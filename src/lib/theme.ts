@@ -32,6 +32,15 @@ const base = EditorView.theme({
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": { backgroundColor: "rgba(59,111,217,.22) !important" },
   ".cm-matchingBracket": { backgroundColor: "rgba(59,111,217,.16)", outline: "none" },
   ".cm-panels": { backgroundColor: "rgba(255,255,255,.85)", backdropFilter: "blur(12px)", borderColor: "rgba(0,0,0,.08)" },
+  ".cm-foldGutter span": { color: "#a0a7b2", cursor: "pointer", padding: "0 4px", opacity: "0", transition: "opacity .15s cubic-bezier(.2,0,0,1)" },
+  ".cm-gutters:hover .cm-foldGutter span, .cm-foldGutter span[title*=nfold]": { opacity: "1" },
+  ".cm-foldPlaceholder": { backgroundColor: "rgba(59,111,217,.12)", border: "none", color: "#3b6fd9", borderRadius: "6px", padding: "0 6px", margin: "0 4px" },
+  ".cm-tooltip.cm-tooltip-autocomplete": { padding: "4px", backdropFilter: "blur(20px) saturate(1.6)", backgroundColor: "rgba(255,255,255,.82)", animation: "pop .14s cubic-bezier(.2,0,0,1)", transformOrigin: "top left" },
+  ".cm-tooltip-autocomplete > ul": { fontFamily: "var(--font-mono)", fontSize: "12.5px", maxHeight: "260px", overscrollBehavior: "contain" },
+  ".cm-tooltip-autocomplete > ul > li": { borderRadius: "6px", padding: "2px 8px", lineHeight: "20px" },
+  ".cm-tooltip-autocomplete > ul > li[aria-selected]": { backgroundColor: "#3b6fd9", color: "#fff" },
+  ".cm-completionMatchedText": { textDecoration: "none", fontWeight: "700" },
+  ".cm-completionDetail": { opacity: ".6", marginLeft: "10px" },
   ".cm-tooltip": { borderRadius: "10px", border: "none", boxShadow: "0 8px 30px rgba(20,30,60,.18), 0 0 0 1px rgba(0,0,0,.06)", backgroundColor: "rgba(255,255,255,.95)" },
 });
 

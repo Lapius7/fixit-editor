@@ -6,6 +6,7 @@ import { bracketMatching, indentOnInput, indentUnit, LanguageDescription } from 
 import { languages } from "@codemirror/language-data";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { fixitTheme } from "./lib/theme";
+import { power } from "./lib/extensions";
 import { TAB_SIZE } from "./lib/config";
 
 type Props = { docKey: string; name: string; value: string; onChange: (v: string) => void; onSave: () => void; onCursor: (l: number, c: number) => void };
@@ -25,7 +26,7 @@ export default function Editor({ docKey, name, value, onChange, onSave, onCursor
         extensions: [
           lineNumbers(), highlightActiveLine(), highlightActiveLineGutter(), history(), drawSelection(), indentOnInput(),
           bracketMatching(), highlightSelectionMatches(), indentUnit.of(" ".repeat(TAB_SIZE)), EditorState.tabSize.of(TAB_SIZE),
-          lang.current.of([]), fixitTheme,
+          lang.current.of([]), fixitTheme, power,
           keymap.of([{ key: "Mod-s", preventDefault: true, run: () => (cb.current.onSave(), true) }, indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) cb.current.onChange(u.state.doc.toString());

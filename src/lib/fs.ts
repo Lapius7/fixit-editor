@@ -30,3 +30,30 @@ export async function writeFile(h: FileSystemFileHandle, text: string) {
   await w.write(text);
   await w.close();
 }
+
+// クイックオープン用に、全ファイルを集める(上限つき)
+export async function crawl(nodes: Node[], limit = 3000, out: Node[] = []): Promise<Node[]> {
+  for (const n of nodes) {
+    if (out.length >= limit) break;
+    if (n.kind === "file") out.push(n);
+    else {
+      const kids = n.children ?? (n.handle ? await readDir(n.handle as FileSystemDirectoryHandle, n.path) : []);
+      await crawl(kids, limit, out);
+    }
+  }
+  return out;
+}
+
+// 文字が順に含まれていれば一致。連続や先頭に近いほど高得点
+export function fuzzy(query: string, target: string): number {
+  const q = query.toLowerCase(), t = target.toLowerCase();
+  let ti = 0, score = 0, run = 0;
+  for (const ch of q) {
+    const at = t.indexOf(ch, ti);
+    if (at < 0) return -1;
+    run = at === ti ? run + 1 : 0;
+    score += 1 + run * 2 - Math.min(at - ti, 5) * 0.2 + (at === 0 || "/._- ".includes(t[at - 1]) ? 3 : 0);
+    ti = at + 1;
+  }
+  return score - t.length * 0.02;
+}
