@@ -1,0 +1,17 @@
+{
+  "name": "fixit-editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "軽くて見た目のいいコードエディタ(フィクシットエディタ)",
+  "author": "Lapius",
+  "license": "MIT",
+  "scripts": { "dev": "vite", "build": "tsc --noEmit && vite build", "preview": "vite preview" },
+  "dependencies": {
+    "@codemirror/commands": "^6", "@codemirror/language": "^6", "@codemirror/language-data": "^6",
+    "@codemirror/search": "^6", "@codemirror/state": "^6", "@codemirror/view": "^6",
+    "@fontsource-variable/inter": "*", "@fontsource-variable/jetbrains-mono": "*", "@fontsource-variable/noto-sans-jp": "*",
+    "@lezer/highlight": "^1", "codemirror": "^6", "lucide-react": "*", "react": "^19", "react-dom": "^19"
+  },
+  "devDependencies": { "@types/react": "^19", "@types/react-dom": "^19", "@vitejs/plugin-react": "*", "typescript": "*", "vite": "*" }
+}
