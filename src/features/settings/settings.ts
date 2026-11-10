@@ -107,6 +107,7 @@ const RAW = [
   n("completeMax", "assist", "補完の候補の数", 12, { min: 4, max: 24, step: 1 }),
   b("completeIcons", "assist", "候補に種類の印を付ける", false),
   b("wordComplete", "assist", "文書内の単語も候補にする", true),
+  b("emmet", "assist", "Emmet 記法を Tab で展開する(HTML・CSS など)", true),
   b("closeBrackets", "assist", "括弧や引用符を自動で閉じる", true, { sec: "入力の補助" }),
   b("indentOnInput", "assist", "入力に合わせてインデントを直す", true),
 

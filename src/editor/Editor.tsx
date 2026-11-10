@@ -26,7 +26,10 @@ const cache = new Map<string, EditorState>();
 export const dropStates = (match: (key: string) => boolean) => { for (const k of [...cache.keys()]) if (match(k)) cache.delete(k); };
 
 // 状態を使い回すので、Compartment は全体で共通にする
-const LANG = new Compartment(), DYN = new Compartment();
+const LANG = new Compartment(), DYN = new Compartment(), EMMET = new Compartment();
+type EmmetSyntax = string;
+const EMMET_SYNTAX: Record<string, EmmetSyntax> = { html: "html", htm: "html", xhtml: "html", vue: "html", php: "html", svelte: "html", xml: "xml", svg: "xml", jsx: "jsx", tsx: "jsx", css: "css", scss: "scss", sass: "sass", less: "css", styl: "stylus", pug: "pug", jade: "pug", haml: "haml", slim: "slim" };
+const emmetSyntax = (name: string): EmmetSyntax | null => EMMET_SYNTAX[name.split(".").pop()?.toLowerCase() ?? ""] ?? null;
 const keys = [indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap].filter((b) => !MANAGED.has(b.run));
 
 export default function Editor({ docKey, name, value, onChange, onCursor, onFocus, onReady, onContext, jump }: Props) {
@@ -42,7 +45,7 @@ export default function Editor({ docKey, name, value, onChange, onCursor, onFocu
     const state = cached && cached.doc.toString() === value ? cached : EditorState.create({
       doc: value,
       extensions: [
-        history(), DYN.of(dynamic(st)), LANG.of([]), fixitTheme, fixitSearch, power,
+        history(), DYN.of(dynamic(st)), LANG.of([]), EMMET.of([]), fixitTheme, fixitSearch, power,
         keymap.of(keys),
         EditorView.domEventHandlers({
           focus: () => { cb.current.onFocus(); },
@@ -100,6 +103,14 @@ export default function Editor({ docKey, name, value, onChange, onCursor, onFocu
     if (v.state.doc.toString() !== value) v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: value } });
   }, [value]);
 
+  // Emmet: ファイルの種類に合う書き方(html / css / jsx など)で、Tab で展開する。使うときに初めて読み込む
+  useEffect(() => {
+    const syntax = emmetSyntax(name);
+    let live = true;
+    if (!syntax || !st.emmet) { view.current?.dispatch({ effects: EMMET.reconfigure([]) }); return; }
+    void import("@emmetio/codemirror6-plugin").then((m) => { if (live) view.current?.dispatch({ effects: EMMET.reconfigure([m.emmetConfig.of({ syntax: syntax as never }), m.abbreviationTracker({ syntax: syntax as never })]) }); });
+    return () => { live = false; };
+  }, [docKey, name, st.emmet]);
   useEffect(() => {
     const d = LanguageDescription.matchFilename(languages, name);
     d?.load().then((s) => view.current?.dispatch({ effects: LANG.reconfigure(s) }));
