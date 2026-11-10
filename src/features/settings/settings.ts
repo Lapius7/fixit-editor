@@ -96,7 +96,7 @@ const RAW = [
   b("indentGuides", "cursor", "インデントの縦線", true),
   b("bracketMatching", "cursor", "対応する括弧を強調", true, { sec: "強調" }),
   b("matchHighlight", "cursor", "選んだ語と同じ語を強調", true),
-  b("rainbowBrackets", "cursor", "括弧を階層ごとに色分け", true), b("tagSync", "assist", "開始タグを直すと閉じタグも同時に直す", true), b("diagnostics", "assist", "エラーに波線を引く", true), b("minimap", "cursor", "ミニマップ(右端に全体の縮図)", true, { sec: "全体表示" }), b("breadcrumbs", "cursor", "パンくず(いまの位置の階層)", true),
+  b("rainbowBrackets", "cursor", "括弧を階層ごとに色分け", true), b("tagSync", "assist", "開始タグを直すと閉じタグも同時に直す", true), b("diagnostics", "assist", "エラーに波線を引く", true), b("langService", "assist", "型情報・定義へ移動・参照検索・リネーム(JS・TS)", true), b("minimap", "cursor", "ミニマップ(右端に全体の縮図)", true, { sec: "全体表示" }), b("breadcrumbs", "cursor", "パンくず(いまの位置の階層)", true),
   e("whitespace", "cursor", "空白文字の表示", "off", [["off", "出さない"], ["trailing", "行末だけ"], ["all", "すべて"]]),
   e("cursorStyle", "cursor", "カーソルの形", "bar", [["bar", "縦線"], ["block", "ブロック"], ["underline", "下線"]], { sec: "カーソル", attr: "cursor" }),
   n("cursorWidth", "cursor", "カーソルの太さ", 1.5, { min: 1, max: 4, step: 0.5, unit: "px", css: "--cur-w" }),

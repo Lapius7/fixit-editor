@@ -5,8 +5,8 @@ import { ms } from "@/features/settings/settings";
 
 type Tip = { name: string; sub: string; x: number; y: number; up: boolean };
 
-const FIRST_MS = 450; // 最初に出すまでの待ち
-const NEXT_MS = 60; // 直前に出していたとき(隣へ移ったとき)の待ち
+const FIRST_MS = 1000; // 最初に出すまでの待ち
+const NEXT_MS = 300; // 直前に出していたとき(隣へ移ったとき)の待ち
 const GAP = 8;
 
 export default function HoverTip() {
