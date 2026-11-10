@@ -124,7 +124,7 @@ button.sb:active { transform: scale(var(--ps)); }
 .tree > ul > li > .tree-row { animation: row-in calc(.3s * var(--sp)) var(--ease) both; animation-delay: calc((calc(var(--i, 0) * 28ms + 120ms)) * var(--sp)); }
 .collapse { display: grid; grid-template-rows: 0fr; transition: grid-template-rows calc(.22s * var(--sp)) var(--ease), opacity calc(.18s * var(--sp)) var(--ease); opacity: 0; }
 .collapse[data-open="true"] { grid-template-rows: 1fr; opacity: 1; }
-.collapse-inner { overflow: hidden; min-height: 0; }
+.collapse-inner { overflow: clip; min-height: 0; } /* hidden だとスクロールの枠になり、入れ子の行の端のぼかしが効かない */
 
 /* 中央に出す窓(クイックオープン・コマンドパレット・設定・ダイアログ) */
 .qo-backdrop { position: fixed; inset: 0; z-index: 50; display: flex; justify-content: center; padding-top: 14vh; background: var(--veil); backdrop-filter: blur(3px); animation: fade calc(.15s * var(--sp)) var(--ease) both; }
