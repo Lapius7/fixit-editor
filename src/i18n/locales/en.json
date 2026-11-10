@@ -1052,5 +1052,7 @@
   "プレビューで開く": "Open in preview",
   "中身をコピー": "Copy contents",
   "中身をコピーしました": "Contents copied",
-  "テキストではないため、中身をコピーできません": "This isn't a text file, so its contents can't be copied"
+  "テキストではないため、中身をコピーできません": "This isn't a text file, so its contents can't be copied",
+  "たたむ": "Show less",
+  "すべて表示({{n}})": "Show all ({{n}})"
 }

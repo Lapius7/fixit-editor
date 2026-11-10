@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Clock, File as FileIcon, Folder, HardDrive, Home, Server, X } from "lucide-react";
+import { ArrowUp, ChevronDown, Clock, File as FileIcon, Folder, HardDrive, Home, Server, X } from "lucide-react";
 import { checkDir, connLabel, dropRecent, getRecent, homeOf, listHosts, parseTarget, pushRecent, resolvePath, showPath, RemoteDir, type Conn } from "@/platform/remote";
 import { ms } from "@/features/settings/settings";
 import i18next from 'i18next'
@@ -12,13 +12,23 @@ type Row = { name: string; dir: boolean };
 const up = (p: string) => (/^[A-Za-z]:\/?$/.test(p) || p === "/" ? p : p.replace(/\/+$/, "").replace(/\/[^/]*$/, "") || "/");
 
 // WSL(このPC)か SSH 先のフォルダを開くための画面
+const RECENT_SHOWN = 3; // 最近開いた場所を、たたんだ状態で出す数
+
 export default function Connect({ current, adding, onConnect, onClose, out }: Props) {
   const [kind, setKind] = useState<"wsl" | "ssh">(current?.kind === "ssh" ? "ssh" : "wsl");
   const [host, setHost] = useState(current?.host ?? "");
   const [path, setPath] = useState(current?.path ?? "~");
+  // フォルダの入力は種類(このPC / SSH)ごとに持つ。このPCのパスを SSH 先で開こうとしないように
+  const kindPaths = useRef<Record<"wsl" | "ssh", string>>({ wsl: current?.kind === "ssh" ? "~" : current?.path ?? "~", ssh: current?.kind === "ssh" ? current.path : "~" });
+  const switchKind = (k: "wsl" | "ssh") => {
+    if (k === kind) return;
+    kindPaths.current[kind] = path;
+    setKind(k); setPath(kindPaths.current[k]); setErr("");
+  };
   const [hosts, setHosts] = useState<{ name: string; hostname?: string; user?: string }[]>([]);
   const [suggest, setSuggest] = useState(false);
   const [recent, setRecent] = useState<Conn[]>(getRecent);
+  const [allRecent, setAllRecent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [closing, setClosing] = useState(false);
@@ -86,8 +96,8 @@ export default function Connect({ current, adding, onConnect, onClose, out }: Pr
         onKeyDown={(e) => { if (e.key === "Escape") close(); else if (e.key === "Enter" && !busy) { e.preventDefault(); go(); } }}>
         <h2>{adding ? i18next.t("WSL・SSH のフォルダを追加") : i18next.t("WSL・SSH のフォルダを開く")}</h2>
         <div className="seg cn-seg" role="group" aria-label={i18next.t("接続先")}>
-          <button aria-pressed={kind === "wsl"} onClick={() => setKind("wsl")}><HardDrive /><Trans i18nKey="WSL(このPC)" /></button>
-          <button aria-pressed={kind === "ssh"} onClick={() => setKind("ssh")}><Server />SSH</button>
+          <button aria-pressed={kind === "wsl"} onClick={() => switchKind("wsl")}><HardDrive /><Trans i18nKey="WSL(このPC)" /></button>
+          <button aria-pressed={kind === "ssh"} onClick={() => switchKind("ssh")}><Server />SSH</button>
         </div>
         {kind === "ssh" && (
           <label className="cn-row">
@@ -133,17 +143,28 @@ export default function Connect({ current, adding, onConnect, onClose, out }: Pr
         {hosts.length > 0 && kind === "ssh" && (
           <div className="cn-chips">{hosts.map((h) => <button key={h.name} className="chipbtn" data-on={host === h.name} onClick={() => { setHost(h.name); setSshHost(h.name); }}><Server />{h.name}</button>)}</div>
         )}
-        {recent.length > 0 && (
-          <div className="cn-recent">
-            <h3><Clock /><Trans i18nKey="最近開いた場所" /></h3>
-            {recent.map((c) => (
-              <div key={`${c.kind}:${c.host}:${c.path}`} className="cn-item">
-                <button onClick={() => go(c)} disabled={busy} data-tip={connLabel(c)} data-tip-sub={showPath(c.path)}><b>{connLabel(c)}</b><span>{showPath(c.path)}</span></button>
-                <button className="icon-btn" aria-label={i18next.t("履歴から外す")} onClick={() => { dropRecent(c); setRecent(getRecent()); }}><X /></button>
+        {(() => {
+          // いま選んでいる種類(このPC / SSH)の履歴だけを出す。多いときはたたんでおく
+          const mine = recent.filter((c) => (kind === "ssh") === (c.kind === "ssh"));
+          if (!mine.length) return null;
+          const more = mine.length > RECENT_SHOWN, list = allRecent ? mine : mine.slice(0, RECENT_SHOWN);
+          return (
+            <div className="cn-recent" data-all={allRecent || undefined}>
+              <h3>
+                <Clock /><Trans i18nKey="最近開いた場所" />
+                {more && <button className="cn-more" aria-expanded={allRecent} onClick={() => setAllRecent((v) => !v)}>{allRecent ? i18next.t("たたむ") : i18next.t("すべて表示({{n}})", { n: mine.length })}<ChevronDown /></button>}
+              </h3>
+              <div className="cn-recent-list">
+                {list.map((c) => (
+                  <div key={`${c.kind}:${c.host}:${c.path}`} className="cn-item">
+                    <button onClick={() => go(c)} disabled={busy} data-tip={connLabel(c)} data-tip-sub={showPath(c.path)}><b>{connLabel(c)}</b><span>{showPath(c.path)}</span></button>
+                    <button className="icon-btn" aria-label={i18next.t("履歴から外す")} onClick={() => { dropRecent(c); setRecent(getRecent()); }}><X /></button>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          );
+        })()}
         <p className="cn-err" role="alert">{err}</p>
         <div className="dlg-foot">
           <button className="btn" onClick={() => close()}><Trans i18nKey="キャンセル" /></button>
