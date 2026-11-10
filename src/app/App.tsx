@@ -41,7 +41,7 @@ import ContextMenu, { type Item } from "@/workbench/ContextMenu";
 import Dialog from "@/workbench/Dialog";
 import Connect from "@/features/workspaces/Connect";
 import Workspaces from "@/features/workspaces/Workspaces";
-import { Pin, History, MessageSquareText, RefreshCw, ArrowUpCircle } from "lucide-react";
+import { GitBranch, Pin, History, MessageSquareText, RefreshCw, ArrowUpCircle } from "lucide-react";
 import { Play } from "lucide-react";
 import { runnerFor, buildCommand } from "@/features/run/runners";
 import { Sparkles, Server, FolderKanban, Eye, Maximize2, Minimize2 } from "lucide-react";
@@ -58,6 +58,7 @@ import { langName } from "@/editor/lang";
 import { APP_NAME } from "@/shared/config";
 import BrowserDock from "@/features/browser/BrowserDock";
 import { AiDock } from "@/features/ai/AiDock";
+import { GitPanel } from "@/features/git/GitPanel";
 import type { AiAction, AiJob, Clip, Ctx } from "@/features/ai/prompts";
 import Preview, { previewKind } from "@/features/preview/Preview";
 import { KEYS, DEF, chips, comboOf, keyOf, rec, table } from "@/features/settings/keys";
@@ -150,6 +151,7 @@ export default function App() {
   const [pv, setPv] = useState<Record<string, PvMode | undefined>>({}); // プレビュー形式のファイルの表示(パス → 表示)
   const [br, setBr] = useState(false); // アプリ内ブラウザの表示
   const [ai, setAi] = useState(false); // AI パネルの表示
+  const [gitOpen, setGitOpen] = useState(false); // Git パネルの表示
   const [aiJob, setAiJob] = useState<AiJob | null>(null); // 右クリックから AI パネルへ渡す依頼
   const [aiQuote, setAiQuote] = useState<Clip | null>(null); // 引用して AI パネルへ添える文
   const aiSeq = useRef(0);
@@ -1366,6 +1368,7 @@ export default function App() {
         {i === lastBar && (
           <>
             {upd && <button className="up-pill" title={i18next.t("v{{v}} に更新できます", { v: upd.version })} onClick={() => setUpdOpen(true)}><ArrowUpCircle size={14} /><span>{i18next.t("更新あり")}</span></button>}
+            {gits[root.prefix] && <button className="icon-btn" data-on={gitOpen} aria-label={i18next.t("Git パネルの表示")} title={i18next.t("Git パネルの表示")} onClick={() => setGitOpen((v) => !v)}><GitBranch /></button>}
             <button className="icon-btn" data-on={ai} aria-label={i18next.t("AI パネルの表示")} title={`${i18next.t("AI パネルの表示")} (${chips(K("toggleAi")).join(" ")})`} onClick={() => setAi((v) => !v)}><Sparkles /></button>
             {runCmd && <button className="icon-btn run-btn" aria-label={i18next.t("このファイルを実行")} title={`${i18next.t("このファイルを実行")} (${chips(K("runFile")).join(" ")})`} onClick={runFile}><Play /></button>}
                 <button className="icon-btn" data-on={term} aria-label={i18next.t("ターミナル")} title={i18next.t("ターミナル")} onClick={() => showTerm()}><SquareTerminal /></button>
@@ -1521,6 +1524,7 @@ export default function App() {
             {br && <BrowserDock onClose={() => setBr(false)} />}
             {ai && <ColGrip width={st.aiW} def={440} min={280} max={900} dir={-1} onChange={(w) => update({ aiW: w })} />}
             <AiDock open={ai} job={aiJob} quote={aiQuote} resolve={clipOf} getCtx={aiCtx} onClose={() => setAi(false)} onSettings={() => setSetts("ai")} />
+            <GitPanel open={gitOpen} conn={root.conn ?? null} root={gits[root.prefix]?.root ?? null} rev={gitTick} onClose={() => setGitOpen(false)} onChanged={() => setGitTick((n) => n + 1)} />
             </div>
             {sess.length > 0 && (
               <div className="term-wrap" data-open={term && shown} data-drag={dragT}>
@@ -1566,7 +1570,7 @@ export default function App() {
             conn={root.conn ? `${connLabel(root.conn)} · ${lastDir(root.conn.path)}` : null} connFull={root.conn ? `${connLabel(root.conn)} · ${showPath(root.conn.path)}` : undefined} connKind={root.conn?.kind ?? null}
             onConn={() => setCn(true)} ws={st.wsStatus ? ws?.name ?? "" : null} wsColor={ws?.color} onWs={() => setWsDlg("ws")} onPop={(k) => setPop((p) => (p === k ? null : k))}
             onTerm={() => showTerm()}
-            git={gits[root.prefix] ? { branch: gits[root.prefix]!.branch, changes: gits[root.prefix]!.files.size } : null} onGit={() => setGitTick((n) => n + 1)}
+            git={gits[root.prefix] ? { branch: gits[root.prefix]!.branch, changes: gits[root.prefix]!.files.size } : null} onGit={() => { setGitTick((n) => n + 1); setGitOpen(true); }}
           />
         )}
       </div>

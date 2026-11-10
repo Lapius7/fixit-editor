@@ -94,6 +94,11 @@ function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, depth, i
     setOpen(!open);
   };
 
+  // 印は消えるときも、直前の文字のまま薄れていく(中身が空になって一瞬ちらつかないように)
+  const lastGit = useRef<string | undefined>(git);
+  if (git) lastGit.current = git;
+  const shownGit = git ?? lastGit.current;
+
   const leave = () => { clearTimeout(hover.current); setOver(false); };
   const dragProps = {
     draggable: true,
@@ -118,7 +123,7 @@ function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, depth, i
         <ChevronRight className="chev" data-open={open} data-hidden={!isDir} />
         {isDir ? (open ? <FolderOpen className="ico folder" /> : <Folder className="ico folder" />) : iconFor(n.name)}
         <span className="truncate">{n.name}</span>
-        {git && <span className="git-badge" data-g={git}>{git === "dir" ? "" : git === "U" ? "U" : git}</span>}
+        {(git || lastGit.current) && <span className="git-badge" data-on={!!git} data-g={shownGit}>{shownGit === "dir" ? "" : shownGit}</span>}
       </button>
       {isDir && <DropGhost on={over} depth={depth + 1} />}
       {isDir && kids && (

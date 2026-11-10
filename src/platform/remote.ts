@@ -191,6 +191,10 @@ export async function gitStatusRaw(c: Conn, dir: string): Promise<string | null>
   const r = await json<{ repo: boolean; raw?: string }>(c, "gitstatus", { path: dir });
   return r.repo ? r.raw ?? null : null;
 }
+// Git の操作。cmd は固定の名前だけ(中身は backend の git.rs / gitops.ts)。dir はリポジトリの根。code は git の終了コード
+export async function gitRun(c: Conn, dir: string, body: Record<string, unknown>): Promise<{ code: number; out: string }> {
+  return (await post(c, "git", { path: dir }, JSON.stringify(body))).json();
+}
 // HEAD にあるファイルの中身。HEAD に無い(新しいファイル・大きすぎる)ときは null
 export async function gitHeadText(c: Conn, file: string): Promise<string | null> {
   return (await json<{ text: string | null }>(c, "githead", { path: file })).text;

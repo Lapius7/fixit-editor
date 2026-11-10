@@ -262,8 +262,14 @@ button.sb:active { transform: scale(var(--ps)); }
 .set-note { min-height: 20px; font-size: 12px; color: var(--accent); margin: 0 0 6px; }
 
 /* Git の印: 変更のあるファイルは名前の色と右端の文字で、フォルダは右端の点で示す */
-.tree-row .git-badge { margin-left: auto; flex: none; font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: .02em; opacity: .9; }
+.tree-row .git-badge { margin-left: auto; flex: none; font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: .02em; white-space: nowrap; opacity: .9; transform: scale(1); filter: blur(0);
+  transition-property: opacity, transform, filter, color, background-color; transition-duration: .22s; transition-timing-function: var(--out, cubic-bezier(.2, 0, 0, 1)); }
 .tree-row .git-badge[data-g="dir"] { width: 6px; height: 6px; border-radius: 50%; background: var(--git-mod); opacity: .75; }
+/* 印が付く・消えるときは、小さく・ぼやけた状態から出入りする。消えたあとは幅を畳む */
+.tree-row .git-badge[data-on="false"] { opacity: 0; transform: scale(.25); filter: blur(4px); width: 0; transition-property: opacity, transform, filter, color, background-color, width; transition-delay: 0s, 0s, 0s, 0s, 0s, .22s; transition-duration: .22s, .22s, .22s, .22s, .22s, 0s; pointer-events: none; }
+@starting-style { .tree-row .git-badge[data-on="true"] { opacity: 0; transform: scale(.25); filter: blur(4px); } }
+.tree-row .truncate { transition: color .22s var(--out, cubic-bezier(.2, 0, 0, 1)); }
+@media (prefers-reduced-motion: reduce) { .tree-row .git-badge, .tree-row .truncate { transition-duration: 0s !important; transition-delay: 0s !important; } }
 .tree-row[data-git="M"] .truncate, .tree-row[data-git="R"] .truncate { color: var(--git-mod); }
 .tree-row[data-git="A"] .truncate, .tree-row[data-git="U"] .truncate { color: var(--git-add); }
 .tree-row[data-git="D"] .truncate, .tree-row[data-git="C"] .truncate { color: var(--git-del); }
