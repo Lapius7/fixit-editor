@@ -79,3 +79,13 @@
 .ws-foot .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; line-height: 20px; }
 .ws-foot .btn svg { flex: none; }
 .ws-badge { line-height: 16px; }
+
+/* ホストの候補(ブラウザ標準の datalist の代わり。右クリックメニューと同じガラスの見た目) */
+.cn-combo { position: relative; z-index: 3; min-width: 0; }
+.cn-suggest { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 5; margin: 0; padding: 4px; list-style: none; border-radius: calc(var(--r-lg) * var(--rk, 1) - 2px); background: var(--pop); -webkit-backdrop-filter: blur(30px) saturate(1.8); backdrop-filter: blur(30px) saturate(1.8); box-shadow: 0 0 0 .5px color-mix(in srgb, var(--ink) 14%, transparent), 0 10px 28px -8px rgba(20, 30, 60, .28); animation: pop calc(.18s * var(--sp)) var(--out) both; transform-origin: top left; }
+.cn-suggest li { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: calc(var(--r-sm) * var(--rk, 1) + 1px); font-size: 13px; line-height: 20px; cursor: default; }
+.cn-suggest li:hover { background: var(--s2); }
+.cn-suggest li svg { flex: none; width: 14px; height: 14px; color: var(--ink-2); }
+.cn-suggest li b { font-weight: 600; flex: none; }
+.cn-suggest li span { min-width: 0; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font-size: 12px; }
+.cn-row:has(.cn-suggest) { position: relative; z-index: 3; }
