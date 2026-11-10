@@ -11,6 +11,7 @@ import { power, dynamic } from "@/editor/extensions";
 import { useSettings } from "@/features/settings/settings";
 import { noteEdit } from "@/features/stats/stats";
 import { langName } from "@/editor/lang";
+import { fileName } from "@/editor/intel";
 import { MANAGED } from "@/editor/edit-cmds";
 
 export type Cursor = { l: number; c: number; sel: number; lines: number };
@@ -45,7 +46,7 @@ export default function Editor({ docKey, name, value, onChange, onCursor, onFocu
     const state = cached && cached.doc.toString() === value ? cached : EditorState.create({
       doc: value,
       extensions: [
-        history(), DYN.of(dynamic(st)), LANG.of([]), EMMET.of([]), fixitTheme, fixitSearch, power,
+        history(), fileName.of(name), DYN.of(dynamic(st)), LANG.of([]), EMMET.of([]), fixitTheme, fixitSearch, power,
         keymap.of(keys),
         EditorView.domEventHandlers({
           focus: () => { cb.current.onFocus(); },
@@ -93,7 +94,7 @@ export default function Editor({ docKey, name, value, onChange, onCursor, onFocu
   useEffect(() => {
     view.current?.dispatch({ effects: DYN.reconfigure(dynamic(st)) });
   }, [docKey, st.tabSize, st.insertSpaces, st.wrap, st.lineNumbers, st.activeLine, st.foldGutter, st.indentGuides, st.bracketMatching, st.matchHighlight, st.whitespace, st.cursorBlink,
-    st.autocomplete, st.autocompleteDelay, st.completeMax, st.completeIcons, st.wordComplete, st.closeBrackets, st.indentOnInput, st.scrollPastEnd, st.spellcheck, st.readOnly]);
+    st.autocomplete, st.autocompleteDelay, st.completeMax, st.completeIcons, st.wordComplete, st.closeBrackets, st.indentOnInput, st.scrollPastEnd, st.spellcheck, st.readOnly, st.rainbowBrackets, st.tagSync, st.diagnostics, st.minimap]);
 
   // もう一方の画面で編集されたときに追従する
   useEffect(() => {

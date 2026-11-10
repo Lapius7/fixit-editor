@@ -787,5 +787,20 @@
   "プレビューを横に開く": "Open preview to the side",
   "エディタも表示する": "Show the editor too",
   "プレビューだけにする": "Preview only",
-  "Emmet 記法を Tab で展開する(HTML・CSS など)": "Expand Emmet abbreviations with Tab (HTML, CSS, etc.)"
+  "Emmet 記法を Tab で展開する(HTML・CSS など)": "Expand Emmet abbreviations with Tab (HTML, CSS, etc.)",
+  "会話を消す": "Clear conversation",
+  "送信先: {{name}}": "Sends to: {{name}}",
+  "AI パネルと、エディタを右クリックして出る「AI」のメニューで使います。コードは、あなたが操作したときだけ、下で選んだ会社のサーバーに送られます。": "Used by the AI panel and the \"AI\" item in the editor's right-click menu. Code is sent to the servers of the company chosen below, only when you take an action.",
+  "使う会社": "Provider",
+  "キーは、設定の書き出し・設定の履歴・統計には含まれません。送られる先は選んだ会社だけです。": "The key is not included in settings export, settings history or statistics. It is sent only to the company you chose.",
+  "Claude Code の契約(サブスクリプション)は使えません。Anthropic の API キーが必要です。": "A Claude Code subscription can't be used. You need an Anthropic API key.",
+  "対応する開始タグがありません": "No matching opening tag",
+  "構文エラー": "Syntax error",
+  "JSON の書き方が正しくありません": "Invalid JSON",
+  "括弧を階層ごとに色分け": "Color brackets by nesting level",
+  "開始タグを直すと閉じタグも同時に直す": "Rename the closing tag together with the opening tag",
+  "エラーに波線を引く": "Underline errors with a wavy line",
+  "ミニマップ(右端に全体の縮図)": "Minimap (overview on the right edge)",
+  "パンくず(いまの位置の階層)": "Breadcrumbs (where the cursor is)",
+  "全体表示": "Overview"
 }

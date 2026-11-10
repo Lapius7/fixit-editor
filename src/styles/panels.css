@@ -229,3 +229,27 @@
 .pv-wrap:hover .pv-reload, .pv-reload:focus-visible { opacity: 1; }
 .pv-seg .pv-wide { width: 26px; padding: 0; }
 .pv-seg .pv-wide svg { top: 0; }
+
+/* ---------- 括弧の色分け(階層ごと) ---------- */
+:root { --rb0: #c78a00; --rb1: #a64ca6; --rb2: #1f7ad1; --rb3: #2f9e6a; --rb-x: #d92d3a; }
+[data-theme="dark"] { --rb0: #f2c14e; --rb1: #d68cf0; --rb2: #6db3ff; --rb3: #7fd6a4; --rb-x: #ff6b78; }
+.cm-rb0 { color: var(--rb0) !important; } .cm-rb1 { color: var(--rb1) !important; } .cm-rb2 { color: var(--rb2) !important; } .cm-rb3 { color: var(--rb3) !important; }
+.cm-rbX { color: var(--rb-x) !important; text-decoration: underline wavy; text-underline-offset: 3px; }
+
+/* ---------- エラー・警告の波線とカード ---------- */
+.cm-lintRange { background-image: none !important; text-decoration-line: underline; text-decoration-style: wavy; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.cm-lintRange-error { text-decoration-color: #e5484d; }
+.cm-lintRange-warning { text-decoration-color: #e0a100; }
+.cm-lintRange-info { text-decoration-color: var(--accent); }
+.cm-lintPoint:after { border-bottom-color: #e5484d !important; }
+.cm-tooltip.cm-tooltip-lint { padding: 4px; border: none; border-radius: 10px; background: var(--pop); -webkit-backdrop-filter: blur(30px) saturate(1.8); backdrop-filter: blur(30px) saturate(1.8); box-shadow: 0 0 0 .5px color-mix(in srgb, var(--ink) 14%, transparent), 0 10px 28px -8px rgba(20, 30, 60, .28); }
+.cm-diagnostic { padding: 4px 8px; margin: 0; border-left: 3px solid #e5484d; border-radius: 3px; font: 400 12px/18px var(--font-sans); color: var(--ink); }
+.cm-diagnostic-warning { border-left-color: #e0a100; }
+.cm-diagnostic-info { border-left-color: var(--accent); }
+
+/* ---------- ミニマップ ---------- */
+.cm-gutters + .cm-scroller, .cm-editor { position: relative; }
+.cm-minimap-gutter { background: transparent !important; border-left: 1px solid color-mix(in srgb, var(--ink) 7%, transparent) !important; }
+.cm-minimap-overlay { background: color-mix(in srgb, var(--accent) 16%, transparent) !important; }
+.cm-minimap-overlay-container.cm-minimap-overlay-mouse-over { opacity: 0; transition: opacity .15s; }
+.cm-minimap-gutter:hover .cm-minimap-overlay-container { opacity: 1; }
