@@ -10,12 +10,12 @@ const ACCOUNT_PAGE = "https://account.lapius7.com/";
 
 // アイコン。読み込めないとき・未設定のときは、名前の頭文字
 export function Avatar({ user, size = 28 }: { user: Pick<Account, "name" | "avatar">; size?: number }) {
-  const [bad, setBad] = useState(false);
-  useEffect(() => setBad(false), [user.avatar]);
+  const [bad, setBad] = useState(false), [ok, setOk] = useState(false);
+  useEffect(() => { setBad(false); setOk(false); }, [user.avatar]);
   const initial = (user.name || "?").trim().slice(0, 1).toUpperCase();
   return (
-    <span className="acct-av" style={{ width: size, height: size, fontSize: Math.round(size * 0.42) }} aria-hidden>
-      {user.avatar && !bad ? <img src={user.avatar} alt="" draggable={false} onError={() => setBad(true)} /> : initial}
+    <span className="acct-av" data-loading={!!user.avatar && !bad && !ok} style={{ width: size, height: size, fontSize: Math.round(size * 0.42) }} aria-hidden>
+      {user.avatar && !bad ? <img src={user.avatar} alt="" draggable={false} onLoad={() => setOk(true)} onError={() => setBad(true)} style={{ opacity: ok ? 1 : 0 }} /> : initial}
     </span>
   );
 }

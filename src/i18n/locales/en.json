@@ -955,5 +955,9 @@
   "実行するコマンド": "Run commands",
   "実行できるファイルを開いてください": "Open a file that can be run",
   "追加するコマンド": "Command to add",
-  "追加する拡張子": "Extension to add"
+  "追加する拡張子": "Extension to add",
+  "公式サイト": "Official site",
+  "ドキュメント": "Documentation",
+  "更新履歴": "Release notes",
+  "GitHub": "GitHub"
 }

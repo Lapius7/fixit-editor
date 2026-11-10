@@ -32,6 +32,8 @@ export const AI_MAX_HISTORY_CHARS = 120_000; // 会話の履歴として送る�
 // 匿名の利用数(インストール数・利用者数)。送り先と保存キーはここだけで決める
 // 受信と更新配布の口。エンドポイントはここに集める
 const API_BASE = "https://fixit-editor.lapius7.com";
+export const SITE_URL = API_BASE;
+export const REPO_URL = "https://github.com/Lapius7/fixit-editor";
 export const TELEMETRY_URL = `${API_BASE}/api/ping`;
 export const USAGE_URL = `${API_BASE}/api/usage`;
 export const ERROR_URL = `${API_BASE}/api/error`;

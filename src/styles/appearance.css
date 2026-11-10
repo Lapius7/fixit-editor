@@ -118,3 +118,9 @@
 .fp-list .ctx-item:hover { background: var(--s2); }
 .fp-sep, .fp-note { padding: 6px 10px 2px; font-size: 11px; line-height: 16px; color: var(--ink-3); }
 .fp-note { padding-bottom: 6px; }
+.set-links { display: flex; flex-direction: column; gap: 2px; padding: 12px 8px 0; border-top: 1px solid var(--hair); margin-top: 8px; }
+.set-link { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 8px; border: 0; background: none; color: var(--ink-2); font: 12px/20px var(--font-sans); text-align: left; cursor: pointer; }
+.set-link:hover { background: var(--press); color: var(--ink); }
+.set-link svg { flex: none; }
+.set-link span { flex: 1; min-width: 0; }
+.set-link .set-link-ext { opacity: .5; }

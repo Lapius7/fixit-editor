@@ -43,3 +43,10 @@
 .up-pill svg { flex: none; }
 @keyframes up-in { from { opacity: 0; transform: translateY(-4px) scale(.94); } }
 @media (prefers-reduced-motion: reduce) { .up-pill { animation: none; } }
+/* 画像が届くまでは、頭文字を出さずに淡く脈打たせる(届いたら画像に切り替わる) */
+.acct-av img { transition: opacity .2s ease; }
+.acct-av[data-loading="true"] { position: relative; }
+.acct-av[data-loading="true"] img { position: absolute; inset: 0; }
+.acct-av[data-loading="true"]::after { content: ""; position: absolute; inset: 0; background: var(--press); animation: acct-pulse 1.1s ease-in-out infinite alternate; }
+@keyframes acct-pulse { from { opacity: .35; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .acct-av[data-loading="true"]::after { animation: none; } }
