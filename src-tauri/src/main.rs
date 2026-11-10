@@ -4,7 +4,7 @@
 use base64::{engine::general_purpose::STANDARD, Engine};
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use std::{collections::HashMap, io::{Read, Write}, sync::Mutex, thread};
-use fixit_core::{claude, fs as fxfs, store};
+use fixit_core::{claude, fonts, fs as fxfs, store, update};
 use std::sync::Arc;
 use tauri::{ipc::{Channel, Request, Response}, AppHandle, Emitter, State};
 
@@ -280,11 +280,55 @@ fn claude_cancel(state: State<Jobs>, id: String) {
     if let Some(j) = state.0.lock().unwrap().get(&id) { j.cancel(); }
 }
 
+// 既定のブラウザで URL を開く。ログイン画面(Lapount)など、決まった https のアドレスだけを許す
+const OPEN_ALLOW: [&str; 1] = ["https://account.lapius7.com/"];
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    if !OPEN_ALLOW.iter().any(|p| url.starts_with(p)) || url.len() > 2048 || url.chars().any(|c| c.is_control() || c == ' ') {
+        return Err("not allowed".into());
+    }
+    #[cfg(windows)]
+    let mut c = {
+        use std::os::windows::process::CommandExt;
+        let mut c = std::process::Command::new("rundll32");
+        c.args(["url.dll,FileProtocolHandler", &url]).creation_flags(0x08000000);
+        c
+    };
+    #[cfg(not(windows))]
+    let mut c = { let mut c = std::process::Command::new("xdg-open"); c.arg(&url); c };
+    c.spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+// この PC に入っているフォントの家族名(設定の書体の選択肢)。読み込みに時間がかかるので別スレッドで行う
+#[tauri::command]
+async fn list_fonts() -> Result<Vec<fonts::FontFamily>, String> {
+    tauri::async_runtime::spawn_blocking(fonts::list_families).await.map_err(|e| e.to_string())
+}
+
+// 更新を適用する。署名とハッシュを確かめた本体だけを起動ファイルと置き換えて、新しい版を起動し直す。
+// 起動ファイルの場所は、1 ファイル配布の launcher が FIXIT_LAUNCHER に入れて渡す(それ以外の起動では更新しない)
+#[tauri::command]
+async fn apply_update(app: AppHandle, version: String, sha256: String, size: u64, sig: String, url: String) -> Result<(), String> {
+    let launcher = std::env::var_os("FIXIT_LAUNCHER").map(std::path::PathBuf::from).ok_or("no_launcher")?;
+    let l2 = launcher.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let data = update::download(&url)?;
+        update::verify(&version, &sha256, size, &sig, &data)?;
+        update::swap(&l2, &data)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    std::process::Command::new(&launcher).args(std::env::args_os().skip(1)).spawn().map_err(|e| e.to_string())?;
+    app.exit(0);
+    Ok(())
+}
+
 fn main() {
+    if let Some(l) = std::env::var_os("FIXIT_LAUNCHER") { update::sweep_old(std::path::Path::new(&l)); }
     tauri::Builder::default()
         .manage(Ptys::default())
         .manage(Jobs::default())
-        .invoke_handler(tauri::generate_handler![pty_open, pty_shells, pty_write, pty_resize, pty_close, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_login, claude_cancel, store_load, store_read, store_stamps, store_save])
+        .invoke_handler(tauri::generate_handler![pty_open, pty_shells, pty_write, pty_resize, pty_close, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_login, claude_cancel, store_load, store_read, store_stamps, store_save, apply_update, list_fonts, open_url])
         .run(tauri::generate_context!())
         .expect("フィクシットエディタを起動できませんでした");
 }

@@ -7,10 +7,11 @@
 - 軽くて見た目のいい、すりガラス調のコードエディタ(Xcode 風)。作者の既定は Lapius。
 - 構成は Vite + React + CodeMirror 6 + Tauri v2。Windows の exe は Tauri で作る。
 - 設定・統計・ワークスペース・設定の変更履歴は、PC の中にだけ保存する(アプリ版は `%APPDATA%\Fixit` の JSON、ブラウザ版は localStorage)。
-- 外部へ送るものは 2 つある。どちらもユーザーが操作したとき、または設定で許可しているときだけ送る。
+- 外部へ送るものは次のとおり。AI 機能と匿名の利用数以外は、ユーザーが操作したとき、または設定で許可しているときだけ送る。送り先と保存キーは `shared/config.ts`、受け手はサイトのプロジェクト(`fixit-editor.lapius7.com` の `server/index.ts`、MySQL)。
   - AI 機能: ユーザーが操作したときに、選択範囲・開いているファイル・入力した文章を、ユーザーが選んだ AI(Anthropic / OpenAI / この PC の claude コマンド経由の Anthropic)へ送る。API キーはユーザー自身のもの。
-  - 匿名の利用数: 1 日 1 回、ランダムな ID・アプリの版・OS の種類・言語だけを送る。設定(`telemetry`、初期値オン)と初回セットアップで切り替えられる。
-- コーディング統計(時間・入力数)は外へ送らない。`reportErrors` 設定は送信先のない仮置きで、何も送らない。
+  - 匿名の利用数: 1 日 1 回、ランダムな ID・アプリの版・OS の種類・言語だけを送る。常にオンで、設定では切り替えられない(開発ビルドでは送らない)。
+  - フィードバック: メニューと右上のボタンの `FeedbackView` から「送る」を押したときだけ。内容・種類・任意の連絡先・版・OS・言語。
+  - 詳しい利用状況とエラーは、必須の送信として常に送る(設定項目なし。本番ビルドのみ。利用状況は `statsOn` が false の間は送らない)。ファイルの中身・名前・パスは含めない。(旧 `reportErrors` は廃止)
 - git リポジトリ。コミットは頼まれたときだけ行う(2026-11-10 に、それまでの変更をまとめて 1 つコミット済み)。
 - 公式サイトは別プロジェクト `~/projects/workspace/git/vpsservice/private/fixit-editor.lapius7.com`。更新履歴は `src/changelog.ts`。機能を足す・変える・消したら、同じ作業の中で更新する(初回公開版は 1.0.0 で、公開までの変更はすべてここに入れる)。
 
@@ -34,7 +35,7 @@
   - `ModelPicker.tsx` はパネルのモデル/Effort 選択(API キーのあるプロバイダーと、ログイン済みの claude のモデルを混ぜた一覧)。`link.ts` は claude コマンドの接続状態(`store.ts` の `Link`。保存しない)の確認とログイン。Rust 版 `claude::status` / `claude::login` と Node 版 `/__claude/status` / `/__claude/login` は同じ振る舞い(`claude auth status --json` の `loggedIn` だけを見る。メール・トークンは読まない)。Effort は `--effort`(claude)と `output_config.effort`(Anthropic)に渡す。openai には渡さない。
   - `preview/` Markdown・HTML のプレビュー(sandbox の iframe、`allow-same-origin` は付けない)。
   - `browser/` ページ内ブラウザ(`BrowserDock.tsx`)。
-  - `telemetry/` 匿名の利用数の送信(`telemetry.ts`)。送り先と保存キーは `shared/config.ts`。
+  - `telemetry/` 匿名の利用数(`telemetry.ts`)・利用状況とエラーの送信(`report.ts`)・フィードバック(`FeedbackView.tsx`)。送り先と保存キーは `shared/config.ts`。
   - `stats/` コーディング時間・入力数・連続日数。`theme/` テーマ編集パネル。`workspaces/` ワークスペース、WSL / SSH 接続。
 - `src/platform/` ファイル操作・ターミナル・リモートへの橋渡し(ブラウザ版は `/__fs`、exe は Tauri)。
 - `src/shared/Select.tsx` は OS 標準 `<select>` の代わり(ポータルで開く一覧は `.ctx` と同じ見た目)。`<select>` は使わずこれを使う。`segslide.ts` は `.seg`(切り替えボタン)の選択つまみを滑らせる(`--seg-x/--seg-w` を書き、`.seg::before` が動く)。エディタ面の濃さは `--paper-k` と `data-paper`(0 のとき `.paper` のぼかしを外す)で効く。
@@ -70,17 +71,20 @@
 - 編集は、言語ごとの色分けと補完(`@codemirror/language-data`)、開いている文書内の単語の補完、スニペット。検索・置換(自作パネル `src/editor/search-panel.ts`、CSS は `panels.css` 末尾)、複数カーソル、折りたたみ、行操作、Tab のインデント、保存時の整形、自動保存も入っている。
 - Markdown・HTML のプレビュー。タブバーの `.pv-seg` は「プレビュー」(横に開く/閉じる)と、開いている間だけ出る「プレビューだけにする」の 2 つ(`Mod+Alt+V` は従来どおり テキスト→両方→プレビューを循環)。切り替えは `.ed-pv` の列幅の transition で動かし、プレビューのみのときもエディタは外さず、幅 0・非表示にする。HTML は `features/preview/resolve.ts` が相対パスの CSS・JS(`defer` 含む)・画像・CSS の `url()` をフォルダから読み、HTML に埋め込んで iframe(srcDoc)に渡す。開いている CSS・JS・SVG・JSON のタブは未保存の内容を優先し、書いたそばから反映する(Live Server 相当のライブ更新。ただし本物の HTTP サーバーではない)。作り直してもスクロール位置は保つ。ウィンドウにフォーカスが戻ると読み直す。右下の更新ボタンで読み直せる。`type="module"` の `import` や `fetch`、ほかの HTML へのリンクは動かない。HTML プレビューはアプリのテーマに追従しない。ページ内ブラウザ(`Mod+Alt+B`)は別。外部サイトは、埋め込みを禁止しているものは表示できない。
 - Emmet: `@emmetio/codemirror6-plugin`(設定 `emmet`、初期値オン)。`Editor.tsx` の `EMMET` Compartment が、ファイル名から html / xml / jsx / css / scss / sass / pug などの書き方を選び、使うときに初めて読み込む。省略形を打って Tab で展開する(HTML は `ul>li.a*3>b{x}`、CSS は `m10-20` `df` で確認済み)。
-- AI(`Mod+Alt+A`、右クリックの「AI」)。Anthropic(SDK、既定のモデルは `claude-opus-5-5`)と OpenAI(`gpt-5` が既定、モデル名は自由入力)。API キーは別のキー(`fixit:ai:v1`)に平文で保存し、設定の書き出し・履歴・統計には含めない。初めて送る前にプロバイダごとの同意画面を出す。「Claude (サブスク)」(`claude-cli`)は、この PC の `claude` コマンドを `server/claude.ts` が非対話で呼ぶ(ツール無効・空の一時フォルダ・`ANTHROPIC_API_KEY` は外す。トークンには触れない)。dev サーバー(ブラウザ版)では `server/claude.ts`、exe では Rust(`fixit-core/src/claude.rs`、Tauri の `claude_chat` / `claude_cancel`)が動かす。exe は Windows の claude.exe を先に探し、なければ WSL の claude を使う。実 CLI で 1 往復の動作は確認済み。OpenAI 側は実 API では未検証。
+- AI(`Mod+Alt+A`、右クリックの「AI」)。Anthropic(SDK、既定のモデルは `claude-opus-5-5`)と OpenAI(`gpt-5` が既定、モデル名は自由入力)。プロバイダーごとにスイッチがあり、初期は全部オフ(`enabled`。設定の「AI」で、オンにしたものだけ接続の設定が開く。以前の設定は、キーか同意があればオンとして引き継ぐ)。API キーは別のキー(`fixit:ai:v1`)に平文で保存し、設定の書き出し・履歴・統計には含めない。初めて送る前にプロバイダごとの同意画面を出す。「Claude (サブスク)」(`claude-cli`)は、この PC の `claude` コマンドを `server/claude.ts` が非対話で呼ぶ(ツール無効・空の一時フォルダ・`ANTHROPIC_API_KEY` は外す。トークンには触れない)。dev サーバー(ブラウザ版)では `server/claude.ts`、exe では Rust(`fixit-core/src/claude.rs`、Tauri の `claude_chat` / `claude_cancel`)が動かす。exe は Windows の claude.exe を先に探し、なければ WSL の claude を使う。実 CLI で 1 往復の動作は確認済み。OpenAI 側は実 API では未検証。
 - タブ、左右・上下の分割、フォルダ、ファイル一覧、クイックオープン、全文検索、画像・PDF・音声・動画・docx の表示、WSL / SSH のフォルダ、ターミナル、ワークスペースとプロファイル。
 - 統計(`Mod+Alt+I`)、コードの画像化、コマンドパレット、約 130 の設定、設定の書き出しと読み込み、設定の変更履歴(巻き戻し。この PC の中だけ)。
 - 起動時は空(`src/shared/demo.ts` の `DEMO_TREE` は空)。接続ダイアログ(`Connect.tsx`)にフォルダの階層ブラウザ(`.cn-br`)。右クリックのサブメニューは `createPortal` で `.ctx-layer` に出す(親の `overflow` で切れるため)。設定 `paperA`(エディタの面の濃さ)は `--paper-k` で効く。
-- 初回セットアップ画面。言語・テーマ・アクセント色・ワークスペース復元・統計・匿名の利用数のオン/オフを選ぶ。
+- 初回セットアップ画面。言語・テーマ・アクセント色・ワークスペース復元・統計のオン/オフを選ぶ。
 
 ## 未実装・未確認
 
 - exe の `/__fs` 相当(WSL のファイル操作)と Claude サブスクは、Rust に移植済み。Windows 実機の WebView2 で `fs_op` / `fs_write`(バイナリの往復を含む)と `claude_chat` のチャンネルを確認した(Windows の claude.exe は利用上限で `rate` が返り、WSL 経由は fixit-fs.exe で返答を確認)。未確認: exe の画面操作でのファイル一覧・保存、exe からの SSH(Windows の ssh.exe と `%USERPROFILE%\.ssh\config` を使う設計)。(`showDirectoryPicker` は exe では `kind=pc` に置き換えた。)
 - exe は `src-tauri/launcher/` で 1 ファイルに同梱済み(Windows 実機で起動と描画は確認)。未確認: `pick_folder`(フォルダ選択ダイアログ)の実操作。
-- 匿名の利用数の受信側は、サイトのプロジェクトの `server/ping.ts`(Bun)と `nginx.conf` に書いてあるが、未デプロイ(VPS が落ちていた)。公開は後回しと決めた。ダウンロード数は、サーバー側(nginx のログや配布 URL の中継)で数える方針で、まだない。
+- サイトは `~/projects/workspace/git/vpsservice/private/fixit-editor.lapius7.com`(`sitedeploy fixit-editor.lapius7.com` で反映済み)。管理画面 `/admin` は Lapount のオーナーだけ。Lapount のリダイレクト許可リストには追加済み(DB の `connected_service_origins` と、supabase の `.env` の `ADDITIONAL_REDIRECT_URLS` に `https://fixit-editor.lapius7.com/login`。実ログインで `/admin` に入れることを確認済み)。
+- フォント: Obel Mono(OFL)を `src/styles/fonts/` に同梱し、コードの書体の既定にしている。この PC のフォントは、exe では Rust の `list_fonts`(`fixit-core/src/fonts.rs`、fontdb)、ブラウザでは `queryLocalFonts` で一覧にする(`settings/fonts.ts`)。値は `local:<家族名>` で保存する。
+- アイコン: 元画像は `assets/icon.svg`。`src-tauri/icons/icon.ico`(16〜256)と `icon.png`、`public/favicon.svg` は、ここから `rsvg-convert` と `magick` で作る。サイトのファビコンも同じ。
+- 自動更新: `src/features/update/`(確認と表示)と、Rust の `apply_update`(`fixit-core/src/update.rs`)。更新情報は Ed25519 署名つきで、アプリ側が署名と SHA-256 を確かめてから、起動ファイル(launcher が `FIXIT_LAUNCHER` で渡す)を置き換える。公開鍵は `update.rs`、秘密鍵は `~/.config/fixit-release/update-key.pem`(リポジトリの外)。配布は `bun scripts/release.ts --notes "..."`(exe と署名つき `latest.json` を VPS の `data/releases/` へ置く)。1.0.0 はまだ公開していない。
 - SSH の書き込み試験。ユーザーの許可を得たときだけ、`contabo-vps:/tmp/fixit-test` で行う。
 - Ctrl+G のステータスポップの再確認。
 - pixel-align は、ブラウザ(Linux の Chromium)でライト・ダークの両方について、右クリックメニュー、接続画面、ファイル一覧(複数フォルダの見出し)、タブ列、テーマパネル、統計、設定(日英韓・15 タブ)を測った。未測定は、ステータスポップ(Ctrl+G で開けなかった)、分割メニュー、シェルメニュー。英語・韓国語のセグメントボタンで「インクの中心が少しずれる」と出るのは既知で、直さなくてよい。AI の設定画面にあるパスワード欄の測定値(下に 5px)は、プレースホルダーの字形による誤検出で、入力欄の寸法は既存の `.field` と同じ。

@@ -20,7 +20,7 @@
 
 Fixit Editor is a small code editor with a frosted-glass look. It ships as a single `Fixit-Editor.exe` for Windows, with no installer. It is built on CodeMirror 6 and Tauri, so it starts fast and stays light.
 
-Settings, statistics, and workspaces are stored on your PC. Nothing about your coding leaves it unless you ask an AI a question or turn on the anonymous usage count.
+Settings, statistics, and workspaces are stored on your PC. Nothing about your coding leaves it unless you ask an AI a question, log in to Lapount with sync turned on, send feedback, or turn on the optional anonymous reporting. The anonymous launch count is always sent.
 
 <p align="center">
   <img src="docs/screenshots/en-light.png" alt="Fixit Editor in light mode" width="49%">
@@ -61,10 +61,13 @@ Settings, statistics, and workspaces are stored on your PC. Nothing about your c
 
 ## Privacy
 
-Only two things can leave your PC, and only when you act or allow it. Coding statistics never leave.
+Only the following can leave your PC. File contents, names, and paths are never included.
 
 - **AI requests:** the selected code, the open file, and your message go to the provider you chose.
-- **Anonymous usage count:** once a day, a random ID, the app version, the OS family, and the language. You can turn it off in Settings and in the first-run setup.
+- **Anonymous usage count:** once a day, a random ID, the app version, the OS family, and the language. There is no setting to turn it off.
+- **Feedback:** only when you press Send: your message, its type, an optional contact, the app version, the OS, and the language.
+- **Lapount login (optional):** only when you log in, the app fetches your account name and icon and syncs your settings, profiles, and workspaces (names, colors, and folder locations). Open tabs, terminals, AI keys and chats, statistics, and file contents are not synced. You can turn sync off and delete the cloud data. Feedback sent while logged in is linked to your account so you can receive replies.
+- **Detailed usage and errors:** daily working time, typed characters, key presses, and saves, and the type, message, and call order of errors. There is no setting to turn this off.
 
 ## Build from source
 

@@ -115,10 +115,11 @@ export function preview(p: Profile): { accent: string; mode: string } {
 }
 
 // 他のウィンドウがプロファイルを変えたら取り込む。使うプロファイル(active)は、このウィンドウのものを保つ
-kvWatch(KEY, (f, dirty) => {
+export function reloadFromStore(f: string | null = kvGet(KEY), dirty = false) {
   const theirs = load(f);
   const list = dirty ? mergeById(st.list, theirs.list, (a, b) => (b.updated > a.updated ? b : a)) : theirs.list;
   st = { active: list.some((p) => p.id === st.active) ? st.active : theirs.active, list };
   if (dirty) save();
   subs.forEach((f) => f());
-});
+}
+kvWatch(KEY, (f, dirty) => reloadFromStore(f, dirty));

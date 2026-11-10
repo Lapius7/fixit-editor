@@ -11,7 +11,7 @@ export function ModelPicker({ disabled }: { disabled?: boolean }) {
   const link = useLink();
   // 選んでいるプロバイダーは、接続の確認が終わっていなくても必ず一覧に入れる
   const ps = connected(cfg, link);
-  const list: Provider[] = ps.includes(cfg.provider) ? ps : [...ps, cfg.provider];
+  const list: Provider[] = ps.includes(cfg.provider) || !cfg.enabled[cfg.provider] ? ps : [...ps, cfg.provider];
   const label = (p: Provider, m: string) => `${i18next.t(PROVIDER_NAME[p])} · ${m || i18next.t("(claude の既定)")}`;
   const cur = cfg.provider + SEP + cfg.models[cfg.provider];
   return (

@@ -5,3 +5,5 @@ pub mod fs;
 pub mod local;
 pub mod run;
 pub mod store;
+pub mod fonts;
+pub mod update;

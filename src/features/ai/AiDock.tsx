@@ -1,14 +1,17 @@
 // AI チャットのパネル。右側に出す(アプリ内ブラウザと同じ置き場所)。
 // 送るのは「利用者が操作したとき」だけ。送る前に、相手と送る範囲を画面に出し、初回は同意を取る。
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Check, Copy, Replace, Settings as Cog, Square, Trash2, X, Paperclip, History, SquarePen } from "lucide-react";
+import { ArrowUp, Check, Copy, Replace, Settings as Cog, Square, Trash2, X, Paperclip, History, SquarePen, FileText, Quote as QuoteIcon, FileDown } from "lucide-react";
 import i18next from "i18next";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { toUrl } from "@/features/browser/BrowserDock";
 import { AI_MAX_HISTORY_CHARS } from "@/shared/config";
 import { AiError, isAbort, streamChat, type AiErrorKind, type Msg, type Stop } from "@/features/ai/providers";
-import { actionLabel, actionPrompt, ctxLabel, systemPrompt, withCode, type AiJob, type Ctx } from "@/features/ai/prompts";
+import { actionLabel, actionPrompt, clipLabel, ctxLabel, systemPrompt, withClips, withCode, type AiJob, type Clip, type Ctx } from "@/features/ai/prompts";
+import { drag, dragEnd } from "@/workbench/dnd";
+import { notify } from "@/shared/notify";
+import { MAX_OPEN_BYTES } from "@/shared/config";
 import { ms } from "@/features/settings/settings";
 import { getAi, hasEffort, ready, PROVIDER_NAME, setConsent, useAi, useLink, type Provider } from "@/features/ai/store";
 import { ModelPicker } from "@/features/ai/ModelPicker";
@@ -60,7 +63,10 @@ function Reply({ m, onReplace, onCopy }: { m: M; onReplace: (m: M) => void; onCo
   );
 }
 
-export function AiDock({ open, job, getCtx, onClose, onSettings }: { open: boolean; job: AiJob | null; getCtx: () => Ctx | null; onClose: () => void; onSettings: () => void }) {
+const MAX_CLIPS = 8;
+// エディタから引用した文(id が変わるたびに 1 件ふえる)。resolve は、ドラッグされたファイル・タブの中身を読む
+export type AiQuote = Clip;
+export function AiDock({ open, job, quote, resolve, getCtx, onClose, onSettings }: { open: boolean; job: AiJob | null; quote: AiQuote | null; resolve: (x: NonNullable<typeof drag.node> | string) => Promise<Ctx | null>; getCtx: () => Ctx | null; onClose: () => void; onSettings: () => void }) {
   const cfg = useAi();
   const link = useLink();
   // 会話の履歴。前回開いていた会話を、そのまま開く
@@ -74,6 +80,39 @@ export function AiDock({ open, job, getCtx, onClose, onSettings }: { open: boole
   const [msgs, setMsgs] = useState<M[]>(init.current.msgs);
   const [text, setText] = useState("");
   const [attach, setAttach] = useState(false);
+  const [clips, setClips] = useState<Clip[]>([]);
+  const [over, setOver] = useState(false);
+  const clipSeq = useRef(0), quoted = useRef(0);
+  const addClip = (c: Ctx & { lines?: [number, number] }) => {
+    setClips((a) => (a.length >= MAX_CLIPS ? (notify(i18next.t("添えられるのは {{n}} 件までです", { n: MAX_CLIPS }), "error"), a) : [...a, { ...c, id: ++clipSeq.current }]));
+    requestAnimationFrame(() => box.current?.focus());
+  };
+  // エディタの右クリックから「AI チャットに引用」されたとき
+  useEffect(() => {
+    if (!quote || quote.id === quoted.current) return;
+    quoted.current = quote.id;
+    addClip(quote);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quote]);
+  // ファイル・タブ・OS のファイルを、パネルへドロップして添える
+  const hasFiles = (e: React.DragEvent) => !!(drag.node || drag.tab) || e.dataTransfer.types.includes("Files");
+  const onDrop = async (e: React.DragEvent) => {
+    e.preventDefault(); setOver(false);
+    const n = drag.node, t = drag.tab, files = Array.from(e.dataTransfer.files);
+    dragEnd();
+    if (n || t) {
+      if (n && n.kind === "dir") { notify(i18next.t("フォルダは添えられません。ファイルをドロップしてください"), "error"); return; }
+      const c = await resolve(n ?? t!);
+      if (c) addClip(c); else notify(i18next.t("このファイルは文字として読めないため、添えられません"), "error");
+      return;
+    }
+    for (const f of files) {
+      if (f.size > MAX_OPEN_BYTES) { notify(i18next.t("{{name}} は大きすぎて添えられません", { name: f.name }), "error"); continue; }
+      const head = new Uint8Array(await f.slice(0, 8192).arrayBuffer());
+      if (head.includes(0)) { notify(i18next.t("このファイルは文字として読めないため、添えられません"), "error"); continue; }
+      addClip({ name: f.name, text: (await f.text()).replace(/\r\n/g, "\n"), scope: "file" });
+    }
+  };
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<{ p: Provider; go: () => void } | null>(null);
   const abort = useRef<AbortController | null>(null);
@@ -135,9 +174,11 @@ export function AiDock({ open, job, getCtx, onClose, onSettings }: { open: boole
     const q = text.trim();
     if (!q || busy || !ready(getAi())) return;
     const c = attach ? getCtx() : null;
-    const w = c ? withCode(q, c) : { content: q, cut: false };
-    setText("");
-    gate(() => run(w.content, q, c ? ctxLabel(c, w.cut) : undefined));
+    const sent = clips;
+    const w = sent.length ? withClips(q, c ? [...sent, c] : sent) : c ? withCode(q, c) : { content: q, cut: false };
+    const label = [...sent.map(clipLabel), ...(c ? [ctxLabel(c, w.cut)] : [])].join(" / ") || undefined;
+    setText(""); setClips([]);
+    gate(() => run(w.content, q, label));
   };
 
   const copy = (m: M) => { void navigator.clipboard?.writeText(m.content); };
@@ -175,7 +216,11 @@ export function AiDock({ open, job, getCtx, onClose, onSettings }: { open: boole
   }, [open]);
   if (!open && !mounted) return null;
   return (
-    <aside className="ai-dock" data-closing={!open} aria-label="AI" onKeyDown={(e) => { if (e.key === "Escape" && hist) { e.stopPropagation(); setHist(false); } }}>
+    <aside className="ai-dock" data-closing={!open} data-over={over} aria-label="AI"
+      onDragOver={(e) => { if (ready(cfg, link) && hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; if (!over) setOver(true); } }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as globalThis.Node | null)) setOver(false); }}
+      onDrop={(e) => { if (ready(cfg, link) && hasFiles(e)) void onDrop(e); }}
+      onKeyDown={(e) => { if (e.key === "Escape" && hist) { e.stopPropagation(); setHist(false); } }}>
       <div className="ai-bar">
         <span className="ai-title">AI<small>{cfg.models[cfg.provider] || (cfg.provider === "claude-cli" ? "claude" : "")}</small></span>
         <button className="icon-btn" aria-label={i18next.t("新しい会話")} title={i18next.t("新しい会話")} disabled={!msgs.length} onClick={startNew}><SquarePen /></button>
@@ -203,7 +248,8 @@ export function AiDock({ open, job, getCtx, onClose, onSettings }: { open: boole
       <div className="ai-list scroll" ref={list} aria-live="polite">
         {!ready(cfg, link) ? (
           <div className="ai-empty">
-            <p>{cfg.provider === "claude-cli"
+            <p>{!cfg.enabled[cfg.provider] ? i18next.t("使うプロバイダーが、設定の「AI」でオフになっています。スイッチをオンにして、連携を設定してください")
+              : cfg.provider === "claude-cli"
               ? i18next.t(link === "nocli" ? "claude コマンドが見つかりません。設定の「AI」で、入れ方を確かめてください" : "Claude にログインしていません。設定の「AI」で、ログインしてください")
               : i18next.t("AI を使うには、設定で API キーを入れてください")}</p>
             <button className="btn" onClick={onSettings}>{i18next.t("AI の設定を開く")}</button>
@@ -228,6 +274,16 @@ export function AiDock({ open, job, getCtx, onClose, onSettings }: { open: boole
       )}
       {ready(cfg, link) && (
         <div className="ai-compose">
+          {clips.length > 0 && (
+            <div className="ai-clips" role="list" aria-label={i18next.t("添えた資料")}>
+              {clips.map((c) => (
+                <span key={c.id} className="ai-clip" role="listitem" title={`${clipLabel(c)} · ${i18next.t("{{n}} 行", { n: c.text.split("\n").length })}`}>
+                  {c.lines ? <QuoteIcon size={12} /> : <FileText size={12} />}<span className="truncate">{clipLabel(c)}</span>
+                  <button className="icon-btn" aria-label={i18next.t("外す")} onClick={() => setClips((a) => a.filter((x) => x.id !== c.id))}><X /></button>
+                </span>
+              ))}
+            </div>
+          )}
           <textarea ref={box} rows={3} value={text} placeholder={i18next.t("AI に質問(Enter で送信、Shift+Enter で改行)")} aria-label={i18next.t("AI に質問")} onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } if (e.key === "Escape") onClose(); }} />
           <ModelPicker disabled={busy} />
@@ -240,6 +296,7 @@ export function AiDock({ open, job, getCtx, onClose, onSettings }: { open: boole
           </div>
         </div>
       )}
+      <div className="ai-drop" aria-hidden="true"><FileDown size={22} /><strong>{i18next.t("ここにドロップして添える")}</strong><small>{i18next.t("ファイルの中身を、質問と一緒に送ります")}</small></div>
     </aside>
   );
 }

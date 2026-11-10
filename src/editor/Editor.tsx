@@ -21,6 +21,7 @@ type Props = { path?: string;
   docKey: string; name: string; value: string;
   onChange: (v: string) => void; onCursor: (c: Cursor) => void; onFocus: () => void; onReady: (v: EditorView | null) => void;
   onContext: (e: MouseEvent, v: EditorView) => void; jump?: Jump;
+  crumbExtra?: React.ReactNode; // パンくず行の右端に置くもの(プレビューの切り替えなど)
   gitBase?: string | null; // Git の HEAD にある内容(行の変更の印の元)。null なら印を出さない
 };
 
@@ -35,7 +36,7 @@ const EMMET_SYNTAX: Record<string, EmmetSyntax> = { html: "html", htm: "html", x
 const emmetSyntax = (name: string): EmmetSyntax | null => EMMET_SYNTAX[name.split(".").pop()?.toLowerCase() ?? ""] ?? null;
 const keys = [indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap].filter((b) => !MANAGED.has(b.run));
 
-export default function Editor({ path, docKey, name, value, onChange, onCursor, onFocus, onReady, onContext, jump, gitBase }: Props) {
+export default function Editor({ path, docKey, name, value, onChange, onCursor, onFocus, onReady, onContext, jump, gitBase, crumbExtra }: Props) {
   const st = useSettings();
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -135,7 +136,7 @@ export default function Editor({ path, docKey, name, value, onChange, onCursor, 
 
   return (
     <div className="ed-host">
-      {st.breadcrumbs && path && <Crumbs view={vw} path={path} ver={ver} />}
+      {((st.breadcrumbs && path) || crumbExtra) && <Crumbs view={vw} path={path ?? name} ver={ver} extra={crumbExtra} trailOn={!!(st.breadcrumbs && path)} />}
       <div ref={host} className="ed-cm" />
     </div>
   );

@@ -20,7 +20,7 @@
 
 Fixit Editor es un pequeño editor de código con aspecto de cristal esmerilado. Funciona con un solo archivo, `Fixit-Editor.exe`, sin instalador. Está hecho con CodeMirror 6 y Tauri, así que arranca rápido y consume poco.
 
-Los ajustes, las estadísticas y los espacios de trabajo se guardan en tu PC. Lo que programas no sale de ella, salvo cuando haces una pregunta a una IA o activas el recuento anónimo de uso.
+Los ajustes, las estadísticas y los espacios de trabajo se guardan en tu PC. Lo que programas no sale de ella, salvo cuando haces una pregunta a una IA, inicias sesión en Lapount con la sincronización activada, envías comentarios o se envía el recuento anónimo de uso.
 
 <p align="center">
   <img src="docs/screenshots/en-light.png" alt="Fixit Editor en modo claro" width="49%">
@@ -61,10 +61,13 @@ Los ajustes, las estadísticas y los espacios de trabajo se guardan en tu PC. Lo
 
 ## Privacidad
 
-Solo dos cosas pueden salir de tu PC, y únicamente cuando actúas tú o lo permites en los ajustes. Las estadísticas de programación nunca salen.
+Solo lo siguiente puede salir de tu PC. El contenido, los nombres y las rutas de los archivos nunca se incluyen.
 
 - **Preguntas a la IA:** el código seleccionado, el archivo abierto y tu mensaje se envían al proveedor que elijas.
-- **Recuento anónimo de uso:** una vez al día, un ID aleatorio, la versión de la app, el tipo de sistema operativo y el idioma. Puedes desactivarlo en los ajustes y en la configuración inicial.
+- **Recuento anónimo de uso:** una vez al día, un ID aleatorio, la versión de la app, el tipo de sistema operativo y el idioma. No hay ajuste para desactivarlo.
+- **Comentarios:** solo cuando pulsas Enviar: tu mensaje, su tipo, un contacto opcional, la versión de la app, el sistema operativo y el idioma.
+- **Inicio de sesión en Lapount (opcional):** solo si inicias sesión, la app obtiene el nombre y el icono de tu cuenta y sincroniza tus ajustes, perfiles y espacios de trabajo (nombres, colores y ubicaciones de carpetas). Las pestañas abiertas, los terminales, las claves y conversaciones de IA, las estadísticas y el contenido de los archivos no se sincronizan. Puedes desactivar la sincronización y borrar los datos de la nube. Los comentarios enviados con la sesión iniciada se vinculan a tu cuenta para que puedas recibir respuestas.
+- **Uso detallado y errores:** el tiempo de trabajo diario, los caracteres escritos y los guardados, y el tipo, el mensaje y el orden de llamadas de los errores. No hay ajuste para desactivarlo.
 
 ## Compilar desde el código fuente
 

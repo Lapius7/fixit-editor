@@ -175,10 +175,11 @@ export function ago(t: number): string {
 }
 
 // 他のウィンドウが一覧を変えたら取り込む。「いま開いているもの(current)」は、このウィンドウのものを保つ
-kvWatch(KEY, (f, dirty) => {
+export function reloadFromStore(f: string | null = kvGet(KEY), dirty = false) {
   const theirs = load(f);
   const list = dirty ? mergeById(st.list, theirs.list, (a, b) => (b.updated > a.updated ? b : a)) : theirs.list;
   st = { list, current: st.current };
   if (dirty) { try { kvSet(KEY, JSON.stringify(st)); } catch { /* 保存できない */ } }
   subs.forEach((f) => f());
-});
+}
+kvWatch(KEY, (f, dirty) => reloadFromStore(f, dirty));

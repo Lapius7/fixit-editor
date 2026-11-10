@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Palette as PaletteIcon, FolderOpen, PanelLeft, PanelRight, PanelTop, PanelBottom, ListCollapse, RotateCw, X, Files, Search as SearchIcon, FilePlus, FolderPlus, Pencil, Trash2, Copy, Scissors, ClipboardPaste,
+  Palette as PaletteIcon, Quote, FolderOpen, PanelLeft, PanelRight, PanelTop, PanelBottom, ListCollapse, RotateCw, X, Files, Search as SearchIcon, FilePlus, FolderPlus, Pencil, Trash2, Copy, Scissors, ClipboardPaste,
   Columns2, Rows2, ArrowLeftRight, SquareTerminal, Settings as Cog, Plus, TextCursorInput, Terminal as TermIcon, Undo2, Redo2, MousePointerClick, CaseUpper, ArrowDownAZ, WrapText, ChevronsDownUp, ChevronsUpDown, Link, Eraser, SunMoon, Command, ChevronDown, ChevronRight, Folder, FolderMinus,
 } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
@@ -12,6 +12,7 @@ import LangUI from "@/editor/LangUI";
 import { openFiles, isScript, type Edit, type Loc } from "@/editor/ts/client";
 import Editor, { dropStates, type Cursor, type Jump } from "@/editor/Editor";
 import FileTree, { GitMarks, canDrop, type GitMark } from "@/workbench/FileTree";
+import { ColGrip } from "@/workbench/ColGrip";
 import { loadBase, loadGit, type GitInfo } from "@/features/git/git";
 import QuickOpen from "@/workbench/QuickOpen";
 import Viewer from "@/workbench/Viewer";
@@ -28,13 +29,20 @@ import { noteSave } from "@/features/stats/stats";
 import { moveFile, recordSave } from "@/features/history/history";
 import LocalHistory from "@/features/history/LocalHistory";
 import { sendPing } from "@/features/telemetry/telemetry";
+import { installErrorHooks, startUsageReports } from "@/features/telemetry/report";
+import FeedbackView from "@/features/telemetry/FeedbackView";
+import { useAccount } from "@/features/account/auth";
+import { useReplies } from "@/features/account/replies";
+import { Avatar } from "@/features/account/AccountUI";
+import UpdateView from "@/features/update/UpdateView";
+import { checkUpdate, type Manifest } from "@/features/update/update";
 import SearchPanel from "@/workbench/SearchPanel";
 import ContextMenu, { type Item } from "@/workbench/ContextMenu";
 import Dialog from "@/workbench/Dialog";
 import Connect from "@/features/workspaces/Connect";
 import Workspaces from "@/features/workspaces/Workspaces";
-import { Pin, History } from "lucide-react";
-import { Sparkles, Server, HardDrive, Unplug, FolderKanban, Eye, Code2, Maximize2, Minimize2 } from "lucide-react";
+import { Pin, History, MessageSquareText, RefreshCw } from "lucide-react";
+import { Sparkles, Server, HardDrive, FolderKanban, Eye, Code2, Maximize2, Minimize2 } from "lucide-react";
 import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
 import { displayPath, setRootNames, splitRoot } from "@/workbench/rootpath";
 import { getProfiles, switchProfile, useProfiles } from "@/features/settings/profiles";
@@ -48,7 +56,7 @@ import { langName } from "@/editor/lang";
 import { APP_NAME } from "@/shared/config";
 import BrowserDock from "@/features/browser/BrowserDock";
 import { AiDock } from "@/features/ai/AiDock";
-import type { AiAction, AiJob, Ctx } from "@/features/ai/prompts";
+import type { AiAction, AiJob, Clip, Ctx } from "@/features/ai/prompts";
 import Preview, { previewKind } from "@/features/preview/Preview";
 import { KEYS, DEF, chips, comboOf, keyOf, rec, table } from "@/features/settings/keys";
 import { EDIT } from "@/editor/edit-cmds";
@@ -116,6 +124,13 @@ export default function App() {
   const [seed, setSeed] = useState("");
   const [rev, setRev] = useState(0);
   const [rootDrop, setRootDrop] = useState(false);
+  const [extDrop, setExtDrop] = useState(false); // OS のフォルダ・ファイルを、エクスプローラーの上へ引きずっている間
+  useEffect(() => { // 引きずりが途中でやめられたり、ウィンドウの外へ出たりしたときに、ドロップ表示が残らないようにする
+    const end = () => { setRootDrop(false); setExtDrop(false); };
+    const out = (e: DragEvent) => { if (!e.relatedTarget) end(); };
+    window.addEventListener("dragend", end); window.addEventListener("drop", end); window.addEventListener("dragleave", out);
+    return () => { window.removeEventListener("dragend", end); window.removeEventListener("drop", end); window.removeEventListener("dragleave", out); };
+  }, []);
   const [preview, setPreview] = useState<string | null>(null); // 一時表示のタブ(1つだけ。編集・保存・ダブルクリックで固定される)
   type PvMode = "split" | "preview"; // 表示の切り替え: なし = テキストだけ / split = 両方 / preview = プレビューだけ
   const pvSeen = useRef(new Set<string>()); // 一度プレビューを開いたファイル(閉じる動きの間も中身を残す)
@@ -123,17 +138,27 @@ export default function App() {
   const [br, setBr] = useState(false); // アプリ内ブラウザの表示
   const [ai, setAi] = useState(false); // AI パネルの表示
   const [aiJob, setAiJob] = useState<AiJob | null>(null); // 右クリックから AI パネルへ渡す依頼
+  const [aiQuote, setAiQuote] = useState<Clip | null>(null); // 引用して AI パネルへ添える文
   const aiSeq = useRef(0);
   const [cur, setCur] = useState<Pair<Cursor | null>>([null, null]);
   const [jump, setJump] = useState<Pair<Jump | undefined>>([undefined, undefined]);
   const [qo, setQo] = useState(false);
   const [cn, setCn] = useState(false);
+  const me = useAccount();
+  const unreplies = useReplies().unread;
   const [wsDlg, setWsDlg] = useState<null | "ws" | "profile">(null);
   const [lh, setLh] = useState<string | null>(null); // ローカル履歴を開いているファイルのパス
   const [statsOpen, setStatsOpen] = useState(false);
+  const [fbOpen, setFbOpen] = useState(false);
+  const [upd, setUpdM] = useState<Manifest | null>(null);
+  const [updOpen, setUpdOpen] = useState(false);
+  const setUpd = (m: Manifest) => { setUpdM(m); setUpdOpen(true); };
+  const checkNow = async () => { const r = await checkUpdate(); if (r === "error") notify(i18next.t("更新を確認できませんでした"), "error"); else if (r) setUpd(r); else notify(i18next.t("最新の版です"), "success"); };
   const [setupOpen, setSetupOpen] = useState(needSetup);
   // 初回セットアップで選び終えてから、1 日 1 回だけ匿名の利用数を送る(開発中は送らない)
-  useEffect(() => { if (!setupOpen) sendPing(); }, [setupOpen]);
+  useEffect(() => { if (!setupOpen) { sendPing(); installErrorHooks(); startUsageReports(); } }, [setupOpen]);
+  // 起動して少ししたら、新しい版がないか確かめる(あれば知らせる)。失敗しても何も出さない
+  useEffect(() => { if (setupOpen || !import.meta.env.PROD) return; const t = setTimeout(() => { checkUpdate().then((r) => { if (r && r !== "error") setUpd(r); }); }, 6000); return () => clearTimeout(t); }, [setupOpen]);
   const [pop, setPop] = useState<PopKind | null>(null);
   const wsStore = useWorkspaces();
   const pfStore = useProfiles();
@@ -160,7 +185,7 @@ export default function App() {
   const [dlg, setDlg] = useState<Dlg | null>(null);
   // 外から閉じられても、閉じるアニメーションが終わるまで残す
   const pQo = usePresence(qo), pPal = usePresence(pal), pSetts = usePresence(setts), pDlg = usePresence(dlg), pCn = usePresence(cn);
-  const pTp = usePresence(tp, 400), pWs = usePresence(wsDlg), pLh = usePresence(lh), pStats = usePresence(statsOpen), pSetup = usePresence(setupOpen), pPop = usePresence(pop, 140), pMenu = usePresence(menu, 140);
+  const pTp = usePresence(tp, 400), pWs = usePresence(wsDlg), pLh = usePresence(lh), pStats = usePresence(statsOpen), pFb = usePresence(fbOpen), pUp = usePresence(updOpen), pSetup = usePresence(setupOpen), pPop = usePresence(pop, 140), pMenu = usePresence(menu, 140);
   const views = useRef<Pair<EditorView | null>>([null, null]);
   const apis = useRef(new Map<number, TermApi>());
   const seq = useRef(0);
@@ -347,17 +372,17 @@ export default function App() {
   snapRef.current = snapshot;
   const flushWs = () => {
     clearTimeout(wsTimer.current);
-    if (st.wsAuto && !restoring.current && activeWs.current) saveState(activeWs.current, snapRef.current());
+    if (!restoring.current && activeWs.current) saveState(activeWs.current, snapRef.current());
   };
   const flushRef = useRef(flushWs);
   flushRef.current = flushWs;
   // 状態が変わったら、少し待ってから書き戻す
   useEffect(() => {
-    if (!st.wsAuto || !activeWs.current || restoring.current) return;
+    if (!activeWs.current || restoring.current) return;
     clearTimeout(wsTimer.current);
     wsTimer.current = setTimeout(() => flushRef.current(), st.wsDelay);
     return () => clearTimeout(wsTimer.current);
-  }, [tabs, act, fp, split, grp, side, panel, term, sess, st.wsAuto, st.wsDelay, st.wsTerms]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tabs, act, fp, split, grp, side, panel, term, sess, st.wsDelay, st.wsTerms]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const f = () => flushRef.current();
     addEventListener("pagehide", f);
@@ -503,6 +528,22 @@ export default function App() {
     const name = conn.path === "/" ? "/" : conn.path.split("/").pop()!;
     return { name, handle: rootHandle(conn) as unknown as FileSystemDirectoryHandle, ref: rootRefOf(conn, name, true) };
   };
+  // エクスプローラーへ、OS のフォルダ・ファイルをドロップして開く(先頭がフォルダならそのフォルダを開き、ファイルだけなら各ファイルをタブで開く)
+  const hasFiles = (e: React.DragEvent) => !drag.node && !drag.tab && e.dataTransfer.types.includes("Files");
+  const dropExternal = async (e: React.DragEvent) => {
+    setRootDrop(false); setExtDrop(false);
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    const items = [...e.dataTransfer.items].filter((i) => i.kind === "file");
+    const hs = await Promise.all(items.map((i) => (i as unknown as { getAsFileSystemHandle?: () => Promise<FileSystemHandle | null> }).getAsFileSystemHandle?.() ?? null));
+    try {
+      const dir = hs.find((h): h is FileSystemDirectoryHandle => h?.kind === "directory");
+      if (dir) { await enter(dir.name, dir, rootRefOf(undefined, dir.name, true)); return; }
+      const files = hs.filter((h): h is FileSystemFileHandle => h?.kind === "file");
+      if (!files.length) { flash(i18next.t("ここへはドロップできません"), "error"); return; }
+      for (const f of files) await open({ name: f.name, path: f.name, kind: "file", handle: f }, fp, true);
+    } catch (err) { flash((err as Error).message, "error"); }
+  };
   const openFolder = async () => {
     try {
       const p = await pickAny();
@@ -514,9 +555,6 @@ export default function App() {
   const connect = async (conn: Conn) => {
     const t = connTarget(conn);
     if (await enter(t.name, t.handle, t.ref, conn)) flash(i18next.t("{{arg0}} に接続しました", { arg0: connLabel(conn) }));
-  };
-  const disconnect = async () => {
-    if (await enter(DEMO_NAME, undefined, { kind: "demo" })) flash(i18next.t("切断しました"));
   };
 
   // フォルダをワークスペースに足す(VSCode の「ワークスペースにフォルダを追加」)。サンプルを開いているときは、普通に開く
@@ -872,6 +910,7 @@ export default function App() {
       palette: () => setPal(true), quickOpen: () => setQo(true), save, openFolder, addFolder, connect: () => { setCnAdd(false); setCn(true); }, workspaces: () => setWsDlg("ws"), profiles: () => setWsDlg("profile"), saveWorkspace: quickSave, newFile: () => create("file", null), settings: () => setSetts("look"), shortcuts: () => setSetts("keys"),
       newTerm: () => addTerm(), closeTerm: () => alive().length && endTerm(actT), nextTerm: () => stepTerm(1), prevTerm: () => stepTerm(-1),
       renameTerm: () => { if (alive().length) { showTerm(true); setRenaming(actT); } }, clearTerm: () => apis.current.get(actT)?.clear(),
+      aiQuote: () => { const v = views.current[fp]; if (v) quoteToAi(v); },
       toggleSide: () => setSide((v) => !v), themePanel: () => setTp((v) => !v), stats: () => setStatsOpen(true), toggleTerm: () => showTerm(), toggleBrowser: () => setBr((v) => !v), toggleAi: () => setAi((v) => !v), togglePreview: () => { if (tab && previewKind(tab.node.name)) setPv((p) => ({ ...p, [tab.node.path]: p[tab.node.path] === undefined ? "split" : p[tab.node.path] === "split" ? "preview" : undefined })); }, toggleSplit,
       otherPane: () => { if (split) { const n = fp === 0 ? 1 : 0; setFp(n); setTimeout(() => views.current[n]?.focus(), 0); } },
       swapPanes, splitDir: flipDir, closePane,
@@ -963,6 +1002,29 @@ export default function App() {
     setAiJob({ id: ++aiSeq.current, action, lang, view: v, ...r });
   };
   const aiCtx = (): Ctx | null => { const v = views.current[fp]; if (!v) return null; const r = aiRange(v); return r.text ? { name: r.name, text: r.text, scope: r.scope } : null; };
+  // 選んだ文(なければ、いまの行)を、行番号つきで AI パネルへ引用する
+  const quoteToAi = (v: EditorView) => {
+    const sel = v.state.selection.main, d = v.state.doc;
+    const from = sel.empty ? d.lineAt(sel.head).from : sel.from, to = sel.empty ? d.lineAt(sel.head).to : sel.to;
+    const text = d.sliceString(from, to);
+    if (!text.trim()) return;
+    setAi(true);
+    setAiQuote({ id: ++aiSeq.current, name: tab?.node.name ?? i18next.t("無題"), text, scope: "selection", lines: [d.lineAt(from).number, d.lineAt(to).number] });
+  };
+  // ファイル(ツリーの行・タブ)を、中身ごと AI パネルへ添える。開いているものは、保存前の内容を使う
+  const clipOf = async (x: Node | string): Promise<Ctx | null> => {
+    const n = typeof x === "string" ? tabOf(x)?.node : x;
+    if (!n || n.kind === "dir") return null;
+    const t = tabOf(n.path);
+    if (t) return t.view.kind === "text" ? { name: n.name, text: t.text, scope: "file" } : null;
+    try { const r = await load(n); return r.view.kind === "text" ? { name: n.name, text: r.view.text, scope: "file" } : null; } catch { return null; }
+  };
+  const fileToAi = async (n: Node) => {
+    const c = await clipOf(n);
+    if (!c) { notify(i18next.t("このファイルは文字として読めないため、添えられません"), "error"); return; }
+    setAi(true);
+    setAiQuote({ id: ++aiSeq.current, ...c });
+  };
   const editorMenu = (e: MouseEvent, v: EditorView) => {
     const sel = !v.state.selection.main.empty, word = sel ? v.state.sliceDoc(v.state.selection.main.from, v.state.selection.main.to) : "";
     const r = (id: string) => () => { v.focus(); EDIT[id](v); };
@@ -998,6 +1060,7 @@ export default function App() {
           { label: i18next.t("折りたたむ"), keys: K("fold"), run: r("fold") }, { label: i18next.t("展開する"), keys: K("unfold"), run: r("unfold") },
           { label: i18next.t("すべて折りたたむ"), keys: K("foldAll"), run: r("foldAll") }, { label: i18next.t("すべて展開"), keys: K("unfoldAll"), run: r("unfoldAll") },
         ] },
+        { label: i18next.t("AI チャットに引用"), icon: ic(Quote), keys: K("aiQuote"), run: () => quoteToAi(v) },
         { label: "AI", icon: ic(Sparkles), sub: [
           { type: "title", label: sel ? i18next.t("選択範囲を送信") : i18next.t("ファイル全体を送信") },
           { label: i18next.t("要約"), run: () => askAi(v, "summarize") },
@@ -1037,6 +1100,7 @@ export default function App() {
         ...(n && !dir ? [
           { label: i18next.t("開く"), icon: ic(Files), run: () => open(n) },
           split ? { label: i18next.t("もう一方の画面で開く"), icon: ic(Columns2), keys: "", run: () => openSplit(n) } : splitSub(n),
+          { label: i18next.t("AI チャットに添える"), icon: ic(Sparkles), run: () => void fileToAi(n) },
           { type: "sep" as const },
         ] : []),
         { label: i18next.t("新規ファイル"), icon: ic(FilePlus), keys: K("newFile"), run: () => create("file", dir ? n : null) },
@@ -1067,7 +1131,6 @@ export default function App() {
           { label: i18next.t("ファイル一覧を更新"), icon: ic(RotateCw), run: reload },
           ...(root.conn ? [{ label: i18next.t("ここでターミナルを開く"), icon: ic(SquareTerminal), run: () => addTerm(root.conn!.path, undefined, root.conn!.kind === "ssh" ? root.conn!.host : null) }] : []),
           { label: i18next.t("WSL・SSH に接続"), icon: ic(Server), keys: K("connect"), run: () => { setCnAdd(false); setCn(true); } },
-          ...(root.conn ? [{ label: i18next.t("切断(サンプルに戻る)"), icon: ic(Unplug), run: disconnect }] : []),
           { label: i18next.t("フォルダを開く"), icon: ic(FolderOpen), keys: K("openFolder"), run: openFolder, disabled: !supportsFs() },
           { label: i18next.t("フォルダをワークスペースに追加"), icon: ic(FolderPlus), keys: K("addFolder"), run: addFolder, disabled: !supportsFs() || !root.handle },
           { label: i18next.t("WSL・SSH のフォルダを追加"), icon: ic(Server), run: () => { setCnAdd(true); setCn(true); }, disabled: !root.handle },
@@ -1093,6 +1156,7 @@ export default function App() {
         { label: i18next.t("保存済みを閉じる"), run: () => closeMany(savedOnes.map((x) => x.node.path)), disabled: savedOnes.length === 0 },
         { label: i18next.t("すべて閉じる"), keys: K("closeAll"), run: () => closeMany(tabs.map((x) => x.node.path)) },
         { type: "sep" },
+        { label: i18next.t("AI チャットに添える"), icon: ic(Sparkles), run: () => void fileToAi(t.node) },
         ...(!split ? [splitSub(t.node)] : [
         { label: i18next.t("{{A}}の画面で開く", { A }), icon: ic(Columns2), run: () => sendTo(t.node, 0), disabled: inPane(0) },
         { label: i18next.t("{{B}}の画面で開く", { B }), icon: ic(Columns2), run: () => sendTo(t.node, 1), disabled: inPane(1) },
@@ -1148,6 +1212,9 @@ export default function App() {
         { label: i18next.t("設定"), icon: ic(Cog), keys: K("settings"), run: () => setSetts("look") },
         { label: i18next.t("統計を見る(作業時間・入力)"), keys: K("stats"), run: () => setStatsOpen(true) },
         { label: i18next.t("ショートカットの一覧"), keys: K("shortcuts"), run: () => setSetts("keys") },
+        { label: i18next.t("アカウント"), run: () => setSetts("account") },
+        { label: i18next.t("フィードバックを送る"), icon: ic(MessageSquareText), run: () => setFbOpen(true) },
+        ...(IS_TAURI ? [{ label: i18next.t("更新を確認"), icon: ic(RefreshCw), run: () => { void checkNow(); } }] : []),
       ],
     });
   };
@@ -1202,24 +1269,13 @@ export default function App() {
         <span style={{ flex: 1, alignSelf: "stretch", minWidth: 8 }} data-tauri-drag-region
           onDragOver={(e) => { if (drag.tab) { e.preventDefault(); const last = list[list.length - 1]; setTabDrop({ path: last?.node.path ?? "", after: true, pane: i }); } }}
           onDrop={(e) => { if (drag.tab) { e.preventDefault(); dropTab(i, list[list.length - 1]?.node.path ?? null, true); } }} />
-        {(() => {
-          const at = list.find((t) => t.node.path === act[i]);
-          if (!at || at.view.kind !== "text" || !previewKind(at.node.name)) return null;
-          const cur = pv[at.node.path];
-          const on = cur !== undefined, wide = cur === "preview", key = chips(K("togglePreview")).join(" ");
-          const set = (m: PvMode | undefined) => setPv((p) => ({ ...p, [at.node.path]: m }));
-          return (
-            <div className="seg pv-seg" role="group" aria-label={i18next.t("プレビュー")} data-open={on}>
-              <button aria-pressed={on} title={`${on ? i18next.t("プレビューを閉じる") : i18next.t("プレビューを横に開く")} (${key})`} onClick={() => set(on ? undefined : "split")}><Eye />{i18next.t("プレビュー")}</button>
-              {on && <button className="pv-wide" aria-pressed={wide} aria-label={wide ? i18next.t("エディタも表示する") : i18next.t("プレビューだけにする")} title={wide ? i18next.t("エディタも表示する") : i18next.t("プレビューだけにする")} onClick={() => set(wide ? "split" : "preview")}>{wide ? <Minimize2 /> : <Maximize2 />}</button>}
-            </div>
-          );
-        })()}
         {i === lastBar && (
           <>
             <button className="icon-btn" data-on={ai} aria-label={i18next.t("AI パネルの表示")} title={`${i18next.t("AI パネルの表示")} (${chips(K("toggleAi")).join(" ")})`} onClick={() => setAi((v) => !v)}><Sparkles /></button>
             <button className="icon-btn" data-on={term} aria-label={i18next.t("ターミナル")} title={i18next.t("ターミナル")} onClick={() => showTerm()}><SquareTerminal /></button>
             <button className="icon-btn" aria-label={i18next.t("コマンドパレット")} title={i18next.t("コマンドパレット")} onClick={() => setPal(true)}><Command /></button>
+            <button className="icon-btn fb-btn" aria-label={i18next.t("フィードバックを送る")} title={i18next.t("フィードバックを送る")} onClick={() => setFbOpen(true)}><MessageSquareText />{unreplies > 0 && <i className="fb-dot" aria-hidden />}</button>
+            {me && <button className="acct-chip" aria-label={i18next.t("アカウント")} title={me.email} onClick={() => setSetts("account")}><Avatar user={me} size={20} /><span>{me.name}</span></button>}
             <button className="icon-btn" aria-label={i18next.t("設定")} title={i18next.t("設定")} onClick={() => setSetts("look")}><Cog /></button>
           </>
         )}
@@ -1246,6 +1302,16 @@ export default function App() {
         ) : t.view.kind === "text" ? (
           <div className="ed-pv" data-pv={previewKind(t.node.name) ? pv[t.node.path] ?? "text" : "text"}>
           <Editor
+          crumbExtra={previewKind(t.node.name) ? (() => {
+            const cur = pv[t.node.path], on = cur !== undefined, wide = cur === "preview", key = chips(K("togglePreview")).join(" ");
+            const set = (m: PvMode | undefined) => setPv((p) => ({ ...p, [t.node.path]: m }));
+            return (
+              <span className="pv-tools" data-open={on}>
+                {on && <button className="icon-btn bc-btn" aria-pressed={wide} aria-label={wide ? i18next.t("エディタも表示する") : i18next.t("プレビューだけにする")} data-tip={wide ? i18next.t("エディタも表示する") : i18next.t("プレビューだけにする")} onClick={() => set(wide ? "split" : "preview")}>{wide ? <Minimize2 /> : <Maximize2 />}</button>}
+                <button className="icon-btn bc-btn" data-on={on} aria-pressed={on} aria-label={on ? i18next.t("プレビューを閉じる") : i18next.t("プレビューを横に開く")} data-tip={`${on ? i18next.t("プレビューを閉じる") : i18next.t("プレビューを横に開く")} (${key})`} onClick={() => set(on ? undefined : "split")}><Eye /></button>
+              </span>
+            );
+          })() : undefined}
             key={`${i}:${t.node.path}`} docKey={`${i}:${t.node.path}`} path={displayPath(t.node.path)} name={t.node.name} value={t.text} jump={jump[i]}
             onChange={(v) => { setTabs((p) => p.map((x) => (x.node.path === t.node.path && x.text !== v ? { ...x, text: v } : x))); setPreview((q) => (q === t.node.path ? null : q)); }}
             onCursor={(c) => setCur((p) => (i === 0 ? [c, p[1]] : [p[0], c]))}
@@ -1270,12 +1336,12 @@ export default function App() {
     <GitMarks.Provider value={gitMark}>
     <div className="stage" onContextMenu={stageMenu}>
       <div className="window" data-side={side} data-sb={st.sbShow} data-tp={tp}>
+        <ColGrip className="col-grip-side" width={st.sideW} def={280} min={200} max={640} dir={1} onChange={(w) => update({ sideW: w })} />
         <aside className="sidebar" aria-label={i18next.t("サイドバー")}>
           <header className="side-head" data-tauri-drag-region>
             {CHROME && <WinControls />}
-            <h1 className="title truncate" data-tauri-drag-region>{roots.length > 1 ? roots.map((r) => r.name).join(" · ") : root.name}</h1>
+            <h1 className="title truncate" data-tauri-drag-region>Fixit</h1>
             <div className="tools">
-              <button className="icon-btn" aria-label={i18next.t("ワークスペース")} title={i18next.t("ワークスペースとプロファイル")} onClick={() => setWsDlg("ws")}><FolderKanban /></button>
               <button className="icon-btn" data-on={panel === "files"} aria-label={i18next.t("ファイル")} title={i18next.t("ファイル")} onClick={() => setPanel("files")}><Files /></button>
               <button className="icon-btn" data-on={panel === "search"} aria-label={i18next.t("全文検索")} title={i18next.t("全文検索")} onClick={() => run("searchAll")}><SearchIcon /></button>
               <button className="icon-btn" aria-label={i18next.t("サイドバーを隠す")} onClick={() => setSide(false)}><PanelLeft /></button>
@@ -1284,9 +1350,9 @@ export default function App() {
           {panel === "files" ? (
             <>
               <nav className="tree scroll overscroll-contain" data-drop={rootDrop}
-                onDragOver={(e) => { if (roots.length > 1 || !drag.node || (e.target as HTMLElement).closest(".tree-row") || dirOf(drag.node.path) === roots[0].prefix) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; setRootDrop(true); }}
-                onDragLeave={(e) => { if (e.currentTarget === e.target) setRootDrop(false); }}
-                onDrop={(e) => { setRootDrop(false); if (roots.length > 1 || !drag.node || (e.target as HTMLElement).closest(".tree-row")) return; e.preventDefault(); const m = drag.node; dragEnd(); moveTo(m, null); }}
+                onDragOver={(e) => { if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setRootDrop(true); setExtDrop(true); return; } if (roots.length > 1 || !drag.node || (e.target as HTMLElement).closest(".tree-row") || dirOf(drag.node.path) === roots[0].prefix) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; setRootDrop(true); }}
+                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as globalThis.Node | null)) { setRootDrop(false); setExtDrop(false); } }}
+                onDrop={(e) => { if (hasFiles(e)) { void dropExternal(e); return; } setRootDrop(false); if (roots.length > 1 || !drag.node || (e.target as HTMLElement).closest(".tree-row")) return; e.preventDefault(); const m = drag.node; dragEnd(); moveTo(m, null); }}
                 onContextMenu={(e) => { if (e.target === e.currentTarget || !(e.target as HTMLElement).closest(".tree-row")) treeMenu(e, null); }}>
                 {roots.length > 1 ? roots.map((r) => {
                   const h = headNode(r), shut = folded.has(r.prefix);
@@ -1309,7 +1375,12 @@ export default function App() {
                       </div>
                     </section>
                   );
-                }) : (
+                }) : roots.every((r) => r.ref.kind === "demo") && !root.nodes.length ? (
+                  <div className="tree-empty">
+                    <FolderOpen />
+                    <p><Trans i18nKey="フォルダやファイルをここへドラッグ&ドロップするか、下のボタンから選んでください。" /></p>
+                  </div>
+                ) : (
                   <FileTree nodes={root.nodes} activePath={act[fp]} ctxPath={menu?.path ?? null} rev={rev} onOpen={(n, pin) => open(n, fp, !!pin)} onContext={(e, n) => treeMenu(e, n)} onMove={moveTo} />
                 )}
               </nav>
@@ -1323,6 +1394,13 @@ export default function App() {
           ) : (
             <SearchPanel roots={rootsLite} live={live} seed={seed} onOpen={goHit} />
           )}
+          <div className="drop-zone" data-on={extDrop && panel === "files"} aria-hidden="true">
+            <div className="drop-zone-card">
+              <span className="drop-zone-icon"><FolderOpen /></span>
+              <strong><Trans i18nKey="ここにドロップして開く" /></strong>
+              <small><Trans i18nKey="フォルダ・ファイルを離すと開きます" /></small>
+            </div>
+          </div>
         </aside>
 
         <section className="main">
@@ -1340,8 +1418,10 @@ export default function App() {
               {splitOpen && <div className="split-grip" role="separator" aria-orientation={st.splitDir === "row" ? "horizontal" : "vertical"} title={i18next.t("ドラッグで幅を変える・ダブルクリックで半分に戻す")} data-drag={dragS} onPointerDown={gripDown} onDoubleClick={() => update({ splitRatio: 50 })} />}
               {dz !== null && dragging() && <div className="drop-hint" data-dir={st.splitDir} style={dropRect(dz)} />}
             </div>
+            {br && <ColGrip width={st.brW} def={560} min={280} max={1000} dir={-1} onChange={(w) => update({ brW: w })} />}
             {br && <BrowserDock onClose={() => setBr(false)} />}
-            <AiDock open={ai} job={aiJob} getCtx={aiCtx} onClose={() => setAi(false)} onSettings={() => setSetts("ai")} />
+            {ai && <ColGrip width={st.aiW} def={440} min={280} max={900} dir={-1} onChange={(w) => update({ aiW: w })} />}
+            <AiDock open={ai} job={aiJob} quote={aiQuote} resolve={clipOf} getCtx={aiCtx} onClose={() => setAi(false)} onSettings={() => setSetts("ai")} />
             </div>
             {sess.length > 0 && (
               <div className="term-wrap" data-open={term && shown} data-drag={dragT}>
@@ -1399,6 +1479,8 @@ export default function App() {
       {pDlg.v && <Dialog key={pDlg.key} out={pDlg.out} {...pDlg.v} onClose={() => setDlg(null)} />}
       {pWs.v && <Workspaces key={pWs.key} out={pWs.out} initial={pWs.v} curId={ws?.id ?? null} saveName={root.conn ? root.name : root.handle ? root.name : ""} max={st.wsMax} onOpen={(w) => openWs(w)} onSaveNew={saveNew} onClose={() => setWsDlg(null)} flash={flash} />}
       {pSetup.v && <Setup key={pSetup.key} out={pSetup.out} onClose={() => setSetupOpen(false)} />}
+      {pFb.v && <FeedbackView key={pFb.key} out={pFb.out} onClose={() => setFbOpen(false)} />}
+      {pUp.v && upd && <UpdateView key={pUp.key} m={upd} out={pUp.out} onClose={() => setUpdOpen(false)} />}
       {pStats.v && <StatsView key={pStats.key} out={pStats.out} onClose={() => setStatsOpen(false)} />}
       {pCn.v && <Connect key={pCn.key} out={pCn.out} current={cnAdd ? null : root.conn ?? null} adding={cnAdd} onConnect={cnAdd ? addConn : connect} onClose={() => setCn(false)} />}
       {pPop.v && <StatusPop key={pPop.key} out={pPop.out} kind={pPop.v} view={ev() ?? null} eol={tab?.eol ?? "lf"} lang={tab ? langName(tab.node.name) : ""} onEol={toggleEol} onClose={() => setPop(null)} />}

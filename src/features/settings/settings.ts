@@ -5,7 +5,7 @@ import { TAB_SIZE } from "@/shared/config";
 
 export type Dot = { x: number; y: number; c: string };
 export type Mode = "light" | "dark" | "auto";
-export type Cat = "look" | "layout" | "editor" | "cursor" | "assist" | "files" | "ws" | "term" | "status" | "motion" | "privacy" | "adv" | "history" | "ai";
+export type Cat = "look" | "layout" | "editor" | "cursor" | "assist" | "files" | "ws" | "term" | "status" | "motion" | "privacy" | "adv" | "history" | "ai" | "account";
 
 // 背景の色を選ぶ見本(画像の下段の丸)
 export const SWATCHES = ["#e4e6ec", "#f08bb4", "#f2836b", "#f5a65b", "#e6c85a", "#8ccf6f", "#4fc79a", "#4aa8f0", "#7a7cf0", "#b57cf0"];
@@ -15,7 +15,7 @@ export const MAX_DOTS = 5;
 export const CATS: { id: Cat | "keys"; label: string }[] = [
   { id: "look", label: "外観" }, { id: "layout", label: "レイアウト" }, { id: "editor", label: "エディタ" }, { id: "cursor", label: "カーソルと行番号" },
   { id: "assist", label: "補完と入力" }, { id: "files", label: "ファイル" }, { id: "ws", label: "ワークスペース" }, { id: "term", label: "ターミナル" }, { id: "status", label: "ステータスバー" },
-  { id: "motion", label: "アニメーション" }, { id: "privacy", label: "統計とプライバシー" }, { id: "adv", label: "詳細" }, { id: "ai", label: "AI" }, { id: "history", label: "変更履歴" }, { id: "keys", label: "ショートカット" },
+  { id: "motion", label: "アニメーション" }, { id: "privacy", label: "統計とプライバシー" }, { id: "adv", label: "詳細" }, { id: "account", label: "アカウント" }, { id: "ai", label: "AI" }, { id: "history", label: "変更履歴" }, { id: "keys", label: "ショートカット" },
 ];
 
 /* ---------- 設定の一覧(ここに足すだけで、設定画面・保存・検索に出る) ----------
@@ -28,6 +28,13 @@ const n = <K extends string>(id: K, cat: Cat, label: string, def: number, o: Opt
 const b = <K extends string>(id: K, cat: Cat, label: string, def: boolean, o: Opt & { fmt?: (v: boolean) => string } = {}) => ({ id, cat, label, def, kind: "bool" as const, ...o });
 const e = <K extends string>(id: K, cat: Cat, label: string, def: string, opts: [string, string][], o: Opt & { fmt?: (v: string) => string } = {}) =>
   ({ id, cat, label, def, kind: "enum" as const, opts, ...o });
+// 書体。選択肢のキー(preset)か、この PC のフォント("local:家族名")のどちらかを持つ
+const f = <K extends string>(id: K, cat: Cat, label: string, def: string, opts: [string, string][], o: Opt & { fmt?: (v: string) => string; mono?: boolean } = {}) =>
+  ({ id, cat, label, def, kind: "font" as const, opts, ...o });
+export const LOCAL = "local:";
+const quote = (n: string) => `"${n.replace(/["\\\n]/g, "")}"`;
+// プリセットは map から、この PC のフォントは家族名を先頭にして、日本語の字が欠けないよう tail を後ろに付ける
+const fontCss = (m: Record<string, string>, tail: string) => (v: string) => (v.startsWith(LOCAL) ? `${quote(v.slice(LOCAL.length))}, ${tail}` : m[v] ?? "");
 const map = (m: Record<string, string>) => (v: string) => m[v] ?? "";
 
 export const SANS: Record<string, string> = {
@@ -36,6 +43,7 @@ export const SANS: Record<string, string> = {
   serif: 'ui-serif, Georgia, "Hiragino Mincho ProN", "Yu Mincho", "Noto Sans JP Variable", serif',
 };
 export const CODE: Record<string, string> = {
+  obel: '"Obel Mono", "Noto Sans JP Variable", ui-monospace, monospace',
   jb: '"JetBrains Mono Variable", "Noto Sans JP Variable", ui-monospace, monospace',
   system: 'ui-monospace, "Cascadia Code", Consolas, Menlo, "Noto Sans JP Variable", monospace',
   mono: 'monospace, "Noto Sans JP Variable"',
@@ -44,20 +52,27 @@ export const CODE: Record<string, string> = {
 const RAW = [
   e("lang", "look", "表示言語", "auto", [["auto", "自動(OSに合わせる)"], ["ja", "日本語"], ["en", "English"], ["ko", "한국어"]], { sec: "言語" }),
   /* 外観(モードとアクセントと背景のメッシュは、専用の画面) */
-  e("uiFont", "look", "画面の文字", "inter", [["inter", "Inter"], ["system", "システム"], ["serif", "明朝"]], { sec: "文字と形", css: "--font-sans", fmt: map(SANS) }),
+  f("uiFont", "look", "画面の文字", "inter", [["inter", "Inter"], ["system", "システム"], ["serif", "明朝"]], { sec: "文字と形", css: "--font-sans", fmt: fontCss(SANS, '"Noto Sans JP Variable", system-ui, sans-serif'), hint: "この PC に入っているフォントも選べます" }),
   e("treeFont", "look", "フォルダ(ファイル一覧)の文字", "ui", [["ui", "画面と同じ"], ["code", "コードと同じ"], ["inter", "Inter"], ["system", "システム"], ["serif", "明朝"]], { css: "--font-tree", fmt: map({ ui: "var(--font-sans)", code: "var(--font-mono)", ...SANS }) }),
   e("radius", "look", "角の丸さ", "normal", [["sharp", "角ばる"], ["normal", "標準"], ["round", "まるい"]], { css: "--rk", fmt: map({ sharp: ".35", normal: "1", round: "1.5" }) }),
-  n("blur", "look", "ガラスのぼかし", 32, { sec: "ガラス", min: 0, max: 60, step: 2, unit: "px", css: "--blur", hint: "窓の背景がどれだけ溶けるか" }),
-  n("sat", "look", "ガラスの彩度", 1.7, { min: 1, max: 2.4, step: 0.1, css: "--sat" }),
-  n("glass", "look", "ガラスの透け具合", 60, { min: 20, max: 100, step: 5, unit: "%", css: "--glass-pct", fmt: (v) => `${v}%`, hint: "大きいほど、壁紙が見えにくくなります" }),
-  n("paperA", "look", "エディタの面の濃さ", 100, { min: 0, max: 100, step: 5, unit: "%", css: "--paper-k", attr: "paper", fmt: (v) => String(v / 100), hint: "下げるほど、壁紙が透けて見えます" }),
+  n("blur", "look", "ガラスのぼかし", 10, { sec: "ガラス", min: 0, max: 60, step: 2, unit: "px", css: "--blur", hint: "窓・エディタの面・メニューの背景がどれだけ溶けるか" }),
+  n("sat", "look", "ガラスの彩度", 1.8, { min: 1, max: 2.4, step: 0.1, css: "--sat" }),
+  n("glass", "look", "ガラスの透け具合", 40, { min: 20, max: 100, step: 5, unit: "%", css: "--glass-pct", fmt: (v) => `${v}%`, hint: "大きいほど、壁紙が見えにくくなります" }),
+  n("paperA", "look", "エディタの面の濃さ", 30, { min: 0, max: 100, step: 5, unit: "%", css: "--paper-k", attr: "paper", fmt: (v) => String(v / 100), hint: "下げるほど、壁紙が透けて見えます" }),
   b("specular", "look", "ガラスの上端の光", true, { attr: "spec" }),
   n("shadow", "look", "影の濃さ", 100, { min: 0, max: 100, step: 5, unit: "%", css: "--sk", fmt: (v) => String(v / 100) }),
-  n("dim", "look", "ダーク時の壁紙の暗さ", 58, { min: 0, max: 90, step: 2, unit: "%", hint: "ダークテーマで壁紙にかぶせる黒の濃さ" }),
-  n("winMargin", "look", "窓の外側の余白", 20, { min: 0, max: 48, step: 4, unit: "px", css: "--stage-pad" }),
+  n("dim", "look", "ダーク時の壁紙の暗さ", 54, { min: 0, max: 90, step: 2, unit: "%", hint: "ダークテーマで壁紙にかぶせる黒の濃さ" }),
+  n("winGap", "look", "窓の外側の余白", 0, { min: 0, max: 48, step: 4, unit: "px", css: "--stage-pad", attr: "wm", hint: "0 で画面いっぱい。上げると窓が壁紙の上に浮き、角の丸さと影が見えます" }),
+  n("hairA", "look", "線と枠の濃さ", 100, { sec: "濃さ", min: 0, max: 250, step: 10, unit: "%", css: "--hair-k", fmt: (v) => String(v / 100), hint: "区切り線・枠・ガラスの縁" }),
+  n("hoverA", "look", "ホバー・押したときの濃さ", 100, { min: 0, max: 300, step: 20, unit: "%", css: "--press-k", fmt: (v) => String(v / 100) }),
+  n("selA", "look", "選択範囲の濃さ", 100, { min: 20, max: 200, step: 10, unit: "%", css: "--sel-k", fmt: (v) => String(v / 100), hint: "エディタで選んだ文字の背景。アクセントの色になります" }),
+  n("lineA", "look", "カーソル行の濃さ", 100, { min: 0, max: 400, step: 20, unit: "%", css: "--line-k", fmt: (v) => String(v / 100) }),
+  n("grain", "look", "壁紙のざらつき", 0, { sec: "壁紙", min: 0, max: 100, step: 10, unit: "%", css: "--grain-k", fmt: (v) => String(v / 100), hint: "壁紙にフィルムのような粒を重ねます" }),
 
   /* レイアウト */
-  n("sideW", "layout", "サイドバーの幅", 280, { sec: "サイドバー", min: 200, max: 440, step: 10, unit: "px", css: "--side-w" }),
+  n("sideW", "layout", "サイドバーの幅", 280, { sec: "サイドバー", min: 200, max: 640, step: 10, unit: "px", css: "--side-w", hint: "エディタとの境目をドラッグしても変えられます" }),
+  n("aiW", "layout", "AI パネルの幅", 440, { sec: "右のパネル", min: 280, max: 900, step: 10, unit: "px", css: "--ai-w", hint: "エディタとの境目をドラッグしても変えられます" }),
+  n("brW", "layout", "ブラウザの幅", 560, { sec: "右のパネル", min: 280, max: 1000, step: 10, unit: "px", css: "--br-w", hint: "エディタとの境目をドラッグしても変えられます" }),
   n("rowH", "layout", "ファイルの行の高さ", 28, { min: 22, max: 40, step: 2, unit: "px", css: "--row-h" }),
   n("treeIndent", "layout", "フォルダの字下げ", 16, { min: 8, max: 32, step: 2, unit: "px" }),
   b("showHidden", "layout", "「.」で始まるファイルも出す", true),
@@ -70,7 +85,7 @@ const RAW = [
   b("splitDrop","layout","タブやファイルのドラッグで、画面を選べるようにする",true),
 
   /* エディタ */
-  e("fontFamily", "editor", "コードの書体", "jb", [["jb", "JetBrains Mono"], ["system", "システム"], ["mono", "標準の等幅"]], { sec: "文字", css: "--font-mono", fmt: map(CODE), hint: "ターミナルにも使います" }),
+  f("fontFamily", "editor", "コードの書体", "obel", [["obel", "Obel Mono"], ["jb", "JetBrains Mono"], ["system", "システム"], ["mono", "標準の等幅"]], { sec: "文字", css: "--font-mono", fmt: fontCss(CODE, '"Noto Sans JP Variable", ui-monospace, monospace'), mono: true, hint: "この PC に入っているフォントも選べます。ターミナルにも使います" }),
   n("fontSize", "editor", "文字の大きさ", 13.5, { min: 10, max: 28, step: 0.5, unit: "px", css: "--fs" }),
   n("fontWeight", "editor", "文字の太さ", 400, { min: 300, max: 700, step: 100, css: "--code-w" }),
   n("lineHeight", "editor", "行の高さ", 22, { min: 16, max: 36, step: 1, unit: "px", css: "--lh", hint: "整数のpxにすると、にじみません" }),
@@ -129,12 +144,9 @@ const RAW = [
   /* 統計とプライバシー */
   b("statsOn", "privacy", "コーディング時間とタイピングを記録する", true, { sec: "統計", hint: "この PC の中だけに保存します。外へは送りません" }),
   n("statsIdle", "privacy", "離席とみなすまでの時間", 60, { min: 10, max: 600, step: 10, unit: "秒", hint: "手が止まってからこの時間までは、作業中として数えます" }),
-  b("telemetry", "privacy", "匿名の利用数を送る", true, { sec: "匿名の利用数", hint: "利用者数とインストール数を数えるため、1 日 1 回だけ、ランダムな ID・アプリの版・OS の種類・言語を送ります。ファイルの中身・名前・パスは送りません" }),
-  b("reportErrors", "privacy", "エラーを匿名で送る", true, { sec: "エラー報告", hint: "将来の機能の設定です。いまは送信先がなく、何も送りません。送るようになっても、ファイルの中身・名前・パスは含めません" }),
 
   /* ワークスペースとプロファイル */
-  b("wsAuto", "ws", "開いている状態を、自動で保存する", true, { sec: "ワークスペース", hint: "開いたタブ・分割・ターミナルを、変えるたびに保存します" }),
-  b("wsRestore", "ws", "起動したとき、前回のワークスペースを開く", true),
+  b("wsRestore", "ws", "起動したとき、前回のワークスペースを開く", true, { sec: "ワークスペース" }),
   b("wsRegister", "ws", "フォルダを開いたとき、ワークスペースに登録する", true, { hint: "同じフォルダを開き直すと、前回のタブも戻ります" }),
   b("wsTerms", "ws", "ターミナルの数と開始位置も保存する", true, { hint: "実行中の処理は戻りません。新しいシェルを同じ場所で開きます" }),
   b("wsProfileLink", "ws", "ワークスペースに結びつけたプロファイルへ切り替える", true),
@@ -198,7 +210,7 @@ const RAW = [
 
 /* ---------- 型 ---------- */
 export type AnyDef = {
-  id: string; cat: Cat; label: string; hint?: string; sec?: string; kind: "num" | "bool" | "enum"; def: number | boolean | string;
+  id: string; cat: Cat; label: string; hint?: string; sec?: string; kind: "num" | "bool" | "enum" | "font"; mono?: boolean; def: number | boolean | string;
   min?: number; max?: number; step?: number; unit?: string; opts?: [string, string][]; css?: string; attr?: string; fmt?: (v: never) => string;
 };
 export const DEFS: AnyDef[] = RAW;
@@ -210,7 +222,7 @@ export type Settings = Values & { mode: Mode; dots: Dot[]; accent: string; keys:
 const DEFAULTS = {
   ...Object.fromEntries(RAW.map((d) => [d.id, d.def])),
   mode: "light", accent: ACCENTS[0], keys: {},
-  dots: [{ x: 24, y: 8, c: "#5d93d4" }, { x: 86, y: 88, c: "#ffaa6e" }, { x: 12, y: 86, c: "#ffe6c8" }],
+  dots: [{ x: 17, y: 14, c: "#59a0f7" }, { x: 86, y: 88, c: "#ffaa6e" }, { x: 12, y: 86, c: "#ffe6c8" }, { x: 85, y: 18, c: "#d8c1f0" }],
 } as Settings;
 
 /* ---------- 読み書き ---------- */
@@ -226,6 +238,7 @@ function clean(raw: unknown, base: Settings = DEFAULTS): Settings {
     if (typeof v !== typeof d.def) continue;
     if (d.kind === "num") { if (Number.isFinite(v)) out[d.id] = Math.min(d.max!, Math.max(d.min!, v as number)); }
     else if (d.kind === "enum") { if (d.opts!.some(([k]) => k === v)) out[d.id] = v; }
+    else if (d.kind === "font") { if (d.opts!.some(([k]) => k === v) || (typeof v === "string" && v.startsWith(LOCAL) && v.length > LOCAL.length && v.length < 120)) out[d.id] = v; }
     else out[d.id] = v;
   }
   if (r.mode === "light" || r.mode === "dark" || r.mode === "auto") out.mode = r.mode;
@@ -305,9 +318,18 @@ export const useSettings = () => useSyncExternalStore((f) => (subs.add(f), () =>
 // 取り込みによる変更は、履歴・プロファイルへは書き戻さない(変えたウィンドウが済ませているため)
 let fromOther = false;
 export const fromOtherWindow = () => fromOther;
-kvWatch(KEY, (_f, dirty) => {
-  if (dirty) return;
+// 同期で送る形。この PC のフォント("local:…")は、ほかの PC にないので除く
+export function syncExport(raw: string | null): string {
+  try {
+    const r = JSON.parse(raw || "{}") as Record<string, unknown>;
+    for (const d of DEFS) if (d.kind === "font" && typeof r[d.id] === "string" && (r[d.id] as string).startsWith(LOCAL)) delete r[d.id];
+    return JSON.stringify(r);
+  } catch { return "{}"; }
+}
+// 同期で取り込んだときも、これを呼ぶ
+export function reloadFromStore() {
   try { s = clean(JSON.parse(kvGet(KEY) || "{}")); } catch { return; }
   fromOther = true;
   try { apply(); subs.forEach((f) => f()); } finally { fromOther = false; }
-});
+}
+kvWatch(KEY, (_f, dirty) => { if (!dirty) reloadFromStore(); });

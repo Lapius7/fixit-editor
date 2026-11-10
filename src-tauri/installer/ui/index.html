@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fixit Editor</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f4f5fb;
+  --fg: #16181d;
+  --fg-2: #4a5060;
+  --fg-3: #6b7284;
+  --line: rgba(22, 24, 29, .1);
+  --glass: rgba(255, 255, 255, .58);
+  --glass-edge: rgba(255, 255, 255, .72);
+  --accent: #2f6bff;
+  --accent-fg: #fff;
+  --danger: #c93c3c;
+  --blue: #8fb4ff;
+  --lavender: #c7b8ff;
+  --cream: #fff1d6;
+  --orange: #ffb27a;
+  --font: "Segoe UI Variable Text", "Segoe UI", "Yu Gothic UI", "Malgun Gothic", system-ui, sans-serif;
+  --ease: cubic-bezier(.22, .8, .2, 1);
+  --r-card: 22px;
+  --r-ctl: 12px;
+}
+* { box-sizing: border-box; margin: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font: 400 14px/20px var(--font);
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+/* 背景: ゆっくり流れるメッシュ */
+.mesh { position: fixed; inset: -20%; z-index: 0; filter: saturate(1.15); animation: drift 24s ease-in-out infinite alternate; }
+.mesh i { position: absolute; border-radius: 50%; filter: blur(48px); }
+.mesh .a { width: 60%; height: 70%; left: 4%; top: 2%; background: var(--blue); }
+.mesh .b { width: 50%; height: 60%; right: 6%; top: 0; background: var(--lavender); }
+.mesh .c { width: 46%; height: 56%; left: 26%; bottom: 4%; background: var(--cream); }
+.mesh .d { width: 40%; height: 50%; right: 2%; bottom: 0; background: var(--orange); opacity: .85; }
+@keyframes drift { to { transform: translate3d(-3%, 2%, 0) scale(1.06); } }
+
+.shell { position: relative; z-index: 1; height: 100%; display: grid; grid-template-columns: 224px minmax(0, 1fr); }
+
+/* ブランド側 */
+.brand { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 0 8px 12px 24px; }
+.brand img { width: 96px; height: 96px; border-radius: 22px; box-shadow: 0 1px 2px rgba(22,24,29,.12), 0 10px 28px rgba(60,70,130,.22); }
+.brand b { font-weight: 500; font-size: 18px; line-height: 24px; letter-spacing: .01em; }
+.brand span { color: var(--fg-2); font-size: 13px; line-height: 20px; font-variant-numeric: tabular-nums; }
+
+/* カード側 */
+.card {
+  position: relative; margin: 14px 14px 14px 0; border-radius: var(--r-card); overflow: hidden;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(22px) saturate(1.8); backdrop-filter: blur(22px) saturate(1.8);
+  box-shadow: inset 0 0 0 1px var(--glass-edge), 0 1px 2px rgba(22,24,29,.06), 0 12px 32px rgba(60,70,130,.16);
+}
+.bar { position: absolute; top: 0; left: 0; right: 0; height: 48px; display: flex; justify-content: flex-end; align-items: flex-start; padding: 8px 8px 0 0; gap: 2px; z-index: 3; }
+.wb {
+  width: 32px; height: 32px; border: 0; border-radius: 10px; background: transparent; color: var(--fg-2);
+  display: inline-flex; align-items: center; justify-content: center; position: relative; cursor: pointer;
+  transition-property: background-color, color, scale; transition-duration: .15s; transition-timing-function: var(--ease);
+}
+.wb::after { content: ""; position: absolute; inset: -4px; }
+.wb:hover { background: rgba(22,24,29,.08); color: var(--fg); }
+.wb:active { scale: .96; }
+.wb svg { width: 16px; height: 16px; flex: none; }
+
+.screen { position: absolute; inset: 0; padding: 56px 32px 28px; display: flex; flex-direction: column; opacity: 0; visibility: hidden; transform: translateY(8px); transition-property: opacity, transform, visibility; transition-duration: .35s, .35s, 0s; transition-delay: 0s, 0s, .35s; transition-timing-function: var(--ease); }
+.screen.on { opacity: 1; visibility: visible; transform: none; transition-delay: .06s, .06s, 0s; }
+.screen > * { min-width: 0; }
+h1 { font-weight: 500; font-size: 22px; line-height: 30px; letter-spacing: -.005em; text-wrap: balance; }
+.sub { margin-top: 8px; color: var(--fg-2); text-wrap: pretty; word-break: auto-phrase; }
+.grow { flex: 1; }
+
+.fact { margin-top: 20px; padding: 12px 14px; border-radius: var(--r-ctl); background: rgba(255,255,255,.55); box-shadow: inset 0 0 0 1px var(--line); }
+.fact small { display: block; color: var(--fg-3); font-size: 12px; line-height: 16px; }
+.fact code { display: block; margin-top: 2px; font: 400 13px/20px "Cascadia Mono", Consolas, monospace; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: text; }
+
+/* チェックボックス */
+.chk { display: flex; align-items: center; gap: 10px; min-height: 40px; margin-top: 10px; cursor: pointer; }
+.chk input { position: absolute; opacity: 0; width: 0; height: 0; }
+.box {
+  width: 18px; height: 18px; flex: none; border-radius: 6px; background: rgba(255,255,255,.8); box-shadow: inset 0 0 0 1px rgba(22,24,29,.22);
+  display: inline-flex; align-items: center; justify-content: center;
+  transition-property: background-color, box-shadow; transition-duration: .15s; transition-timing-function: var(--ease);
+}
+.box svg { width: 12px; height: 12px; stroke: var(--accent-fg); opacity: 0; scale: .25; filter: blur(4px); transition-property: opacity, scale, filter; transition-duration: .2s; transition-timing-function: cubic-bezier(.2, 0, 0, 1); }
+.chk input:checked + .box { background: var(--accent); box-shadow: none; }
+.chk input:checked + .box svg { opacity: 1; scale: 1; filter: blur(0); }
+.chk input:focus-visible + .box { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chk span:last-child { text-wrap: pretty; }
+
+/* ボタン */
+.row { display: flex; gap: 10px; justify-content: flex-end; }
+.btn {
+  height: 40px; padding: 0 20px; border: 0; border-radius: var(--r-ctl); font: 500 14px/20px var(--font); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;
+  transition-property: background-color, box-shadow, scale; transition-duration: .15s; transition-timing-function: var(--ease);
+}
+.btn:active { scale: .96; }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn.pri { background: var(--accent); color: var(--accent-fg); box-shadow: 0 1px 2px rgba(20,40,120,.3), inset 0 1px 0 rgba(255,255,255,.22); }
+.btn.pri:hover { background: #2559e0; }
+.btn.sec { background: rgba(255,255,255,.65); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line); }
+.btn.sec:hover { background: rgba(255,255,255,.9); }
+.btn.dng { background: var(--danger); color: #fff; box-shadow: 0 1px 2px rgba(120,20,20,.3), inset 0 1px 0 rgba(255,255,255,.2); }
+.btn.dng:hover { background: #b03232; }
+
+/* 進捗 */
+.prog { margin-top: 28px; height: 8px; border-radius: 99px; background: rgba(22,24,29,.1); overflow: hidden; }
+.prog i { display: block; height: 100%; width: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), #7a8cff); transform-origin: left; transform: scaleX(0); transition: transform .5s var(--ease); }
+.steps { margin-top: 20px; list-style: none; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.steps li { display: flex; align-items: center; gap: 10px; min-height: 28px; color: var(--fg-3); transition: color .3s var(--ease); }
+.steps li.now { color: var(--fg); }
+.steps li.ok { color: var(--fg-2); }
+.dot { width: 18px; height: 18px; flex: none; border-radius: 50%; box-shadow: inset 0 0 0 1.5px rgba(22,24,29,.2); display: inline-flex; align-items: center; justify-content: center; transition: background-color .3s var(--ease), box-shadow .3s var(--ease); }
+.dot svg { width: 11px; height: 11px; stroke: #fff; opacity: 0; scale: .25; filter: blur(4px); transition-property: opacity, scale, filter; transition-duration: .25s; transition-timing-function: cubic-bezier(.2, 0, 0, 1); }
+li.now .dot { box-shadow: inset 0 0 0 1.5px var(--accent); }
+li.now .dot::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1.1s ease-in-out infinite; }
+li.ok .dot { background: var(--accent); box-shadow: none; }
+li.ok .dot svg { opacity: 1; scale: 1; filter: blur(0); }
+@keyframes pulse { 50% { opacity: .3; scale: .7; } }
+
+.tick { width: 52px; height: 52px; border-radius: 50%; background: var(--accent); display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 6px 18px rgba(47,107,255,.35); margin-bottom: 18px; }
+.tick.warn { background: var(--danger); box-shadow: 0 6px 18px rgba(201,60,60,.3); }
+.tick svg { width: 26px; height: 26px; stroke: #fff; }
+.tick path { stroke-dasharray: 30; stroke-dashoffset: 30; }
+.screen.on .tick path { animation: draw .5s .15s var(--ease) forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .mesh, li.now .dot::before { animation: none; }
+  .screen, .screen.on { transition-duration: 0s; transform: none; }
+  .tick path { stroke-dashoffset: 0; animation: none !important; }
+  .prog i, .box svg, .dot svg { transition-duration: 0s; }
+}
+</style>
+</head>
+<body>
+<div class="mesh" aria-hidden="true"><i class="a"></i><i class="b"></i><i class="c"></i><i class="d"></i></div>
+<div class="shell">
+  <aside class="brand" data-drag>
+    <img src="{{ICON}}" alt="" width="96" height="96" draggable="false">
+    <b>Fixit Editor</b>
+    <span id="ver"></span>
+  </aside>
+  <main class="card">
+    <div class="bar" data-drag>
+      <button class="wb" id="min" type="button" data-l="min"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 8h9"/></svg></button>
+      <button class="wb" id="cls" type="button" data-l="close"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+    </div>
+
+    <!-- インストール: 開始 -->
+    <section class="screen" id="welcome">
+      <h1 id="w-t"></h1>
+      <p class="sub" id="w-s"></p>
+      <div class="fact"><small data-l="where"></small><code id="dir"></code></div>
+      <label class="chk"><input type="checkbox" id="desk" checked><span class="box"><svg viewBox="0 0 12 12" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.4l2.3 2.3 4.7-5"/></svg></span><span data-l="desk"></span></label>
+      <div class="grow"></div>
+      <div class="row"><button class="btn sec" type="button" data-act="close" data-l="cancel"></button><button class="btn pri" type="button" id="go"></button></div>
+    </section>
+
+    <!-- 進行中(インストール・削除で共用) -->
+    <section class="screen" id="busy">
+      <h1 id="b-t"></h1>
+      <div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="100"><i id="bar"></i></div>
+      <ol class="steps" id="steps"></ol>
+    </section>
+
+    <!-- 完了 -->
+    <section class="screen" id="done">
+      <span class="tick" aria-hidden="true"><svg viewBox="0 0 26 26" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 13.5l5 5 9-10.5"/></svg></span>
+      <h1 id="d-t"></h1>
+      <p class="sub" id="d-s"></p>
+      <div class="grow"></div>
+      <div class="row" id="d-r"></div>
+    </section>
+
+    <!-- エラー -->
+    <section class="screen" id="err">
+      <span class="tick warn" aria-hidden="true"><svg viewBox="0 0 26 26" fill="none" stroke-width="2.4" stroke-linecap="round"><path d="M13 6.5v8.5M13 19.5v.1"/></svg></span>
+      <h1 id="e-t"></h1>
+      <p class="sub" id="e-s"></p>
+      <div class="grow"></div>
+      <div class="row"><button class="btn sec" type="button" data-act="close" data-l="close"></button><button class="btn pri" type="button" id="retry" data-l="retry"></button></div>
+    </section>
+
+    <!-- 削除: 確認 -->
+    <section class="screen" id="ask">
+      <h1 data-l="u_t"></h1>
+      <p class="sub" data-l="u_s"></p>
+      <label class="chk"><input type="checkbox" id="wipe"><span class="box"><svg viewBox="0 0 12 12" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.4l2.3 2.3 4.7-5"/></svg></span><span data-l="u_wipe"></span></label>
+      <div class="grow"></div>
+      <div class="row"><button class="btn sec" type="button" data-act="close" data-l="cancel"></button><button class="btn dng" type="button" id="rm" data-l="u_go"></button></div>
+    </section>
+  </main>
+</div>
+
+<script>
+const S = {
+  ja: {
+    min: "最小化", close: "閉じる", cancel: "キャンセル", where: "インストール先", retry: "もう一度試す",
+    desk: "デスクトップにショートカットを作る",
+    w_t: "Fixit Editor を入れます", w_s: "このユーザーだけが使えます。管理者の許可は要りません。",
+    w_t2: "Fixit Editor を更新します", w_s2: "設定やワークスペースはそのままで、アプリだけを新しい版に置き換えます。",
+    go: "インストール", go2: "更新する",
+    i_t: "インストールしています", i: ["ファイルをコピーしています", "ショートカットを作っています", "アプリの一覧に登録しています"],
+    d_t: "インストールが終わりました", d_s: "スタートメニューの「Fixit Editor」から開けます。", launch: "Fixit Editor を開く",
+    e_t: "インストールできませんでした",
+    e_running: "Fixit Editor が使われています。閉じてから、もう一度試してください。",
+    e_other: "ファイルを書き込めませんでした。空き容量とフォルダの権限を確かめて、もう一度試してください。",
+    u_t: "Fixit Editor を削除します", u_s: "アプリとショートカットを削除します。",
+    u_wipe: "設定とワークスペースの情報も削除する", u_go: "削除する",
+    r_t: "削除しています", r: ["ショートカットと登録を消しています", "ファイルを削除しています"],
+    x_t: "削除しました", x_s: "ご利用ありがとうございました。",
+    ue_t: "削除できませんでした", ue_running: "Fixit Editor が使われています。閉じてから、もう一度試してください。",
+  },
+  en: {
+    min: "Minimize", close: "Close", cancel: "Cancel", where: "Install location", retry: "Try again",
+    desk: "Create a desktop shortcut",
+    w_t: "Install Fixit Editor", w_s: "It installs for your account only. No administrator permission is needed.",
+    w_t2: "Update Fixit Editor", w_s2: "Your settings and workspaces stay as they are. Only the app is replaced with the new version.",
+    go: "Install", go2: "Update",
+    i_t: "Installing", i: ["Copying files", "Creating shortcuts", "Adding to the app list"],
+    d_t: "Installation complete", d_s: "Open it from Fixit Editor in the Start menu.", launch: "Open Fixit Editor",
+    e_t: "Couldn't install",
+    e_running: "Fixit Editor is in use. Close it and try again.",
+    e_other: "The files couldn't be written. Check the free space and folder permissions, then try again.",
+    u_t: "Remove Fixit Editor", u_s: "This removes the app and its shortcuts.",
+    u_wipe: "Also delete settings and workspace data", u_go: "Remove",
+    r_t: "Removing", r: ["Removing shortcuts and the registration", "Deleting files"],
+    x_t: "Fixit Editor was removed", x_s: "Thanks for using it.",
+    ue_t: "Couldn't remove it", ue_running: "Fixit Editor is in use. Close it and try again.",
+  },
+  ko: {
+    min: "최소화", close: "닫기", cancel: "취소", where: "설치 위치", retry: "다시 시도",
+    desk: "바탕 화면에 바로 가기 만들기",
+    w_t: "Fixit Editor 설치", w_s: "현재 사용자 계정에만 설치합니다. 관리자 권한은 필요하지 않습니다.",
+    w_t2: "Fixit Editor 업데이트", w_s2: "설정과 워크스페이스는 그대로 두고, 앱만 새 버전으로 바꿉니다.",
+    go: "설치", go2: "업데이트",
+    i_t: "설치하는 중", i: ["파일을 복사하는 중", "바로 가기를 만드는 중", "앱 목록에 등록하는 중"],
+    d_t: "설치가 끝났습니다", d_s: "시작 메뉴의 Fixit Editor에서 열 수 있습니다.", launch: "Fixit Editor 열기",
+    e_t: "설치하지 못했습니다",
+    e_running: "Fixit Editor가 사용 중입니다. 닫고 다시 시도하세요.",
+    e_other: "파일을 쓰지 못했습니다. 남은 용량과 폴더 권한을 확인하고 다시 시도하세요.",
+    u_t: "Fixit Editor 삭제", u_s: "앱과 바로 가기를 삭제합니다.",
+    u_wipe: "설정과 워크스페이스 정보도 삭제", u_go: "삭제",
+    r_t: "삭제하는 중", r: ["바로 가기와 등록 정보를 지우는 중", "파일을 삭제하는 중"],
+    x_t: "삭제했습니다", x_s: "이용해 주셔서 감사합니다.",
+    ue_t: "삭제하지 못했습니다", ue_running: "Fixit Editor가 사용 중입니다. 닫고 다시 시도하세요.",
+  },
+};
+const lang = (navigator.language || "ja").slice(0, 2);
+const T = S[lang] || S.en;
+const $ = (id) => document.getElementById(id);
+const send = (m) => (window.send ? window.send(m) : window.ipc && window.ipc.postMessage(JSON.stringify(m)));
+document.documentElement.lang = S[lang] ? lang : "en";
+document.querySelectorAll("[data-l]").forEach((e) => { const v = T[e.dataset.l]; if (e.tagName === "BUTTON" && e.classList.contains("wb")) e.setAttribute("aria-label", v); else e.textContent = v; });
+
+let mode = "install", info = {}, steps = 0;
+const show = (id) => document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("on", s.id === id));
+
+function busy(title, list) {
+  $("b-t").textContent = title; steps = list.length;
+  $("steps").innerHTML = list.map((x) => `<li><span class="dot"><svg viewBox="0 0 12 12" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.4l2.3 2.3 4.7-5"/></svg></span><span>${x}</span></li>`).join("");
+  $("bar").style.transform = "scaleX(0)";
+  show("busy");
+}
+function step(i) {
+  [...$("steps").children].forEach((li, k) => { li.className = k < i ? "ok" : k === i ? "now" : ""; });
+  const p = (i + 0.5) / steps;
+  $("bar").style.transform = `scaleX(${p})`;
+  document.querySelector(".prog").setAttribute("aria-valuenow", Math.round(p * 100));
+}
+function finish() {
+  [...$("steps").children].forEach((li) => { li.className = "ok"; });
+  $("bar").style.transform = "scaleX(1)";
+}
+const btn = (cls, txt, act) => `<button class="btn ${cls}" type="button" data-act="${act}">${txt}</button>`;
+
+window.fx = (m) => {
+  if (m.t === "init") {
+    info = m; mode = m.mode;
+    $("ver").textContent = "v" + m.version;
+    $("dir").textContent = m.dir;
+    $("dir").title = m.dir;
+    if (mode === "uninstall") { show("ask"); return; }
+    $("w-t").textContent = m.installed ? T.w_t2 : T.w_t;
+    $("w-s").textContent = m.installed ? T.w_s2 : T.w_s;
+    $("go").textContent = m.installed ? T.go2 : T.go;
+    show("welcome");
+  } else if (m.t === "step") {
+    step(m.i);
+  } else if (m.t === "done") {
+    finish();
+    setTimeout(() => {
+      if (mode === "uninstall") {
+        $("d-t").textContent = T.x_t; $("d-s").textContent = T.x_s;
+        $("d-r").innerHTML = btn("pri", T.close, "close");
+      } else {
+        $("d-t").textContent = T.d_t; $("d-s").textContent = T.d_s;
+        $("d-r").innerHTML = btn("sec", T.close, "close") + btn("pri", T.launch, "launch");
+      }
+      show("done");
+      const p = document.querySelector("#d-r .pri"); p && p.focus({ preventScroll: true });
+    }, 450);
+  } else if (m.t === "error") {
+    const un = mode === "uninstall";
+    $("e-t").textContent = un ? T.ue_t : T.e_t;
+    $("e-s").textContent = m.code === "running" ? (un ? T.ue_running : T.e_running) : T.e_other;
+    show("err");
+  }
+};
+
+function start() {
+  busy(T.i_t, T.i);
+  send({ t: "install", desktop: $("desk").checked });
+}
+$("go").onclick = start;
+$("retry").onclick = () => { if (mode === "uninstall") remove(); else start(); };
+function remove() { busy(T.r_t, T.r); send({ t: "uninstall", data: $("wipe").checked }); }
+$("rm").onclick = remove;
+$("min").onclick = () => send({ t: "min" });
+$("cls").onclick = () => send({ t: "close" });
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("[data-act]"); if (!a) return;
+  send({ t: a.dataset.act });
+});
+document.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 || e.target.closest("button, label, input, code")) return;
+  if (e.target.closest("[data-drag]")) send({ t: "drag" });
+});
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") send({ t: "close" }); });
+send({ t: "ready" });
+</script>
+</body>
+</html>

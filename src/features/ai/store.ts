@@ -14,13 +14,14 @@ export type Effort = "" | "low" | "medium" | "high" | "xhigh" | "max";
 export const EFFORTS: Effort[] = ["", "low", "medium", "high", "xhigh", "max"];
 export const hasEffort = (p: Provider) => p !== "openai";
 
-type Cfg = { provider: Provider; models: Record<Provider, string>; keys: Record<Provider, string>; consent: Record<Provider, boolean>; effort: Effort };
+type Cfg = { provider: Provider; models: Record<Provider, string>; keys: Record<Provider, string>; consent: Record<Provider, boolean>; enabled: Record<Provider, boolean>; effort: Effort };
 
 const blank = (): Cfg => ({
   provider: "anthropic",
   models: { ...AI_DEFAULT_MODEL },
   keys: { anthropic: "", openai: "", "claude-cli": "" },
   consent: { anthropic: false, openai: false, "claude-cli": false },
+  enabled: { anthropic: false, openai: false, "claude-cli": false }, // 初期はすべてオフ。設定の「AI」で、使うものだけオンにする
   effort: "",
 });
 
@@ -35,6 +36,8 @@ const load = (): Cfg => {
       if (typeof r.models?.[p] === "string" && r.models[p].trim()) d.models[p] = r.models[p].trim();
       if (typeof r.keys?.[p] === "string") d.keys[p] = r.keys[p];
       d.consent[p] = r.consent?.[p] === true;
+      // オンオフの保存がない古い設定は、すでに使っていたもの(キーを入れた・同意した)だけオンにして引き継ぐ
+      d.enabled[p] = typeof r.enabled?.[p] === "boolean" ? r.enabled[p] : d.keys[p].length > 0 || d.consent[p];
     }
   } catch { /* 壊れた値は初期値に戻す */ }
   return d;
@@ -55,6 +58,14 @@ export const setProvider = (provider: Provider) => commit({ ...cfg, provider });
 export const setModel = (p: Provider, v: string) => commit({ ...cfg, models: { ...cfg.models, [p]: v.trim() || AI_DEFAULT_MODEL[p] } });
 // キーを変えたら、同意はいったん取り消す(別のアカウントや別の相手に送ることになるため)
 export const setKey = (p: Provider, v: string) => commit({ ...cfg, keys: { ...cfg.keys, [p]: v.trim() }, consent: { ...cfg.consent, [p]: false } });
+// オンにしたとき、使う相手がまだオフのものなら、これに切り替える。オフにしたとき、使う相手がこれなら、オンのほかのものへ移す
+export const setEnabled = (p: Provider, on: boolean) => {
+  const enabled = { ...cfg.enabled, [p]: on };
+  let provider = cfg.provider;
+  if (on && !enabled[provider]) provider = p;
+  if (!on && provider === p) provider = PROVIDERS.find((x) => enabled[x]) ?? p;
+  commit({ ...cfg, enabled, provider });
+};
 export const setConsent = (p: Provider, v: boolean) => commit({ ...cfg, consent: { ...cfg.consent, [p]: v } });
 export const setEffort = (effort: Effort) => commit({ ...cfg, effort });
 // 送り先とモデルを一度に切り替える(別のプロバイダーのモデルも選べる)
@@ -69,9 +80,9 @@ export const setLink = (v: Link) => { if (v === link) return; link = v; lsubs.fo
 export const useLink = () => useSyncExternalStore((f) => (lsubs.add(f), () => lsubs.delete(f)), () => link);
 
 // 送れる状態か。claude コマンド方式は API キーが要らず、未ログインか claude がないと分かっているときだけ止める
-export const ready = (c: Cfg = cfg, l: Link = link) => (c.provider === "claude-cli" ? l !== "login" && l !== "nocli" : c.keys[c.provider].length > 0);
+export const ready = (c: Cfg = cfg, l: Link = link) => c.enabled[c.provider] && (c.provider === "claude-cli" ? l !== "login" && l !== "nocli" : c.keys[c.provider].length > 0);
 // 使えるプロバイダー(モデル選択の一覧に出す)。API キーがあるものと、ログイン済みの claude
-export const connected = (c: Cfg = cfg, l: Link = link): Provider[] => PROVIDERS.filter((p) => (p === "claude-cli" ? l === "ready" || (l === "unknown" && c.provider === p) : c.keys[p].length > 0));
+export const connected = (c: Cfg = cfg, l: Link = link): Provider[] => PROVIDERS.filter((p) => c.enabled[p] && (p === "claude-cli" ? l === "ready" || (l === "unknown" && c.provider === p) : c.keys[p].length > 0));
 // 一覧に出すモデル。候補に、いま選んでいるモデルを足す(自分で入力した名前も選べるように)
 export const modelsOf = (c: Cfg, p: Provider): string[] => {
   const cur = c.models[p];

@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <clipPath id="sq"><rect x="16" y="16" width="480" height="480" rx="116"/></clipPath>
+    <linearGradient id="base" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8fc3ff"/><stop offset=".55" stop-color="#c9bcff"/><stop offset="1" stop-color="#ffd2b0"/>
+    </linearGradient>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="52"/></filter>
+    <linearGradient id="pane" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".78"/><stop offset="1" stop-color="#fff" stop-opacity=".34"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".5" stop-color="#fff" stop-opacity=".25"/><stop offset="1" stop-color="#fff" stop-opacity=".55"/>
+    </linearGradient>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3550e6"/><stop offset="1" stop-color="#7b5cf2"/>
+    </linearGradient>
+    <linearGradient id="caret" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff9f6b"/><stop offset="1" stop-color="#ff6f8f"/>
+    </linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="drop" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="20" stdDeviation="22" flood-color="#2a3a9a" flood-opacity=".32"/>
+    </filter>
+    <filter id="inkshadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#2a2f9a" flood-opacity=".28"/>
+    </filter>
+  </defs>
+  <g clip-path="url(#sq)">
+    <rect x="16" y="16" width="480" height="480" fill="url(#base)"/>
+    <g filter="url(#soft)">
+      <circle cx="110" cy="96" r="200" fill="#5aa9ff" opacity=".9"/>
+      <circle cx="430" cy="110" r="150" fill="#b08cff" opacity=".85"/>
+      <circle cx="420" cy="440" r="190" fill="#ffae80" opacity=".9"/>
+      <circle cx="90" cy="450" r="120" fill="#ffd9ef" opacity=".7"/>
+    </g>
+    <rect x="16" y="16" width="480" height="240" fill="url(#gloss)" opacity=".35"/>
+  </g>
+  <rect x="17" y="17" width="478" height="478" rx="115" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2"/>
+  <g filter="url(#drop)">
+    <rect x="102" y="102" width="308" height="308" rx="84" fill="url(#pane)"/>
+  </g>
+  <rect x="103" y="103" width="306" height="306" rx="83" fill="none" stroke="url(#edge)" stroke-width="3"/>
+  <g filter="url(#inkshadow)" fill="url(#ink)">
+    <rect x="178" y="146" width="44" height="220" rx="22"/>
+    <rect x="178" y="146" width="164" height="44" rx="22"/>
+    <rect x="178" y="228" width="120" height="42" rx="21"/>
+  </g>
+  <rect x="268" y="304" width="30" height="62" rx="15" fill="url(#caret)"/>
+</svg>

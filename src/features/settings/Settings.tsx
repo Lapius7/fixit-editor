@@ -4,6 +4,7 @@ import { CATS, DEFS, changedCount, exportJson, importJson, isChanged, ms, resetA
 import { Rows, Look } from "@/features/settings/SettingsParts";
 import HistoryView from "@/features/settings/HistoryView";
 import { AiSettings } from "@/features/ai/AiSettings";
+import { AccountSettings } from "@/features/account/AccountUI";
 import { KEYS, chips, comboOf, keyOf, rec, table } from "@/features/settings/keys";
 import { notify } from "@/shared/notify";
 import i18next from 'i18next'
@@ -57,7 +58,7 @@ export default function Settings({ onClose, first, out, onTheme }: { onClose: ()
   };
 
   return (
-    <div className="qo-backdrop" data-mid data-closing={closing || !!out} onMouseDown={close}>
+    <div className="qo-backdrop" data-mid data-closing={closing || !!out}>
       <div className="qo set" role="dialog" aria-label={i18next.t("設定")} onMouseDown={(e) => e.stopPropagation()}>
         <nav className="set-nav" ref={nav} aria-label={i18next.t("設定の分類")}>
           <h2><Trans i18nKey="設定" /></h2>
@@ -87,7 +88,7 @@ export default function Settings({ onClose, first, out, onTheme }: { onClose: ()
             <div key={searching ? "search" : cat} className="set-fade">
             {searching ? (
               found.length ? <Rows defs={found} flat /> : <p className="set-none"><Trans i18nKey="見つかりません" /></p>
-            ) : cat === "keys" ? <Keys /> : cat === "history" ? <HistoryView /> : cat === "ai" ? <AiSettings /> : (
+            ) : cat === "keys" ? <Keys /> : cat === "history" ? <HistoryView /> : cat === "ai" ? <AiSettings /> : cat === "account" ? <AccountSettings /> : (
               <>
                 {cat === "look" && onTheme && <div className="set-theme-link"><div><Trans i18nKey="プレビューを見ながら編集" /><small><Trans i18nKey="エディタの右にパネルをひらき、画面そのままで変えられます" /></small></div><button className="btn" data-primary="true" onClick={() => { setClosing(true); setTimeout(onTheme, ms(180)); }}><Trans i18nKey="パネルで編集" /></button></div>}
                 {cat === "look" && <Look />}

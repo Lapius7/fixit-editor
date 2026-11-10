@@ -26,6 +26,7 @@ const base = EditorView.theme({
   ".cm-content": { padding: "var(--pad-y, 14px) 0", caretColor: "var(--accent)" },
   ".cm-line": { padding: "0 24px 0 var(--pad-x, 8px)" },
   ".cm-gutters": { backgroundColor: "transparent", border: "none", color: "var(--gutter)" },
+  "&.cm-hscroll .cm-gutters": { backgroundColor: "var(--gutter-veil)", backdropFilter: "blur(14px) saturate(1.2)", WebkitBackdropFilter: "blur(14px) saturate(1.2)" },
   ".cm-lineNumbers .cm-gutterElement": { padding: "0 8px 0 22px", minWidth: "44px" },
   ".cm-git-gutter": { width: "6px" },
   ".cm-git-gutter .cm-gutterElement": { padding: "0" },
@@ -34,6 +35,7 @@ const base = EditorView.theme({
   ".cm-git-mod": { background: "var(--git-mod)" },
   ".cm-git-del": { background: "var(--git-del)", height: "3px", width: "6px", marginTop: "-1px" },
   ".cm-activeLine": { backgroundColor: "var(--active-line)" },
+  "&.cm-hasSel .cm-activeLine": { backgroundColor: "transparent" }, // 範囲を選んでいるときは、カーソル行の帯を消す(選択の上に濃い帯が重ならない)
   ".cm-activeLineGutter": { backgroundColor: "transparent", color: "var(--gutter-active)" },
   "&.cm-focused": { outline: "none" },
   ".cm-selectionLayer": { display: "none" },

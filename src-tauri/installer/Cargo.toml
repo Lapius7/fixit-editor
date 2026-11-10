@@ -1,0 +1,23 @@
+[package]
+name = "fixit-installer"
+version = "1.0.0"
+description = "Fixit Editor のインストーラー(画面は HTML、WebView2 で表示する)"
+authors = ["Lapius"]
+license = "MIT"
+edition = "2021"
+build = "build.rs"
+
+# 本体の workspace とは別に作る(本体の exe を内包するため、あとからビルドする)
+[workspace]
+
+[dependencies]
+wry = "=0.57.1"
+tao = "=0.37.2"
+serde_json = "1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

@@ -1,10 +1,9 @@
-// 設定の「AI」画面。プロバイダー・モデル・API キー。キーは設定本体とは別の場所に保存する
+// 設定の「AI」画面。プロバイダーごとにスイッチを並べ、オンにしたものだけ接続の設定(API キー・ログイン)を開く。モデルは AI パネルで選ぶ。キーは設定本体とは別の場所に保存する
 import { useEffect, useRef, useState } from "react";
 import { Trash2, Check, RefreshCw, LogIn, Copy } from "lucide-react";
 import i18next from "i18next";
 import { Trans } from "react-i18next";
-import { AI_DEFAULT_MODEL, AI_MODEL_HINTS } from "@/shared/config";
-import { PROVIDERS, PROVIDER_NAME, setKey, setModel, setProvider, tail, useAi, useLink, type Provider } from "@/features/ai/store";
+import { PROVIDERS, PROVIDER_NAME, setEnabled, setKey, setProvider, tail, useAi, useLink, type Provider } from "@/features/ai/store";
 import { login, refreshLink } from "@/features/ai/link";
 
 function KeyRow({ p }: { p: Provider }) {
@@ -56,43 +55,68 @@ function ClaudeLink() {
   );
 }
 
-export function AiSettings() {
+const SUB: Record<Provider, string> = {
+  "claude-cli": "Claude のサブスクリプションのログインで使う",
+  anthropic: "自分の API キーで使う",
+  openai: "自分の API キーで使う",
+};
+
+// プロバイダー1つぶん。スイッチをオンにすると、接続の設定が開く(初期はすべてオフ)
+function ProviderCard({ p, many }: { p: Provider; many: boolean }) {
   const cfg = useAi();
-  const p = cfg.provider;
-  const [model, setM] = useState<Record<Provider, string>>(cfg.models);
+  const link = useLink();
+  const on = cfg.enabled[p];
+  const body = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (body.current) body.current.inert = !on; }, [on]);
+  const name = i18next.t(PROVIDER_NAME[p]);
+  const linked = p === "claude-cli" ? link === "ready" : cfg.keys[p].length > 0;
+  const state = !on ? "オフ" : p === "claude-cli" ? (linked ? "ログイン済み" : "未ログイン") : linked ? "API キーを保存済み" : "API キーが未設定";
+  const hid = `ai-p-${p}`;
   return (
-    <section className="set-sec ai-set">
-      <p className="ai-set-note"><Trans i18nKey="AI パネルと、エディタを右クリックして出る「AI」のメニューで使います。コードは、あなたが操作したときだけ、下で選んだプロバイダーのサーバーに送られます。" /></p>
-      <div className="ai-set-row">
-        <span id="ai-prov">{i18next.t("使うプロバイダー")}</span>
-        <div className="seg" role="group" aria-labelledby="ai-prov">
-          {PROVIDERS.map((x) => <button key={x} aria-pressed={p === x} onClick={() => setProvider(x)}>{i18next.t(PROVIDER_NAME[x])}</button>)}
+    <section className="ai-prov" data-on={on} aria-labelledby={hid}>
+      <div className="ai-prov-h">
+        <div className="ai-prov-t">
+          <strong id={hid}>{name}</strong>
+          <small>{i18next.t(SUB[p])}</small>
+        </div>
+        <span className="ai-prov-st" data-ok={on && linked} role="status">{i18next.t(state)}</span>
+        <button className="switch" role="switch" aria-checked={on} aria-labelledby={hid} onClick={() => setEnabled(p, !on)} />
+      </div>
+      <div className="ai-prov-body" data-open={on}>
+        <div ref={body}>
+          {p === "claude-cli" ? <ClaudeLink /> : <KeyRow p={p} />}
+          {many && (
+            <div className="ai-set-row">
+              <span>{i18next.t("AI パネルで使う")}</span>
+              {cfg.provider === p
+                ? <span className="ai-prov-cur"><Check size={14} />{i18next.t("使用中")}</span>
+                : <button className="btn" onClick={() => setProvider(p)}><span>{i18next.t("これを使う")}</span></button>}
+            </div>
+          )}
+          <ul className="ai-set-list">
+            {p === "claude-cli" ? <>
+              <li><Trans i18nKey="この PC に入っている claude コマンド(Claude Code)の、あなたのログインを使います。API キーは要りません。未ログインのときは、上の「ログイン」を押します。" /></li>
+              <li><Trans i18nKey="Windows の claude コマンドを先に探し、なければ WSL の claude コマンドを使います。" /></li>
+              <li><Trans i18nKey="使った分は、あなたの Claude の契約の利用枠に数えられます。ログインのトークンは、このエディタは読みません。" /></li>
+            </> : <>
+              <li><Trans i18nKey="API キーは、この PC のこのアプリの保存領域に、暗号化せずに入ります。共有の PC では入れないでください。" /></li>
+              <li><Trans i18nKey="キーは、設定の書き出し・設定の履歴・統計には含まれません。送られる先は選んだプロバイダーだけです。" /></li>
+            </>}
+            <li><Trans i18nKey="初めて送るときに、送る相手と内容を確かめる画面が出ます。" /></li>
+          </ul>
         </div>
       </div>
-      <div className="ai-set-row">
-        <label htmlFor="ai-model">{i18next.t("モデル")}</label>
-        <input id="ai-model" className="field" list="ai-models" spellCheck={false} value={model[p]} placeholder={AI_DEFAULT_MODEL[p] || i18next.t("(claude の既定)")}
-          onChange={(e) => setM({ ...model, [p]: e.target.value })} onBlur={() => { setModel(p, model[p]); setM({ ...model, [p]: model[p].trim() || AI_DEFAULT_MODEL[p] }); }} />
-        <datalist id="ai-models">{AI_MODEL_HINTS[p].map((m) => <option key={m} value={m} />)}</datalist>
-      </div>
-      {p === "anthropic" && <KeyRow p="anthropic" />}
-      {p === "openai" && <KeyRow p="openai" />}
-      {p === "claude-cli" && <ClaudeLink />}
-      {p === "claude-cli" ? (
-        <ul className="ai-set-list">
-          <li><Trans i18nKey="この PC に入っている claude コマンド(Claude Code)の、あなたのログインを使います。API キーは要りません。未ログインのときは、上の「ログイン」を押します。" /></li>
-          <li><Trans i18nKey="Windows の claude コマンドを先に探し、なければ WSL の claude コマンドを使います。" /></li>
-          <li><Trans i18nKey="使った分は、あなたの Claude の契約の利用枠に数えられます。ログインのトークンは、このエディタは読みません。" /></li>
-          <li><Trans i18nKey="初めて送るときに、送る相手と内容を確かめる画面が出ます。" /></li>
-        </ul>
-      ) : (
-      <ul className="ai-set-list">
-        <li><Trans i18nKey="API キーは、この PC のこのアプリの保存領域に、暗号化せずに入ります。共有の PC では入れないでください。" /></li>
-        <li><Trans i18nKey="キーは、設定の書き出し・設定の履歴・統計には含まれません。送られる先は選んだプロバイダーだけです。" /></li>
-        <li><Trans i18nKey="初めて送るときに、送る相手と内容を確かめる画面が出ます。キーを変えると、もう一度出ます。" /></li>
-        <li><Trans i18nKey="Claude の契約(サブスクリプション)で使うときは、上で「Claude (サブスク)」を選びます。" /></li>
-      </ul>
-      )}
+    </section>
+  );
+}
+
+export function AiSettings() {
+  const cfg = useAi();
+  const many = PROVIDERS.filter((x) => cfg.enabled[x]).length > 1;
+  return (
+    <section className="set-sec ai-set">
+      <p className="ai-set-note"><Trans i18nKey="AI パネルと、エディタを右クリックして出る「AI」のメニューで使います。コードは、あなたが操作したときだけ、オンにしたプロバイダーのサーバーに送られます。" /></p>
+      {PROVIDERS.map((x) => <ProviderCard key={x} p={x} many={many} />)}
     </section>
   );
 }

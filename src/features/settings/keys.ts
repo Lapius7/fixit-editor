@@ -23,6 +23,7 @@ export const KEYS: KeyDef[] = [
   d(G.view, "togglePreview", "Markdown・HTML のプレビューを切り替え", "Mod+Alt+V"),
   d(G.view, "toggleBrowser", "ブラウザの表示", "Mod+Alt+B"),
   d(G.view, "toggleAi", "AI パネルの表示", "Mod+Alt+A"),
+  d(G.view, "aiQuote", "選択した文を AI チャットに引用", "Mod+Alt+Q"),
   d(G.view, "toggleTerm", "ターミナルの表示", "Mod+J", { inTerm: true }),
   d(G.view, "toggleSplit", "分割表示", "Mod+\\", { inTerm: true }),
   d(G.view, "otherPane", "もう一方の画面へ移る", "Mod+Shift+\\"),
