@@ -17,6 +17,7 @@ export default function Connect({ current, adding, onConnect, onClose, out }: Pr
   const [host, setHost] = useState(current?.host ?? "");
   const [path, setPath] = useState(current?.path ?? "~");
   const [hosts, setHosts] = useState<{ name: string; hostname?: string; user?: string }[]>([]);
+  const [suggest, setSuggest] = useState(false);
   const [recent, setRecent] = useState<Conn[]>(getRecent);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -27,6 +28,8 @@ export default function Connect({ current, adding, onConnect, onClose, out }: Pr
   const [lerr, setLerr] = useState("");
 
   useEffect(() => { listHosts().then(setHosts); }, []);
+  const q = host.trim().toLowerCase();
+  const matches = hosts.filter((h) => h.name !== host && (!q || h.name.toLowerCase().includes(q))).slice(0, 6);
   // 入力したパスのフォルダの中身を出す(入力が止まってから読む)
   useEffect(() => {
     if (kind === "ssh" && (!HOST_OK.test(sshHost) || sshHost.startsWith("-"))) { setRows(null); setDir(""); return; }
@@ -77,8 +80,22 @@ export default function Connect({ current, adding, onConnect, onClose, out }: Pr
         {kind === "ssh" && (
           <label className="cn-row">
             <span><Trans i18nKey="ホスト" /></span>
-            <input className="field" autoFocus list="cn-hosts" value={host} placeholder={i18next.t("例: user@example.com")} spellCheck={false} onChange={(e) => setHost(e.target.value)} onBlur={() => setSshHost(host.trim())} />
-            <datalist id="cn-hosts">{hosts.map((h) => <option key={h.name} value={h.name}>{[h.user, h.hostname].filter(Boolean).join("@")}</option>)}</datalist>
+            <div className="cn-combo">
+              <input className="field" autoFocus role="combobox" aria-expanded={suggest} aria-autocomplete="list" value={host} placeholder={i18next.t("例: user@example.com")} spellCheck={false}
+                onChange={(e) => { setHost(e.target.value); setSuggest(true); }}
+                onFocus={() => setSuggest(true)}
+                onBlur={() => { setSuggest(false); setSshHost(host.trim()); }}
+                onKeyDown={(e) => { if (e.key === "Escape" && suggest && matches.length) { e.stopPropagation(); setSuggest(false); } }} />
+              {suggest && matches.length > 0 && (
+                <ul className="cn-suggest" role="listbox">
+                  {matches.map((h) => (
+                    <li key={h.name} role="option" aria-selected={h.name === host} onMouseDown={(e) => { e.preventDefault(); setHost(h.name); setSshHost(h.name); setSuggest(false); }}>
+                      <Server aria-hidden /><b>{h.name}</b>{(h.user || h.hostname) && <span>{[h.user, h.hostname].filter(Boolean).join("@")}</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </label>
         )}
         <label className="cn-row">
@@ -109,7 +126,7 @@ export default function Connect({ current, adding, onConnect, onClose, out }: Pr
             <h3><Clock /><Trans i18nKey="最近開いた場所" /></h3>
             {recent.map((c) => (
               <div key={`${c.kind}:${c.host}:${c.path}`} className="cn-item">
-                <button onClick={() => go(c)} disabled={busy} title={c.path}><b>{connLabel(c)}</b><span>{c.path}</span></button>
+                <button onClick={() => go(c)} disabled={busy} data-tip={connLabel(c)} data-tip-sub={c.path}><b>{connLabel(c)}</b><span>{c.path}</span></button>
                 <button className="icon-btn" aria-label={i18next.t("履歴から外す")} onClick={() => { dropRecent(c); setRecent(getRecent()); }}><X /></button>
               </div>
             ))}

@@ -64,7 +64,7 @@ const trimmedSelection = layer({
     const out: RectangleMarker[] = [];
     const sb = view.scrollDOM.getBoundingClientRect();
     const baseL = sb.left - view.scrollDOM.scrollLeft, baseT = sb.top - view.scrollDOM.scrollTop;
-    const nl = view.defaultCharacterWidth;
+    const nl = view.defaultCharacterWidth, lh = view.defaultLineHeight;
     const vp = view.viewport;
     for (const r of view.state.selection.ranges) {
       if (r.empty) continue;
@@ -82,7 +82,10 @@ const trimmedSelection = layer({
           const breaks = r.to > line.to && segEnd >= line.to; // この行の改行まで選んでいる
           const left = a.left;
           const right = (segEnd > pos ? z.right : a.left) + (breaks ? nl : 0);
-          if (right > left) out.push(new RectangleMarker("cm-selectionBackground", left - baseL, a.top - baseT, right - left, a.bottom - a.top));
+          // 字の高さではなく行の高さ(line-height)ぶん塗る。行と行のあいだに隙間を作らない(VS Code と同じ)。座標は整数に丸めて、継ぎ目の細い線も出さない
+          const mid = (a.top + a.bottom) / 2;
+          const top = Math.round(mid - lh / 2 - baseT), bottom = Math.round(mid + lh / 2 - baseT);
+          if (right > left) out.push(new RectangleMarker("cm-selectionBackground", left - baseL, top, right - left, bottom - top));
         }
         if (segEnd >= r.to) break;
         pos = segEnd >= line.to ? line.to + 1 : segEnd;
