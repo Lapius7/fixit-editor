@@ -1,3 +1,5 @@
+import HoverTip from "@/shared/HoverTip";
+import { Notifier } from "@/shared/notify";
 import { createRoot } from "react-dom/client";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/noto-sans-jp";
@@ -12,7 +14,7 @@ import "@/features/settings/history"; // 設定の変更履歴の記録を始め
 import Splash from "@/app/Splash";
 import { warmJaFont } from "@/shared/fontwarm";
 
-createRoot(document.getElementById("root")!).render(<><App /><Splash /></>);
+createRoot(document.getElementById("root")!).render(<><App /><Splash /><Notifier /><HoverTip /></>);
 startStats();
 initSegSlide();
 warmJaFont();

@@ -31,9 +31,12 @@
 .set-h + .set-row { border-top-color: transparent; }
 .set-l { min-width: 0; flex: 1; display: flex; flex-direction: column; }
 .set-l small { color: var(--ink-3); font-size: 12px; line-height: 16px; text-wrap: pretty; }
-.set-row[data-changed="true"] .set-l > span::before { content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 8px 1px -14px; border-radius: 50%; background: var(--accent); }
+/* 変えた項目の印: 行の左に細いバーが伸びる。右の「初期値に戻す」ボタンも、変えたときだけふわっと出る */
+.set-row::after { content: ""; position: absolute; left: -13px; top: 12px; bottom: 12px; width: 3px; border-radius: 3px; background: var(--accent); transform: scaleY(0); opacity: 0; transform-origin: center; transition: transform calc(.28s * var(--sp)) var(--split-spring, var(--out)), opacity calc(.18s * var(--sp)) var(--out); pointer-events: none; }
+.set-row[data-changed="true"]::after { transform: none; opacity: 1; }
 .set-c { display: flex; align-items: center; gap: 6px; flex: none; }
-.set-reset { width: 24px; height: 24px; }
+.set-reset { width: 24px; height: 24px; opacity: 0; transform: scale(.7); pointer-events: none; transition: opacity calc(.18s * var(--sp)) var(--out), transform calc(.28s * var(--sp)) var(--split-spring, var(--out)), background-color calc(.2s * var(--sp)) var(--out), color calc(.2s * var(--sp)) var(--out); }
+.set-row[data-changed="true"] .set-reset { opacity: 1; transform: none; pointer-events: auto; }
 .set-none { margin: 24px 0; color: var(--ink-3); text-align: center; }
 .sel { height: 30px; padding: 0 8px; border: 0; border-radius: calc(var(--r-md) * var(--rk, 1)); background: var(--s1); color: var(--ink); box-shadow: 0 0 0 1px var(--hair) inset; }
 .sel:focus-visible { outline-offset: 0; }

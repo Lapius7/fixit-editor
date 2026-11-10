@@ -6,6 +6,7 @@ import {
 import type { EditorView } from "@codemirror/view";
 import WinControls from "@/app/WinControls";
 import { CHROME } from "@/shared/chrome";
+import { notify, type NoticeKind } from "@/shared/notify";
 import Editor, { dropStates, type Cursor, type Jump } from "@/editor/Editor";
 import FileTree, { canDrop } from "@/workbench/FileTree";
 import QuickOpen from "@/workbench/QuickOpen";
@@ -114,7 +115,6 @@ export default function App() {
   const aiSeq = useRef(0);
   const [cur, setCur] = useState<Pair<Cursor | null>>([null, null]);
   const [jump, setJump] = useState<Pair<Jump | undefined>>([undefined, undefined]);
-  const [msg, setMsg] = useState("");
   const [qo, setQo] = useState(false);
   const [cn, setCn] = useState(false);
   const [wsDlg, setWsDlg] = useState<null | "ws" | "profile">(null);
@@ -149,7 +149,6 @@ export default function App() {
   const pQo = usePresence(qo), pPal = usePresence(pal), pSetts = usePresence(setts), pDlg = usePresence(dlg), pCn = usePresence(cn);
   const pTp = usePresence(tp, 400), pWs = usePresence(wsDlg), pStats = usePresence(statsOpen), pSetup = usePresence(setupOpen), pPop = usePresence(pop, 140), pMenu = usePresence(menu, 140);
   const views = useRef<Pair<EditorView | null>>([null, null]);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const apis = useRef(new Map<number, TermApi>());
   const seq = useRef(0);
   const sessRef = useRef<Sess[]>([]);
@@ -168,7 +167,7 @@ export default function App() {
     const k = list.findIndex((t) => t.node.path === path), c = list.filter((t) => !skip.has(t.node.path) && mem(i, t.node.path));
     return (c.find((t) => list.indexOf(t) > k) ?? c[c.length - 1])?.node.path ?? null;
   };
-  const flash = (m: string) => { setMsg(m); clearTimeout(timer.current); timer.current = setTimeout(() => setMsg(""), st.msgMs * 1000); };
+  const flash = (m: string, kind?: NoticeKind) => notify(m, kind);
   const dirtyList = tabs.filter((t) => isText(t) && t.text !== t.saved);
 
   /* ---------- ファイル ---------- */
@@ -188,7 +187,7 @@ export default function App() {
           setFresh((f) => new Set(f).add(n.path));
           setTimeout(() => setFresh((f) => { const x = new Set(f); x.delete(n.path); return x; }), ms(500));
         }
-      } catch (e) { return flash((e as Error).message); }
+      } catch (e) { return flash((e as Error).message, "error"); }
     } else if (pin && preview === n.path) setPreview(null);
     setAct((a) => (pane === 0 ? [n.path, a[1]] : [a[0], n.path]));
     setGrp((g) => (g[pane].has(n.path) ? g : grpAdd(g, pane, n.path)));
@@ -240,7 +239,7 @@ export default function App() {
     const mark = () => { setTabs((p) => p.map((x) => (x.node.path === t.node.path ? { ...x, text: x.text === t.text ? text : x.text, saved: text } : x))); setPreview((v) => (v === t.node.path ? null : v)); };
     if (!t.node.handle) { mark(); return quiet ? undefined : flash(i18next.t("デモのファイルは、保存先がありません")); }
     try { await writeFile(t.node.handle as FileSystemFileHandle, t.eol === "crlf" && st.remoteKeepEol ? text.replace(/\n/g, "\r\n") : text); mark(); noteSave(); if (!quiet) flash(i18next.t("保存しました")); }
-    catch (e) { flash("保存できませんでした: " + (e as Error).message); }
+    catch (e) { flash(i18next.t("保存できませんでした: {{m}}", { m: (e as Error).message }), "error"); }
   }, [st.trimOnSave, st.finalNewline, st.remoteKeepEol]); // eslint-disable-line react-hooks/exhaustive-deps
   // 改行コードの切り替え。保存し直すまでは、ファイルは変わらない(未保存の印をつける)
   const toggleEol = () => { if (!tab || !isText(tab)) return; const eol = tab.eol === "crlf" ? "lf" : "crlf"; setTabs((p) => p.map((x) => (x.node.path === tab.node.path ? { ...x, eol, saved: x.saved + "\u0000" } : x))); flash(i18next.t("改行コードを {{arg0}} にしました。保存すると反映されます", { arg0: eol === "crlf" ? "CRLF" : "LF" })); };
@@ -405,7 +404,7 @@ export default function App() {
       } catch (e) {
         if (gen.current !== mine) return; // 待っている間に、利用者が別のフォルダを開いた
         setCurrent(null);
-        if (w) { setWsDlg("ws"); flash(i18next.t("「{{name}}」は、一覧から選ぶと開けます", { name: w.name })); } else flash((e as Error).message);
+        if (w) { setWsDlg("ws"); flash(i18next.t("「{{name}}」は、一覧から選ぶと開けます", { name: w.name })); } else flash((e as Error).message, "error");
       } finally { if (gen.current === mine) restoring.current = false; }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -432,7 +431,7 @@ export default function App() {
     try {
       const p = await pickAny();
       if (p) await enter(p.name, p.handle, p.ref, p.conn);
-    } catch (e) { flash((e as Error).message); }
+    } catch (e) { flash((e as Error).message, "error"); }
   };
 
   // WSL・SSH のフォルダを開く。ファイルのハンドルと同じ形で扱うので、一覧・保存・検索はそのまま使える
@@ -467,13 +466,13 @@ export default function App() {
       setRev((r) => r + 1);
       flash(i18next.t("「{{name}}」を追加しました", { name }));
       return true;
-    } catch (e) { flash((e as Error).message); return false; }
+    } catch (e) { flash((e as Error).message, "error"); return false; }
   };
   const addFolder = async () => {
     try {
       const p = await pickAny();
       if (p) await addRoot(p.name, p.handle, p.ref, p.conn);
-    } catch (e) { flash((e as Error).message); }
+    } catch (e) { flash((e as Error).message, "error"); }
   };
   const addConn = async (conn: Conn) => { const t = connTarget(conn); await addRoot(t.name, t.handle, t.ref, conn); };
   // フォルダをワークスペースから外す(ディスク上のフォルダは消さない)
@@ -854,7 +853,7 @@ export default function App() {
   ], [st.keys, tabs, act, fp, split, term, st.fontSize, st.wrap, st.mode, root]); // eslint-disable-line react-hooks/exhaustive-deps
   const wsCmds: Cmd[] = [
     ...cmds,
-    ...wsStore.list.map((w) => ({ id: `ws-${w.id}`, label: i18next.t("ワークスペース: {{name}}", { name: w.name }), group: i18next.t("ワークスペース"), icon: <FolderKanban />, run: () => { openWs(w).catch((e) => flash((e as Error).message)); } })),
+    ...wsStore.list.map((w) => ({ id: `ws-${w.id}`, label: i18next.t("ワークスペース: {{name}}", { name: w.name }), group: i18next.t("ワークスペース"), icon: <FolderKanban />, run: () => { openWs(w).catch((e) => flash((e as Error).message, "error")); } })),
     ...pfStore.list.map((p) => ({ id: `pf-${p.id}`, label: i18next.t("プロファイル: {{name}}{{arg1}}", { name: p.name, arg1: p.id === pfStore.active ? i18next.t("(使用中)") : "" }), group: i18next.t("プロファイル"), run: () => { switchProfile(p.id); flash(i18next.t("プロファイル「{{name}}」に切り替えました", { name: p.name })); } })),
   ];
 
@@ -1091,7 +1090,7 @@ export default function App() {
         {list.map((t) => {
           const path = t.node.path;
           return (
-            <div key={path} className="tab" role="tab" data-path={path} ref={measureTab} data-fresh={fresh.has(path)} data-drop={tabDrop?.pane === i && tabDrop.path === path ? (tabDrop.after ? "after" : "before") : undefined} draggable
+            <div key={path} className="tab" role="tab" data-path={path} data-tip={t.node.name} data-tip-sub={displayPath(path)} ref={measureTab} data-fresh={fresh.has(path)} data-drop={tabDrop?.pane === i && tabDrop.path === path ? (tabDrop.after ? "after" : "before") : undefined} draggable
               onDragStart={(e) => { drag.tab = path; drag.from = i; setPreview((v) => (v === path ? null : v)); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", displayPath(path)); }}
               onDragEnd={() => { dragEnd(); setDz(null); setTabDrop(null); }}
               onDragOver={(e) => { if (!drag.tab) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; const r = e.currentTarget.getBoundingClientRect(), after = e.clientX > r.left + r.width / 2; setTabDrop((d) => (d?.pane === i && d.path === path && d.after === after ? d : { path, after, pane: i })); }}
@@ -1286,7 +1285,7 @@ export default function App() {
 
         {st.sbShow && (
           <StatusBar
-            tab={tab} cur={cur[fp]} msg={msg} info={tab?.info ?? ""} lang={tab ? langName(tab.node.name) : ""}
+            tab={tab} cur={cur[fp]} info={tab?.info ?? ""} lang={tab ? langName(tab.node.name) : ""}
             dirtyCount={dirtyList.length} termCount={alive().length} term={term}
             conn={root.conn ? `${connLabel(root.conn)} · ${root.conn.path}` : null} connKind={root.conn?.kind ?? null}
             onConn={() => setCn(true)} ws={st.wsStatus ? ws?.name ?? "" : null} wsColor={ws?.color} onWs={() => setWsDlg("ws")} onPop={(k) => setPop((p) => (p === k ? null : k))}

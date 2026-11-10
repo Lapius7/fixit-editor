@@ -1,20 +1,18 @@
-import { AlertCircle, Check, SquareTerminal, Settings as Cog, WrapText, Server, HardDrive, FolderKanban } from "lucide-react";
+import { Check, SquareTerminal, Settings as Cog, WrapText, Server, HardDrive, FolderKanban } from "lucide-react";
 import type { Cursor } from "@/editor/Editor";
 import type { Tab } from "@/shared/types";
 import { useSettings } from "@/features/settings/settings";
 import type { PopKind } from "@/workbench/StatusPop";
-import { usePresence } from "@/shared/presence";
 import i18next from 'i18next'
 import { Trans } from 'react-i18next'
 
 type Props = {
-  tab: Tab | null; cur: Cursor | null; msg: string; info: string; lang: string; dirtyCount: number; termCount: number;
+  tab: Tab | null; cur: Cursor | null; info: string; lang: string; dirtyCount: number; termCount: number;
   term: boolean; conn: string | null; connKind: "wsl" | "ssh" | "pc" | null; onConn: () => void; ws: string | null; wsColor?: string; onWs: () => void; onPop: (k: PopKind) => void; onTerm: () => void; onSettings: () => void;
 };
 
 // 下の情報バー(VS Code の状態バーに相当)。出す項目は設定で選べる
-export default function StatusBar({ tab, cur, msg, info, lang, dirtyCount, termCount, term, conn, connKind, onConn, ws, wsColor, onWs, onPop, onTerm, onSettings }: Props) {
-  const pMsg = usePresence(msg, 200);
+export default function StatusBar({ tab, cur, info, lang, dirtyCount, termCount, term, conn, connKind, onConn, ws, wsColor, onWs, onPop, onTerm, onSettings }: Props) {
   const s = useSettings();
   const text = tab?.view.kind === "text";
   return (
@@ -23,7 +21,6 @@ export default function StatusBar({ tab, cur, msg, info, lang, dirtyCount, termC
       {conn && <button className="sb sb-conn" data-kind={connKind} onClick={onConn} title={`${conn}\n${i18next.t("接続先の切り替え・切断")}`}>{connKind === "ssh" ? <Server /> : <HardDrive />}{(() => { const i = conn.indexOf(" · "); return i < 0 ? conn : <><span className="sb-host">{conn.slice(0, i)} ·</span><span className="sb-path"><bdi>{conn.slice(i + 3)}</bdi></span></>; })()}</button>}
       {s.sbTerm && <button className="sb" data-on={term} onClick={onTerm} title={i18next.t("ターミナル")}><SquareTerminal /><Trans i18nKey="ターミナル" />{termCount > 0 && <b className="sb-n">{termCount}</b>}</button>}
       {s.sbSaved && <span className="sb" title={i18next.t("未保存のファイル")} data-on={dirtyCount > 0}>{dirtyCount > 0 ? <><span className="sb-dot" />{dirtyCount} <Trans i18nKey="件未保存" /></> : <><Check /><Trans i18nKey="保存済み" /></>}</span>}
-      {pMsg.v && <span className="sb sb-msg" data-out={pMsg.out}><AlertCircle />{pMsg.v}</span>}
       <span className="sb-sp" />
       {tab && !text && <span className="sb">{info}</span>}
       {text && cur && (

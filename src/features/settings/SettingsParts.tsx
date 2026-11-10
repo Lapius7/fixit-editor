@@ -61,7 +61,7 @@ export function Row({ d }: { d: AnyDef }) {
       {label}
       <div className="set-c">
         {ctl}
-        <button className="icon-btn set-reset" aria-label={i18next.t("{{label}}を初期値に戻す", { label: i18next.t(d.label) })} title={i18next.t("初期値に戻す")} style={{ visibility: isChanged(d) ? "visible" : "hidden" }} onClick={() => resetOne(d.id)}><RotateCcw /></button>
+        <button className="icon-btn set-reset" aria-label={i18next.t("{{label}}を初期値に戻す", { label: i18next.t(d.label) })} title={i18next.t("初期値に戻す")} tabIndex={isChanged(d) ? 0 : -1} onClick={() => resetOne(d.id)}><RotateCcw /></button>
       </div>
     </div>
   );

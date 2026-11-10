@@ -1,3 +1,4 @@
+import { displayPath } from "@/workbench/rootpath";
 import { useEffect, useRef, useState } from "react";
 import { ChevronRight, FileText, FileCode2, FileJson, FileType, Folder, FolderOpen, Image as ImageIcon, Film, Music } from "lucide-react";
 import { readDir, type Node } from "@/platform/fs";
@@ -72,7 +73,7 @@ function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, depth, i
 
   return (
     <li role="treeitem" aria-expanded={isDir ? open : undefined}>
-      <button className="tree-row" data-active={!isDir && activePath === n.path} data-ctx={ctxPath === n.path} data-drop={over} {...dragProps} onClick={click} onDoubleClick={() => { if (!isDir) onOpen(n, true); }}
+      <button className="tree-row" data-tip={n.name} data-tip-sub={displayPath(n.path)} data-active={!isDir && activePath === n.path} data-ctx={ctxPath === n.path} data-drop={over} {...dragProps} onClick={click} onDoubleClick={() => { if (!isDir) onOpen(n, true); }}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContext(e, n); }}
         style={{ paddingLeft: 10 + depth * indent, ["--i" as string]: idx }}>
         <ChevronRight className="chev" data-open={open} data-hidden={!isDir} />
