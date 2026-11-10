@@ -504,7 +504,7 @@
   "開いたタブ・分割・ターミナルを、変えるたびに保存します": "Saves open tabs, splits and terminals every time they change",
   "起動したとき、前回のワークスペースを開く": "Reopen the last workspace on launch",
   "フォルダを開いたとき、ワークスペースに登録する": "Register opened folders as workspaces",
-  "同じフォルダを開き直すと、前回のタブも戻ります": "Reopening the same folder restores its tabs",
+  "登録したフォルダは、開き直すと前回のタブも戻ります": "Registered folders restore their tabs when reopened",
   "ターミナルの数と開始位置も保存する": "Also save terminal count and start locations",
   "実行中の処理は戻りません。新しいシェルを同じ場所で開きます": "Running processes are not restored. A new shell opens in the same place",
   "ワークスペースに結びつけたプロファイルへ切り替える": "Switch to the profile linked to the workspace",

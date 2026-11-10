@@ -440,7 +440,7 @@ export default function App() {
     const main = specs[0];
     try {
       const lists = await Promise.all(specs.map((x) => (x.handle ? readDir(x.handle, x.prefix) : Promise.resolve(DEMO_TREE))));
-      const hit = target ?? (st.wsRegister && main.handle && specs.length === 1 ? await matchRoot(main.ref, main.handle) : null);
+      const hit = target ?? (main.handle && specs.length === 1 ? await matchRoot(main.ref, main.handle) : null);
       const restored: Tab[] = [];
       if (hit) {
         const got = await Promise.all(hit.tabs.map(async (p) => {
@@ -498,7 +498,7 @@ export default function App() {
   };
   // 1 つのフォルダを開く。同じフォルダを先頭にした複数フォルダのワークスペースがあれば、それをまとめて開く
   const enter = async (name: string, handle: FileSystemDirectoryHandle | undefined, ref: RootRef, conn?: Conn, target?: Workspace) => {
-    const hit = target ?? (st.wsRegister && handle ? await matchRoot(ref, handle) : null);
+    const hit = target ?? (handle ? await matchRoot(ref, handle) : null);
     if (!target && hit && wsRoots(hit).length > 1) return openWs(hit);
     return enterMany([{ prefix: "", name, handle, conn, ref }], hit ?? undefined);
   };
