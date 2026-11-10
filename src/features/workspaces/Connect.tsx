@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Clock, File as FileIcon, Folder, HardDrive, Home, Server, X } from "lucide-react";
-import { checkDir, connLabel, dropRecent, getRecent, homeOf, listHosts, parseTarget, pushRecent, resolvePath, RemoteDir, type Conn } from "@/platform/remote";
+import { checkDir, connLabel, dropRecent, getRecent, homeOf, listHosts, parseTarget, pushRecent, resolvePath, showPath, RemoteDir, type Conn } from "@/platform/remote";
 import { ms } from "@/features/settings/settings";
 import i18next from 'i18next'
 import { Trans } from 'react-i18next'
@@ -138,7 +138,7 @@ export default function Connect({ current, adding, onConnect, onClose, out }: Pr
             <h3><Clock /><Trans i18nKey="最近開いた場所" /></h3>
             {recent.map((c) => (
               <div key={`${c.kind}:${c.host}:${c.path}`} className="cn-item">
-                <button onClick={() => go(c)} disabled={busy} data-tip={connLabel(c)} data-tip-sub={c.path}><b>{connLabel(c)}</b><span>{c.path}</span></button>
+                <button onClick={() => go(c)} disabled={busy} data-tip={connLabel(c)} data-tip-sub={showPath(c.path)}><b>{connLabel(c)}</b><span>{showPath(c.path)}</span></button>
                 <button className="icon-btn" aria-label={i18next.t("履歴から外す")} onClick={() => { dropRecent(c); setRecent(getRecent()); }}><X /></button>
               </div>
             ))}

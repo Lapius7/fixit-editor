@@ -49,7 +49,7 @@ import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, 
 import { displayPath, setRootNames, splitRoot } from "@/workbench/rootpath";
 import { getProfiles, switchProfile, useProfiles } from "@/features/settings/profiles";
 import { listShells, type ShellOpt } from "@/platform/pty";
-import { RemoteFile, checkDir, connKey, connLabel, normConn, pushRecent, rootHandle, sshUrl, type Conn, type RemoteDir } from "@/platform/remote";
+import { RemoteFile, checkDir, connKey, connLabel, lastDir, normConn, showPath, pushRecent, rootHandle, sshUrl, type Conn, type RemoteDir } from "@/platform/remote";
 import { DEMO_NAME, DEMO_TREE } from "@/shared/demo";
 import { IS_TAURI } from "@/shared/chrome";
 import { createDir, createFile, moveEntry, pickFolder, pickPcFolder, readDir, removeEntry, renameFile, supportsFs, writeFile, type Node } from "@/platform/fs";
@@ -1563,7 +1563,7 @@ export default function App() {
           <StatusBar
             tab={tab} cur={cur[fp]} info={tab?.info ?? ""} lang={tab ? langName(tab.node.name) : ""}
             dirtyCount={dirtyList.length} termCount={alive().length} term={term}
-            conn={root.conn ? `${connLabel(root.conn)} · ${root.conn.path}` : null} connKind={root.conn?.kind ?? null}
+            conn={root.conn ? `${connLabel(root.conn)} · ${lastDir(root.conn.path)}` : null} connFull={root.conn ? `${connLabel(root.conn)} · ${showPath(root.conn.path)}` : undefined} connKind={root.conn?.kind ?? null}
             onConn={() => setCn(true)} ws={st.wsStatus ? ws?.name ?? "" : null} wsColor={ws?.color} onWs={() => setWsDlg("ws")} onPop={(k) => setPop((p) => (p === k ? null : k))}
             onTerm={() => showTerm()}
             git={gits[root.prefix] ? { branch: gits[root.prefix]!.branch, changes: gits[root.prefix]!.files.size } : null} onGit={() => setGitTick((n) => n + 1)}

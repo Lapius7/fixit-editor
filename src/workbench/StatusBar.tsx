@@ -8,18 +8,18 @@ import { Trans } from 'react-i18next'
 
 type Props = {
   tab: Tab | null; cur: Cursor | null; info: string; lang: string; dirtyCount: number; termCount: number;
-  term: boolean; conn: string | null; connKind: "wsl" | "ssh" | "pc" | null; onConn: () => void; ws: string | null; wsColor?: string; onWs: () => void; onPop: (k: PopKind) => void; onTerm: () => void;
+  term: boolean; conn: string | null; connFull?: string; connKind: "wsl" | "ssh" | "pc" | null; onConn: () => void; ws: string | null; wsColor?: string; onWs: () => void; onPop: (k: PopKind) => void; onTerm: () => void;
   git?: { branch: string; changes: number } | null; onGit?: () => void;
 };
 
 // 下の情報バー(VS Code の状態バーに相当)。出す項目は設定で選べる
-export default function StatusBar({ tab, cur, info, lang, dirtyCount, termCount, term, conn, connKind, onConn, ws, wsColor, onWs, onPop, onTerm, git, onGit }: Props) {
+export default function StatusBar({ tab, cur, info, lang, dirtyCount, termCount, term, conn, connFull, connKind, onConn, ws, wsColor, onWs, onPop, onTerm, git, onGit }: Props) {
   const s = useSettings();
   const text = tab?.view.kind === "text";
   return (
     <footer className="statusbar" role="status" aria-live="polite">
       {ws !== null && <button className="sb sb-ws" onClick={onWs} title={i18next.t("ワークスペースの切り替え・保存")}><FolderKanban />{ws ? <><i className="ws-dot" style={{ background: wsColor }} /><span className="sb-wsn">{ws}</span></> : i18next.t("ワークスペース")}</button>}
-      {conn && <button className="sb sb-conn" data-kind={connKind} onClick={onConn} title={`${conn}\n${i18next.t("接続先の切り替え・切断")}`}>{connKind === "ssh" ? <Server /> : <HardDrive />}{(() => { const i = conn.indexOf(" · "); return i < 0 ? conn : <><span className="sb-host">{conn.slice(0, i)} ·</span><span className="sb-path"><bdi>{conn.slice(i + 3)}</bdi></span></>; })()}</button>}
+      {conn && <button className="sb sb-conn" data-kind={connKind} onClick={onConn} title={`${connFull ?? conn}\n${i18next.t("接続先の切り替え・切断")}`}>{connKind === "ssh" ? <Server /> : <HardDrive />}{(() => { const i = conn.indexOf(" · "); return i < 0 ? conn : <><span className="sb-host">{conn.slice(0, i)} ·</span><span className="sb-path"><bdi>{conn.slice(i + 3)}</bdi></span></>; })()}</button>}
       {git && <button className="sb sb-git" onClick={onGit} title={i18next.t("Git のブランチ(クリックで更新)")}><GitBranch />{git.branch}{git.changes > 0 && <span className="sb-chg">{git.changes}</span>}</button>}
       {s.sbTerm && <button className="sb" data-on={term} onClick={onTerm} title={i18next.t("ターミナル")}><SquareTerminal /><Trans i18nKey="ターミナル" /></button>}
       {s.sbSaved && <span className="sb" title={i18next.t("未保存のファイル")} data-on={dirtyCount > 0}>{dirtyCount > 0 ? <><span className="sb-dot" />{dirtyCount} <Trans i18nKey="件未保存" /></> : <><Check /><Trans i18nKey="保存済み" /></>}</span>}

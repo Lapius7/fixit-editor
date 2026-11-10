@@ -141,6 +141,10 @@ export function wslUncPath(input: string): string | null {
   const m = /^[\\/]{2}wsl(?:\$|\.localhost)[\\/][^\\/]+((?:[\\/].*)?)$/i.exec(input.trim().replace(/^["']|["']$/g, ""));
   return m ? m[1].replace(/\\/g, "/").replace(/\/+$/, "") || "/" : null;
 }
+// 画面に出すパス。WSL の UNC パス(//wsl.localhost/…)は /home/… の形にそろえる
+export const showPath = (p: string): string => wslUncPath(p) ?? p;
+// 画面に出すフォルダ名(パスの最後の部分だけ。根は / のまま)
+export const lastDir = (p: string): string => { const s = showPath(p).replace(/[\\/]+$/, ""); return s ? s.split(/[\\/]/).pop() || "/" : "/"; };
 // 開いた場所が WSL の UNC パスなら、PC ではなく WSL の絶対パス(/home/…)として扱う
 export const normConn = (c: Conn): Conn => { const w = c.kind === "pc" ? wslUncPath(c.path) : null; return w ? { kind: "wsl", path: w } : c; };
 
