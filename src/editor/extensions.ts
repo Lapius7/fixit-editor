@@ -1,6 +1,7 @@
 import { langService } from "@/editor/langsvc";
 import { rainbowBrackets, tagSync, diagnostics, minimap } from "@/editor/intel";
 import { EditorSelection, EditorState, countColumn, type Extension } from "@codemirror/state";
+import { gitGutter } from "./gitgutter";
 import { EditorView, RectangleMarker, layer, crosshairCursor, drawSelection, dropCursor, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, highlightTrailingWhitespace, highlightWhitespace, lineNumbers, rectangularSelection, scrollPastEnd } from "@codemirror/view";
 import { highlightSelectionMatches } from "@codemirror/search";
 import type { Settings } from "@/features/settings/settings";
@@ -109,6 +110,7 @@ export const dynamic = (o: EditorOpts): Extension => [
   EditorState.tabSize.of(o.tabSize),
   o.wrap ? EditorView.lineWrapping : [],
   o.lineNumbers ? lineNumbers() : [],
+  gitGutter(),
   o.activeLine ? [highlightActiveLine(), highlightActiveLineGutter()] : [],
   o.foldGutter ? foldGutter({ openText: "⌄", closedText: "›" }) : [],
   o.indentGuides ? indentationMarkers({

@@ -173,3 +173,13 @@ export function pushRecent(c: Conn) {
 export function dropRecent(c: Conn) {
   try { kvSet(RECENT, JSON.stringify(getRecent().filter((x) => connKey(x) !== connKey(c)))); } catch { /* 保存できない */ }
 }
+
+// Git(読み取りだけ)。status は porcelain(-z)の生の文字列。リポジトリでなければ null
+export async function gitStatusRaw(c: Conn, dir: string): Promise<string | null> {
+  const r = await json<{ repo: boolean; raw?: string }>(c, "gitstatus", { path: dir });
+  return r.repo ? r.raw ?? null : null;
+}
+// HEAD にあるファイルの中身。HEAD に無い(新しいファイル・大きすぎる)ときは null
+export async function gitHeadText(c: Conn, file: string): Promise<string | null> {
+  return (await json<{ text: string | null }>(c, "githead", { path: file })).text;
+}

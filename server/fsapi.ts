@@ -65,6 +65,7 @@ export interface Backend {
   rm(p: string): Promise<void>;
   mv(from: string, to: string): Promise<void>;
   stat(p: string): Promise<{ kind: "dir" | "file"; size: number; mtime: number } | null>;
+  exec(script: string): Promise<Buffer>;
   find(root: string, skip: string[], limit: number): Promise<string[]>;
   grep(root: string, q: string, o: { re: boolean; cs: boolean; word: boolean }, skip: string[], limit: number): Promise<{ path: string; line: number; text: string }[]>;
 }
@@ -112,6 +113,7 @@ class LocalBackend implements Backend {
   async stat(p: string) {
     try { const s = await fs.stat(p); return { kind: s.isDirectory() ? "dir" as const : "file" as const, size: s.size, mtime: s.mtimeMs }; } catch { return null; }
   }
+  async exec(script: string) { return (await run("sh", ["-c", script], undefined, 30000)).out; }
   async find(root: string, skip: string[], limit: number) {
     const r = await run("sh", ["-c", findScript(root, skip, limit)], undefined, 30000);
     return parseFind(root, r.out);
@@ -172,6 +174,7 @@ class SshBackend implements Backend {
     if (r === "n") return null;
     return { kind: r === "d" ? "dir" as const : "file" as const, size: 0, mtime: 0 };
   }
+  async exec(script: string) { return this.sh(script, undefined, 30000); }
   async find(root: string, skip: string[], limit: number) {
     return parseFind(root, await this.sh(findScript(root, skip, limit), undefined, 60000, 64 * 1024 * 1024));
   }
@@ -238,7 +241,10 @@ function backendFor(q: URLSearchParams): Backend {
   return new SshBackend(host, { timeout: t });
 }
 
-const READ = new Set(["hosts", "home", "list", "read", "stat", "find", "grep"]);
+// Git(読み取りだけ)。状態は porcelain(-z)の生のまま返し、整えるのは画面側。リポジトリでなければ NOREPO
+const gitStatusScript = (dir: string) => `cd -- ${sq(dir)} 2>/dev/null || { printf NOREPO; exit 0; }; top=$(git rev-parse --show-toplevel 2>/dev/null) || { printf NOREPO; exit 0; }; br=$(git symbolic-ref --short -q HEAD || git rev-parse --short HEAD 2>/dev/null); printf '%s\\0%s\\0' "$top" "$br"; git -c core.quotepath=off status --porcelain=v1 -z -uall 2>/dev/null`;
+const gitHeadScript = (file: string) => { const dir = path.posix.dirname(file), name = path.posix.basename(file); return `cd -- ${sq(dir)} 2>/dev/null && s=$(git cat-file -s ${sq("HEAD:./" + name)} 2>/dev/null) && [ "$s" -lt 2000000 ] && { printf Y; git show ${sq("HEAD:./" + name)}; } || printf N`; };
+const READ = new Set(["hosts", "home", "list", "read", "stat", "find", "grep", "gitstatus", "githead"]);
 const WRITE = new Set(["write", "mkdir", "rm", "mv"]);
 
 export function fsApi(): Plugin {
@@ -259,6 +265,8 @@ export function fsApi(): Plugin {
           const be = backendFor(q);
           const maxMB = Math.min(200, Math.max(1, +(q.get("maxMB") ?? 20) || 20));
           switch (op) {
+            case "gitstatus": { const o = (await be.exec(gitStatusScript(absPath(q.get("path"))))).toString("utf8"); return json(res, 200, o === "NOREPO" ? { repo: false } : { repo: true, raw: o }); }
+            case "githead": { const o = await be.exec(gitHeadScript(absPath(q.get("path")))); return json(res, 200, { text: o[0] === 0x59 ? o.subarray(1).toString("utf8") : null }); }
             case "home": return json(res, 200, { path: await be.home() });
             case "list": return json(res, 200, { entries: await be.list(absPath(q.get("path"))) });
             case "stat": return json(res, 200, { stat: await be.stat(absPath(q.get("path"))) });

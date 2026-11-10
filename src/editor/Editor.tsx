@@ -12,7 +12,7 @@ import { power, dynamic } from "@/editor/extensions";
 import { useSettings } from "@/features/settings/settings";
 import { noteEdit } from "@/features/stats/stats";
 import { langName } from "@/editor/lang";
-import { fileName } from "@/editor/intel"; import { filePath } from "@/editor/langsvc";
+import { setGitBase } from "@/editor/gitgutter"; import { fileName } from "@/editor/intel"; import { filePath } from "@/editor/langsvc";
 import { MANAGED } from "@/editor/edit-cmds";
 
 export type Cursor = { l: number; c: number; sel: number; lines: number };
@@ -21,6 +21,7 @@ type Props = { path?: string;
   docKey: string; name: string; value: string;
   onChange: (v: string) => void; onCursor: (c: Cursor) => void; onFocus: () => void; onReady: (v: EditorView | null) => void;
   onContext: (e: MouseEvent, v: EditorView) => void; jump?: Jump;
+  gitBase?: string | null; // Git の HEAD にある内容(行の変更の印の元)。null なら印を出さない
 };
 
 // タブを切り替えても、元に戻す履歴やカーソル位置が残るようにする
@@ -34,7 +35,7 @@ const EMMET_SYNTAX: Record<string, EmmetSyntax> = { html: "html", htm: "html", x
 const emmetSyntax = (name: string): EmmetSyntax | null => EMMET_SYNTAX[name.split(".").pop()?.toLowerCase() ?? ""] ?? null;
 const keys = [indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap].filter((b) => !MANAGED.has(b.run));
 
-export default function Editor({ path, docKey, name, value, onChange, onCursor, onFocus, onReady, onContext, jump }: Props) {
+export default function Editor({ path, docKey, name, value, onChange, onCursor, onFocus, onReady, onContext, jump, gitBase }: Props) {
   const st = useSettings();
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -99,6 +100,8 @@ export default function Editor({ path, docKey, name, value, onChange, onCursor, 
     view.current?.dispatch({ effects: DYN.reconfigure(dynamic(st)) });
   }, [docKey, st.tabSize, st.insertSpaces, st.wrap, st.lineNumbers, st.activeLine, st.foldGutter, st.indentGuides, st.bracketMatching, st.matchHighlight, st.whitespace, st.cursorBlink,
     st.autocomplete, st.autocompleteDelay, st.completeMax, st.completeIcons, st.wordComplete, st.closeBrackets, st.indentOnInput, st.scrollPastEnd, st.spellcheck, st.readOnly, st.rainbowBrackets, st.tagSync, st.diagnostics, st.langService, st.minimap]);
+
+  useEffect(() => { view.current?.dispatch({ effects: setGitBase.of(gitBase ?? null) }); }, [docKey, gitBase]);
 
   // もう一方の画面で編集されたときに追従する
   useEffect(() => {
