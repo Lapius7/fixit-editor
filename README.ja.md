@@ -6,7 +6,7 @@
 
 **軽くて見た目のいい、すりガラス調の Windows 用コードエディタ。**
 
-![License](https://img.shields.io/badge/license-MIT-blue)
+![License](https://img.shields.io/badge/license-proprietary-lightgrey)
 ![Platform](https://img.shields.io/badge/platform-Windows-0078d4)
 ![Built with](https://img.shields.io/badge/built%20with-Tauri%20%C2%B7%20React%20%C2%B7%20CodeMirror%206-444)
 
@@ -18,7 +18,7 @@
 
 ## 概要
 
-Fixit Editor は、すりガラス調の小さなコードエディタです。インストーラーなしで、`Fixit-Editor.exe` 1 つだけで動きます。CodeMirror 6 と Tauri で作っているので、起動が速く軽く動きます。
+Fixit Editor は、すりガラス調の小さなコードエディタです。Windows 用に、インストーラー(`Fixit-Editor-Setup.exe`)と、単体の `Fixit-Editor.exe` の両方を用意しています。CodeMirror 6 と Tauri で作っているので、起動が速く軽く動きます。
 
 設定・統計・ワークスペースは、この PC の中に保存します。AI に質問したとき、Lapount にログインして同期をオンにしたとき、匿名の利用数(常に送ります)、フィードバックを送ったとき、設定でオンにした匿名の送信を除いて、コーディングの内容は外へ送りません。
 
@@ -35,6 +35,7 @@ Fixit Editor は、すりガラス調の小さなコードエディタです。�
 - 分割表示、全文検索、コマンドパレット、クイックオープンに対応しています。
 - 画像・PDF・Word・音声・動画を開けます。Markdown と HTML は、ソースの横でプレビューできます。
 - ターミナルを複数開けます。タブの名前も変えられます。
+- 開いているファイルを ▶(`Ctrl+Alt+R`)で実行できます。拡張子ごとのコマンドは設定で変えられます。
 
 **リモートとワークスペース**
 
@@ -80,4 +81,4 @@ bash scripts/build-win.sh   # dist-win/Fixit-Editor.exe ができます
 
 ## ライセンス
 
-[MIT](LICENSE)
+All rights reserved。アプリの利用は無料ですが、コードの複製・再配布・流用は禁止です。詳しくは [LICENSE](LICENSE) を参照してください。

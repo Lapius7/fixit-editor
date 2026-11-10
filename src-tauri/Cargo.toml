@@ -3,7 +3,7 @@ name = "fixit-editor"
 version = "0.0.1"
 description = "軽くて見た目のいいコードエディタ(フィクシットエディタ)"
 authors = ["Lapius"]
-license = "MIT"
+license-file = "../LICENSE"
 edition = "2021"
 
 [workspace]

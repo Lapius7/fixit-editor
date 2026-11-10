@@ -1,21 +1,43 @@
-MIT License
+Fixit Editor License
 
-Copyright (c) 2026 Lapius
+Copyright (c) 2026 Lapius. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. Permitted use
+   You may download, install and run the Fixit Editor application
+   (the "Software") for personal or internal business use, free of charge.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+2. Prohibited
+   Without prior written permission from the copyright holder, you may not:
+   - copy, reproduce or redistribute the Software, its source code, or any
+     part of them, in source or binary form, including re-uploading the
+     installer or executable to other sites;
+   - modify, adapt, translate, or create derivative works from them;
+   - reuse, extract or incorporate their code, design, text or assets in
+     another project or product;
+   - sell, sublicense, rent, lease or otherwise commercialize them;
+   - reverse engineer, decompile or disassemble the Software, except where
+     applicable law allows it despite this restriction;
+   - remove or alter copyright notices.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+3. Source code visibility
+   The source code is published for reference only. Being able to read it
+   on GitHub does not grant any right other than those in section 1 and
+   those GitHub's Terms of Service give to users of the platform (such as
+   viewing and forking within GitHub).
+
+4. Third-party components
+   The Software includes third-party components (for example, open-source
+   libraries and the Obel Mono font under the SIL Open Font License).
+   They remain under their own licenses, which apply to those components
+   only. See src/styles/fonts/OFL-ObelMono.txt and each dependency's license.
+
+5. No warranty
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+   IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES
+   OR OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+6. Termination
+   This license ends automatically if you violate it. Then you must stop
+   using the Software and delete your copies.

@@ -69,8 +69,10 @@
 .paper > .tabbar > .icon-btn { align-self: center; }
 
 /* Markdown・HTML のプレビュー(エディタの右に並べる) */
-.ed-pv { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0fr); height: 100%; min-height: 0; transition: grid-template-columns calc(.32s * var(--sp)) var(--split-open); }
-.ed-pv[data-pv="split"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.ed-pv { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0fr); height: 100%; min-height: 0; transition: grid-template-columns calc(.32s * var(--sp)) var(--split-open); }
+.ed-pv[data-pv="split"] { grid-template-columns: minmax(0, var(--pv-a, 1fr)) minmax(0, var(--pv-b, 1fr)); }
+.col-grip.ratio-grip { position: absolute; z-index: 6; top: 0; bottom: 0; left: calc(var(--pv-r, .5) * 100%); width: 10px; margin: 0 0 0 -5px; }
+body:has(.ratio-grip[data-drag="true"]) .ed-pv { transition: none; }
 .ed-pv[data-pv="preview"] { grid-template-columns: minmax(0, 0fr) minmax(0, 1fr); }
 .ed-pv > :first-child { min-width: 0; overflow: hidden; transition: opacity calc(.24s * var(--sp)) var(--ease), visibility 0s linear; }
 .ed-pv[data-pv="preview"] > :first-child { opacity: 0; visibility: hidden; transition: opacity calc(.2s * var(--sp)) var(--ease), visibility 0s linear calc(.32s * var(--sp)); }
@@ -266,9 +268,8 @@
 /* ---------- ミニマップ ---------- */
 .cm-gutters + .cm-scroller, .cm-editor { position: relative; }
 .cm-minimap-gutter { background: transparent !important; border-left: 1px solid color-mix(in srgb, var(--ink) 7%, transparent) !important; }
-.cm-minimap-overlay { background: color-mix(in srgb, var(--accent) 16%, transparent) !important; }
-.cm-minimap-overlay-container.cm-minimap-overlay-mouse-over { opacity: 0; transition: opacity .15s; }
-.cm-minimap-gutter:hover .cm-minimap-overlay-container { opacity: 1; }
+.cm-minimap-overlay { background: color-mix(in srgb, var(--accent) 18%, transparent) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent), inset 2px 0 0 var(--accent); border-radius: 3px; }
+.cm-minimap-gutter:hover .cm-minimap-overlay { background: color-mix(in srgb, var(--accent) 26%, transparent) !important; }
 
 /* ---------- パンくず・アウトライン ---------- */
 .ed-host { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
@@ -318,16 +319,6 @@
 .lang-pop ul:focus { outline: none; }
 .lang-pop li .bc-name { font-family: var(--font-mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
 
-/* 分割中、いま操作している画面の枠: 色がゆっくり流れ、ほんの少し明るさがゆれる */
-.panes[data-split="true"] .paper[data-focus="true"] { box-shadow: 0 0 0 1px var(--hair), 0 0 0 1px var(--hl) inset, 0 10px 28px -10px var(--shadow-soft), inset 0 0 22px -8px color-mix(in srgb, var(--accent) 38%, transparent); }
-.panes[data-split="true"] .paper::before { content: ""; position: absolute; inset: 0; z-index: 4; border-radius: inherit; padding: 1.5px; pointer-events: none; opacity: 0; transition: opacity calc(.3s * var(--sp)) var(--ease);
-  background: linear-gradient(115deg, var(--accent), #7a5cf0 28%, #4fc3f7 52%, #e8838f 76%, var(--accent)) 0 0 / 320% 320%;
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
-.panes[data-split="true"] .paper[data-focus="true"]::before { opacity: .9; animation: ring-flow 14s ease-in-out infinite alternate, ring-breathe 5s ease-in-out infinite alternate; }
-@keyframes ring-flow { from { background-position: 0% 0%; } to { background-position: 100% 100%; } }
-@keyframes ring-breathe { from { opacity: .62; } to { opacity: .95; } }
-@media (prefers-reduced-motion: reduce) { .panes[data-split="true"] .paper[data-focus="true"]::before { animation: none; } }
-
 /* ミニマップは、字を淡く(真っ黒に見えないように) */
 .cm-minimap-gutter canvas { opacity: .6; }
 
@@ -362,13 +353,18 @@
 
 /* 面の境目の持ち手(幅を変える)。右のパネルは、flex の隙間(--pane-gap)にぴったり重ねる */
 .col-grip { position: relative; z-index: 4; flex: none; width: 8px; margin: 0 -8px; align-self: stretch; cursor: col-resize; touch-action: none; outline: none; }
-.col-grip::before { content: ""; position: absolute; inset: 0 -3px; }
-.col-grip::after { content: ""; position: absolute; left: 50%; top: 50%; width: 3px; height: 36px; border-radius: 3px; transform: translate(-50%, -50%); background: transparent; transition: background-color calc(.16s * var(--sp)) var(--ease), height calc(.2s * var(--sp)) var(--out); }
-.col-grip:hover::after, .col-grip:focus-visible::after, .col-grip[data-drag="true"]::after { background: var(--accent); height: 64px; }
+/* 持ち手の見た目は、分割の境目(split.css の .split-grip)と同じ: つまみが、近づくと細い線になる */
+.col-grip::after { content: ""; position: absolute; left: 50%; top: 50%; width: 3px; height: 36px; border-radius: 999px; transform: translate(-50%, -50%); pointer-events: none; background: transparent; transition: width calc(.28s * var(--sp)) var(--out), height calc(.28s * var(--sp)) var(--out), background-color calc(.2s * var(--sp)) var(--ease), opacity calc(.2s * var(--sp)) var(--ease); }
+.col-grip:hover::after, .col-grip:focus-visible::after, .col-grip[data-drag="true"]::after { width: 2px; height: 100%; background: var(--accent); opacity: .6; }
+.col-grip[data-drag="true"]::after { opacity: 1; }
 .col-grip[data-drag="true"] { cursor: col-resize; }
-.col-grip-side { position: absolute; z-index: 6; top: 0; bottom: var(--sb-h, 28px); left: calc(var(--side-w, 280px) - 4px); width: 8px; margin: 0; align-self: auto; }
+/* サイドバーの境目は、グリッドの 2 列目の左端に取り付ける。列の幅が動く間も、持ち手は同じ列の端に付いたままで、ずれない */
+.col-grip-side { position: absolute; z-index: 6; grid-column: 2; grid-row: 1; top: calc(var(--tab-h, 32px) + 20px); bottom: calc(var(--sb-h, 28px) + 8px); left: -8px; width: 8px; margin: 0; align-self: auto; }
+/* つかんでいる間は、列の幅の動きをなめらかにせず、手に合わせて動かす */
+body:has(.col-grip-side[data-drag="true"]) .window { transition: none; }
 .window[data-side="false"] .col-grip-side { display: none; }
-.window[data-sb="false"] .col-grip-side { bottom: 0; }
+.window[data-sb="false"] .col-grip-side { bottom: 8px; }
+.col-grip-side::after { height: 36px; }
 body:has(.col-grip[data-drag="true"]) { cursor: col-resize; user-select: none; }
 body:has(.col-grip[data-drag="true"]) iframe, body:has(.col-grip[data-drag="true"]) webview { pointer-events: none; }
 
@@ -385,3 +381,18 @@ body:has(.col-grip[data-drag="true"]) iframe, body:has(.col-grip[data-drag="true
 .ai-drop small { color: var(--ink-2); font-size: 12px; }
 .ai-dock[data-over="true"] .ai-drop { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) { .ai-clip { animation: none; } }
+
+/* パンくずが入りきらないときは、左を切って右端(いまの位置)を見せる */
+.bc[data-cut] .bc-trail { -webkit-mask-image: linear-gradient(to right, transparent, #000 22px); mask-image: linear-gradient(to right, transparent, #000 22px); }
+
+/* ---- タブ: エディタとは繋げず、選んだタブだけを浮いた丸いピルにする ---- */
+.tabbar { align-items: center; padding-bottom: 10px; gap: 2px; }
+.tab { border-radius: calc(var(--r-sm) * var(--rk, 1) + 4px); box-shadow: none; }
+.tab[aria-selected="true"], .tab[data-other="true"] { box-shadow: none; }
+.tab[aria-selected="true"] {
+  background: rgba(255, 255, 255, .62); color: var(--ink);
+  box-shadow: 0 0 0 1px var(--hair), 0 1px 0 var(--hl) inset, 0 1px 3px var(--shadow-soft);
+}
+:root[data-theme="dark"] .tab[aria-selected="true"] { background: rgba(255, 255, 255, .1); }
+.tabbar[data-focus="false"] .tab[aria-selected="true"] { background: rgba(255, 255, 255, .3); color: var(--ink-2); box-shadow: 0 0 0 1px var(--hair); }
+:root[data-theme="dark"] .tabbar[data-focus="false"] .tab[aria-selected="true"] { background: rgba(255, 255, 255, .05); }

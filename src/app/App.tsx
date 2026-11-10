@@ -12,7 +12,7 @@ import LangUI from "@/editor/LangUI";
 import { openFiles, isScript, type Edit, type Loc } from "@/editor/ts/client";
 import Editor, { dropStates, type Cursor, type Jump } from "@/editor/Editor";
 import FileTree, { GitMarks, canDrop, type GitMark } from "@/workbench/FileTree";
-import { ColGrip } from "@/workbench/ColGrip";
+import { ColGrip, RatioGrip } from "@/workbench/ColGrip";
 import { loadBase, loadGit, type GitInfo } from "@/features/git/git";
 import QuickOpen from "@/workbench/QuickOpen";
 import Viewer from "@/workbench/Viewer";
@@ -35,13 +35,15 @@ import { useAccount } from "@/features/account/auth";
 import { useReplies } from "@/features/account/replies";
 import { Avatar } from "@/features/account/AccountUI";
 import UpdateView from "@/features/update/UpdateView";
-import { checkUpdate, type Manifest } from "@/features/update/update";
+import { runCheck, useUpdateState } from "@/features/update/update";
 import SearchPanel from "@/workbench/SearchPanel";
 import ContextMenu, { type Item } from "@/workbench/ContextMenu";
 import Dialog from "@/workbench/Dialog";
 import Connect from "@/features/workspaces/Connect";
 import Workspaces from "@/features/workspaces/Workspaces";
-import { Pin, History, MessageSquareText, RefreshCw } from "lucide-react";
+import { Pin, History, MessageSquareText, RefreshCw, ArrowUpCircle } from "lucide-react";
+import { Play } from "lucide-react";
+import { runnerFor, buildCommand } from "@/features/run/runners";
 import { Sparkles, Server, HardDrive, FolderKanban, Eye, Code2, Maximize2, Minimize2 } from "lucide-react";
 import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
 import { displayPath, setRootNames, splitRoot } from "@/workbench/rootpath";
@@ -111,13 +113,22 @@ export default function App() {
   const [fp, setFp] = useState(0); // いま操作している画面の番号
   const split = !isLeaf(lay);
   const first = leaves(lay)[0]; // いちばん左上の画面
+  const [moving, setMoving] = useState(false); // 画面の配置が動いている間(ミニマップを隠して、止まってから描き直す)
   const [born, setBorn] = useState<Pm<Edge>>({}); // 分割した直後の画面(どの側から現れるか)。現れる動きのために、少しだけ持つ
+  const layOnce = useRef(true);
+  useEffect(() => {
+    if (layOnce.current) { layOnce.current = false; return; }
+    setMoving(true);
+    const t = setTimeout(() => { setMoving(false); requestAnimationFrame(() => window.dispatchEvent(new Event("resize"))); }, ms(950));
+    return () => clearTimeout(t);
+  }, [lay]);
   const [grp, setGrp] = useState<Pm<Set<string>>>({ 0: new Set() }); // 分割時、各画面のタブ(どれにも属さないタブは、左上の画面に出す)
   const [fresh, setFresh] = useState<Set<string>>(new Set());   // 開いた直後のタブだけ、伸びる動きをつける(並べ替えで動きが再生されないように)
   const [dz, setDz] = useState<Dz | null>(null);        // ドラッグ中に落とす先
   const seen = useRef(0); const [chk, setChk] = useState(0);                         // 画面が空になっていないか見直す合図
   const [tabDrop, setTabDrop] = useState<{ path: string; after: boolean; pane: number } | null>(null);
   const [dragS, setDragS] = useState(false);
+  const [gripOn, setGripOn] = useState<string | null>(null); // つかんでいる境目だけ光らせる
   // 新しいタブは、自分の幅まで伸びながら出てくる。伸びる先の幅を、出す前に測っておく
   const measureTab = useCallback((el: HTMLDivElement | null) => { if (!el || el.style.getPropertyValue("--tw")) return; el.style.animation = "none"; el.style.setProperty("--tw", `${el.offsetWidth}px`); el.style.animation = ""; }, []);
   const [side, setSide] = useState(true);
@@ -135,6 +146,7 @@ export default function App() {
   const [preview, setPreview] = useState<string | null>(null); // 一時表示のタブ(1つだけ。編集・保存・ダブルクリックで固定される)
   type PvMode = "split" | "preview"; // 表示の切り替え: なし = テキストだけ / split = 両方 / preview = プレビューだけ
   const pvSeen = useRef(new Set<string>()); // 一度プレビューを開いたファイル(閉じる動きの間も中身を残す)
+  const [pvR, setPvR] = useState(0.5); // エディタとプレビューを並べたときの、エディタの幅の割合
   const [pv, setPv] = useState<Record<string, PvMode | undefined>>({}); // プレビュー形式のファイルの表示(パス → 表示)
   const [br, setBr] = useState(false); // アプリ内ブラウザの表示
   const [ai, setAi] = useState(false); // AI パネルの表示
@@ -151,15 +163,15 @@ export default function App() {
   const [lh, setLh] = useState<string | null>(null); // ローカル履歴を開いているファイルのパス
   const [statsOpen, setStatsOpen] = useState(false);
   const [fbOpen, setFbOpen] = useState(false);
-  const [upd, setUpdM] = useState<Manifest | null>(null);
+  const { found: upd } = useUpdateState();
   const [updOpen, setUpdOpen] = useState(false);
-  const setUpd = (m: Manifest) => { setUpdM(m); setUpdOpen(true); };
-  const checkNow = async () => { const r = await checkUpdate(); if (r === "error") notify(i18next.t("更新を確認できませんでした"), "error"); else if (r) setUpd(r); else notify(i18next.t("最新の版です"), "success"); };
+  // 手動の確認。見つかれば確認の画面を開く
+  const checkNow = async () => { const r = await runCheck(); if (r === "error") notify(i18next.t("更新を確認できませんでした"), "error"); else if (r) setUpdOpen(true); else if (!upd) notify(i18next.t("最新の版です"), "success"); else setUpdOpen(true); };
   const [setupOpen, setSetupOpen] = useState(needSetup);
   // 初回セットアップで選び終えてから、1 日 1 回だけ匿名の利用数を送る(開発中は送らない)
   useEffect(() => { if (!setupOpen) { sendPing(); installErrorHooks(); startUsageReports(); } }, [setupOpen]);
-  // 起動して少ししたら、新しい版がないか確かめる(あれば知らせる)。失敗しても何も出さない
-  useEffect(() => { if (setupOpen || !import.meta.env.PROD) return; const t = setTimeout(() => { checkUpdate().then((r) => { if (r && r !== "error") setUpd(r); }); }, 6000); return () => clearTimeout(t); }, [setupOpen]);
+  // 起動して少ししたら、新しい版がないか確かめる(あれば右上に印を出す)。失敗しても何も出さない
+  useEffect(() => { if (setupOpen || !import.meta.env.PROD) return; const t = setTimeout(() => { void runCheck(); }, 6000); return () => clearTimeout(t); }, [setupOpen]);
   const [pop, setPop] = useState<PopKind | null>(null);
   const wsStore = useWorkspaces();
   const pfStore = useProfiles();
@@ -237,6 +249,18 @@ export default function App() {
     setFp(pane);
   }, [tabs, fp, preview, act, lay]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 一覧・クイックオープンから開くとき: すでに別の画面で開いていれば、その画面のタブへ移るだけにする(重複して開かない)
+  const openOrFocus = (n: Node, pin = true) => {
+    if (tabs.some((t) => t.node.path === n.path) && !mem(fp, n.path)) {
+      const k = leaves(lay).find((i) => mem(i, n.path));
+      if (k !== undefined) {
+        if (pin && preview === n.path) setPreview(null);
+        setAct((a) => ({ ...a, [k]: n.path })); setFp(k);
+        return;
+      }
+    }
+    return open(n, fp, pin);
+  };
   const goto = async (n: Node, line: number, from = 0, to = 0) => {
     await open(n);
     setJump((j) => ({ ...j, [fp]: { line, from, to, n: Date.now() } }));
@@ -285,6 +309,15 @@ export default function App() {
       setClosing((c) => { const n = new Set(c); gone.forEach((x) => n.delete(x)); return n; });
     }, ms(220));
   };
+  // 一時表示(斜体)のタブは、どの画面でも選ばれなくなったら閉じる。未保存の変更があれば固定して残す(編集した時点でも固定される)
+  useEffect(() => {
+    if (!preview || closing.has(preview) || Object.values(act).includes(preview)) return;
+    const t = tabs.find((x) => x.node.path === preview);
+    if (!t) { setPreview(null); return; }
+    if (isText(t) && t.text !== t.saved) { setPreview(null); return; }
+    setPreview(null);
+    closeMany([preview], true);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
   const close = (path: string) => {
     if (pinned.has(path)) return;
     const t = tabOf(path);
@@ -837,7 +870,11 @@ export default function App() {
     const node = n ?? tabOf(path);
     if (!node) return;
     const nd = "node" in node ? node.node : node;
-    if (z.edge) await splitDrop(nd, z.pane, z.edge, !!path && paneTabs(from).length > 1, from);
+    if (z.edge) {
+      // 自分の画面にある最後の1枚を、自分の端へ落としても何も変わらない。ほかの画面のタブなら、複製ではなく移動(空になった元の画面はたたまれる)
+      if (path && z.pane === from && paneTabs(from).length <= 1) return;
+      await splitDrop(nd, z.pane, z.edge, !!path, from);
+    }
     else await sendTo(nd, z.pane, !!path, from);
   };
   // 境目をドラッグして、その分割の割合を変える
@@ -850,8 +887,8 @@ export default function App() {
       const local = j.dir === "row" ? (f - j.box.y) / j.box.h : (f - j.box.x) / j.box.w;
       setLay((l) => setRatio(l, j.path, local * 100));
     };
-    const up = () => { removeEventListener("pointermove", mv); removeEventListener("pointerup", up); setDragS(false); };
-    setDragS(true); addEventListener("pointermove", mv); addEventListener("pointerup", up);
+    const up = () => { removeEventListener("pointermove", mv); removeEventListener("pointerup", up); setDragS(false); setGripOn(null); };
+    setDragS(true); setGripOn(j.path.join(".")); addEventListener("pointermove", mv); addEventListener("pointerup", up);
   };
   // ターミナル: 開く・閉じるは、すべてここを通す(動きと、開き直しの扱いをそろえるため)
   const alive = () => sessRef.current.filter((x) => !x.exiting);
@@ -906,7 +943,29 @@ export default function App() {
   };
   const nameOf = (x: Sess) => x.name || `${x.label ?? i18next.t("ターミナル")} ${x.num}`;
   const registerTerm = useCallback((id: number, api: TermApi | null) => { if (api) apis.current.set(id, api); else apis.current.delete(id); }, []);
-  useEffect(() => {
+
+  // ▶ 実行: 開いているファイルを、設定の「実行」にある拡張子ごとのコマンドで、ターミナルから走らせる
+  const runCmd = tab && isText(tab) && tab.node.handle ? runnerFor(tab.node.name, st.runners) : null;
+  const typeInTerm = (id: number, text: string, tries = 0) => {
+    const api = apis.current.get(id);
+    if (api) { if (st.runClear) api.clear(); api.send(text + "\r"); api.focus(); } else if (tries < 40) setTimeout(() => typeInTerm(id, text, tries + 1), 100);
+  };
+  const runFile = async () => {
+    if (!tab || !isText(tab) || !tab.node.handle) return flash(i18next.t("実行できるファイルを開いてください"));
+    const tpl = runnerFor(tab.node.name, st.runners);
+    if (!tpl) return flash(i18next.t("この種類のファイルの実行コマンドが未設定です(設定の「実行」で追加できます)"));
+    const rr = rootOf(tab.node), built = buildCommand(tpl, abs(tab.node));
+    if (!built) return flash(i18next.t("パスに使えない文字が含まれているため、実行できません"), "error");
+    if (st.runSave && tab.text !== tab.saved) await saveTab(tab, true);
+    const ssh = rr.conn?.kind === "ssh";
+    const cur = alive().find((x) => x.id === actT);
+    if (cur && !ssh && !cur.host && !cur.shell && built.dir.startsWith("/") && apis.current.get(cur.id)) { // いまのターミナルを使い回す(場所だけ移す)
+      showTerm(true); setTermKey((k) => k + 1); typeInTerm(cur.id, `cd "${built.dir}" && ${built.cmd}`); return;
+    }
+    const id = seq.current + 1;
+    addTerm(built.dir, undefined, ssh ? rr.conn!.host : null);
+    typeInTerm(id, built.cmd);
+  };  useEffect(() => {
     if (!term) { setShown(false); return; }
     let b = 0;
     const a = requestAnimationFrame(() => { b = requestAnimationFrame(() => setShown(true)); });
@@ -926,7 +985,7 @@ export default function App() {
   const run = (id: string) => {
     const f: Record<string, () => unknown> = {
       palette: () => setPal(true), quickOpen: () => setQo(true), save, openFolder, addFolder, connect: () => { setCnAdd(false); setCn(true); }, workspaces: () => setWsDlg("ws"), profiles: () => setWsDlg("profile"), saveWorkspace: quickSave, newFile: () => create("file", null), settings: () => setSetts("look"), shortcuts: () => setSetts("keys"),
-      newTerm: () => addTerm(), closeTerm: () => alive().length && endTerm(actT), nextTerm: () => stepTerm(1), prevTerm: () => stepTerm(-1),
+      newTerm: () => addTerm(), runFile, closeTerm: () => alive().length && endTerm(actT), nextTerm: () => stepTerm(1), prevTerm: () => stepTerm(-1),
       renameTerm: () => { if (alive().length) { showTerm(true); setRenaming(actT); } }, clearTerm: () => apis.current.get(actT)?.clear(),
       aiQuote: () => { const v = views.current[fp]; if (v) quoteToAi(v); },
       toggleSide: () => setSide((v) => !v), themePanel: () => setTp((v) => !v), stats: () => setStatsOpen(true), toggleTerm: () => showTerm(), toggleBrowser: () => setBr((v) => !v), toggleAi: () => setAi((v) => !v), togglePreview: () => { if (tab && previewKind(tab.node.name)) setPv((p) => ({ ...p, [tab.node.path]: p[tab.node.path] === undefined ? "split" : p[tab.node.path] === "split" ? "preview" : undefined })); }, toggleSplit,
@@ -1116,7 +1175,7 @@ export default function App() {
       items: [
         ...(n ? [{ type: "title" as const, label: head ? rr.name : displayPath(n.path) }] : []),
         ...(n && !dir ? [
-          { label: i18next.t("開く"), icon: ic(Files), run: () => open(n) },
+          { label: i18next.t("開く"), icon: ic(Files), run: () => openOrFocus(n) },
           split ? { label: i18next.t("もう一方の画面で開く"), icon: ic(Columns2), keys: "", run: () => openSplit(n) } : splitSub(n),
           { label: i18next.t("AI チャットに添える"), icon: ic(Sparkles), run: () => void fileToAi(n) },
           { type: "sep" as const },
@@ -1306,8 +1365,10 @@ export default function App() {
           onDrop={(e) => { if (drag.tab) { e.preventDefault(); dropTab(i, list[list.length - 1]?.node.path ?? null, true); } }} />
         {i === lastBar && (
           <>
+            {upd && <button className="up-pill" title={i18next.t("v{{v}} に更新できます", { v: upd.version })} onClick={() => setUpdOpen(true)}><ArrowUpCircle size={14} /><span>{i18next.t("更新あり")}</span></button>}
             <button className="icon-btn" data-on={ai} aria-label={i18next.t("AI パネルの表示")} title={`${i18next.t("AI パネルの表示")} (${chips(K("toggleAi")).join(" ")})`} onClick={() => setAi((v) => !v)}><Sparkles /></button>
-            <button className="icon-btn" data-on={term} aria-label={i18next.t("ターミナル")} title={i18next.t("ターミナル")} onClick={() => showTerm()}><SquareTerminal /></button>
+            {runCmd && <button className="icon-btn run-btn" aria-label={i18next.t("このファイルを実行")} title={`${i18next.t("このファイルを実行")} (${chips(K("runFile")).join(" ")})`} onClick={runFile}><Play /></button>}
+                <button className="icon-btn" data-on={term} aria-label={i18next.t("ターミナル")} title={i18next.t("ターミナル")} onClick={() => showTerm()}><SquareTerminal /></button>
             <button className="icon-btn" aria-label={i18next.t("コマンドパレット")} title={i18next.t("コマンドパレット")} onClick={() => setPal(true)}><Command /></button>
             <button className="icon-btn fb-btn" aria-label={i18next.t("フィードバックを送る")} title={i18next.t("フィードバックを送る")} onClick={() => setFbOpen(true)}><MessageSquareText />{unreplies > 0 && <i className="fb-dot" aria-hidden />}</button>
             {me && <button className="acct-chip" aria-label={i18next.t("アカウント")} title={me.email} onClick={() => setSetts("account")}><Avatar user={me} size={20} /><span>{me.name}</span></button>}
@@ -1335,7 +1396,7 @@ export default function App() {
             )}
           </div>
         ) : t.view.kind === "text" ? (
-          <div className="ed-pv" data-pv={previewKind(t.node.name) ? pv[t.node.path] ?? "text" : "text"}>
+          <div className="ed-pv" data-pv={previewKind(t.node.name) ? pv[t.node.path] ?? "text" : "text"} style={{ "--pv-r": pvR, "--pv-a": `${pvR}fr`, "--pv-b": `${1 - pvR}fr` } as React.CSSProperties}>
           <Editor
           crumbExtra={previewKind(t.node.name) ? (() => {
             const cur = pv[t.node.path], on = cur !== undefined, wide = cur === "preview", key = chips(K("togglePreview")).join(" ");
@@ -1352,6 +1413,7 @@ export default function App() {
             onCursor={(c) => setCur((p) => ({ ...p, [i]: c }))}
             onFocus={() => setFp(i)} onReady={(v) => { views.current[i] = v; }} onContext={editorMenu} gitBase={bases[t.node.path]}
           />
+          {previewKind(t.node.name) && pv[t.node.path] === "split" && <RatioGrip ratio={pvR} onChange={setPvR} />}
           {previewKind(t.node.name) && (
             <div className="pv-pane" inert={!pv[t.node.path]}>
               {(pv[t.node.path] || pvSeen.current.has(t.node.path)) && (pvSeen.current.add(t.node.path), <Preview kind={previewKind(t.node.name)!} text={t.text} name={t.node.name} source={previewSource(t)} />)}
@@ -1405,7 +1467,7 @@ export default function App() {
                       </button>
                       <div className="collapse" data-open={!shut} inert={shut}>
                         <div className="collapse-inner">
-                          <FileTree nodes={r.nodes} activePath={act[fp]} ctxPath={menu?.path ?? null} rev={rev} onOpen={(n, pin) => open(n, fp, !!pin)} onContext={(e, n) => treeMenu(e, n)} onMove={moveTo} />
+                          <FileTree nodes={r.nodes} activePath={act[fp]} ctxPath={menu?.path ?? null} rev={rev} onOpen={(n, pin) => openOrFocus(n, !!pin)} onContext={(e, n) => treeMenu(e, n)} onMove={moveTo} />
                         </div>
                       </div>
                     </section>
@@ -1416,7 +1478,7 @@ export default function App() {
                     <p><Trans i18nKey="フォルダやファイルをここへドラッグ&ドロップするか、下のボタンから選んでください。" /></p>
                   </div>
                 ) : (
-                  <FileTree nodes={root.nodes} activePath={act[fp]} ctxPath={menu?.path ?? null} rev={rev} onOpen={(n, pin) => open(n, fp, !!pin)} onContext={(e, n) => treeMenu(e, n)} onMove={moveTo} />
+                  <FileTree nodes={root.nodes} activePath={act[fp]} ctxPath={menu?.path ?? null} rev={rev} onOpen={(n, pin) => openOrFocus(n, !!pin)} onContext={(e, n) => treeMenu(e, n)} onMove={moveTo} />
                 )}
               </nav>
               <div className="side-foot">
@@ -1444,12 +1506,12 @@ export default function App() {
           </div>
           <div className="work">
             <div className="work-row">
-            <div className="panes" data-split={split} data-dragging={dragS}
+            <div className="panes" data-split={split} data-dragging={dragS} data-moving={moving || undefined}
               onDragOverCapture={(e) => { if (!st.splitDrop || !dragging() || (drag.tab && (e.target as HTMLElement).closest?.(".tabbar"))) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = drag.tab ? "move" : "copy"; const z = zoneOf(e); setDz((d) => (d && d.pane === z.pane && d.edge === z.edge ? d : z)); }}
               onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as globalThis.Node | null)) setDz(null); }}
               onDropCapture={(e) => { if (!st.splitDrop || !dragging() || (drag.tab && (e.target as HTMLElement).closest?.(".tabbar"))) return; e.preventDefault(); e.stopPropagation(); dropOnPanes(zoneOf(e)); }}>
               {leaves(lay).map((i) => <div key={i} className="slot" data-born={born[i]} style={slot(boxes(lay).get(i)!)}>{pane(i)}</div>)}
-              {joints(lay).map((j) => <div key={j.path.join("")} className="split-grip" data-dir={j.dir} data-drag={dragS} role="separator" aria-orientation={j.dir === "row" ? "horizontal" : "vertical"} style={gripPos(j)}
+              {joints(lay).map((j) => <div key={j.path.join("")} className="split-grip" data-dir={j.dir} data-drag={gripOn === j.path.join(".")} role="separator" aria-orientation={j.dir === "row" ? "horizontal" : "vertical"} style={gripPos(j)}
                 title={i18next.t("ドラッグで幅を変える・ダブルクリックで半分に戻す")} onPointerDown={(e) => gripDown(e, j)} onDoubleClick={() => setLay((l) => setRatio(l, j.path, 50))} />)}
               {dz && dragging() && <div className="drop-hint" data-edge={dz.edge} style={dropRect(dz)} />}
             </div>
@@ -1501,15 +1563,15 @@ export default function App() {
             dirtyCount={dirtyList.length} termCount={alive().length} term={term}
             conn={root.conn ? `${connLabel(root.conn)} · ${root.conn.path}` : null} connKind={root.conn?.kind ?? null}
             onConn={() => setCn(true)} ws={st.wsStatus ? ws?.name ?? "" : null} wsColor={ws?.color} onWs={() => setWsDlg("ws")} onPop={(k) => setPop((p) => (p === k ? null : k))}
-            onTerm={() => showTerm()} onSettings={() => setSetts("look")}
+            onTerm={() => showTerm()}
             git={gits[root.prefix] ? { branch: gits[root.prefix]!.branch, changes: gits[root.prefix]!.files.size } : null} onGit={() => setGitTick((n) => n + 1)}
           />
         )}
       </div>
 
-      {pQo.v && <QuickOpen key={pQo.key} out={pQo.out} roots={rootsLite} onPick={(n) => open(n)} onClose={() => setQo(false)} />}
+      {pQo.v && <QuickOpen key={pQo.key} out={pQo.out} roots={rootsLite} onPick={(n) => openOrFocus(n)} onClose={() => setQo(false)} />}
       {pPal.v && <Palette key={pPal.key} out={pPal.out} cmds={wsCmds} onClose={() => setPal(false)} />}
-      {pSetts.v && <Settings onTheme={() => { setSetts(null); setTp(true); }} key={pSetts.key} out={pSetts.out} first={pSetts.v} onClose={() => setSetts(null)} />}
+      {pSetts.v && <Settings onCheckUpdate={checkNow} onTheme={() => { setSetts(null); setTp(true); }} key={pSetts.key} out={pSetts.out} first={pSetts.v} onClose={() => setSetts(null)} />}
       {pLh.v && (() => { const lt = tabs.find((x) => x.node.path === pLh.v); return lt && isText(lt) ? <LocalHistory key={pLh.key} out={pLh.out} path={lt.node.path} name={lt.node.name} current={lt.text} onRestore={(text) => setTabs((p) => p.map((x) => (x.node.path === lt.node.path && isText(x) ? { ...x, text } : x)))} onClose={() => setLh(null)} /> : null; })()}
       {pDlg.v && <Dialog key={pDlg.key} out={pDlg.out} {...pDlg.v} onClose={() => setDlg(null)} />}
       {pWs.v && <Workspaces key={pWs.key} out={pWs.out} initial={pWs.v} curId={ws?.id ?? null} saveName={root.conn ? root.name : root.handle ? root.name : ""} max={st.wsMax} onOpen={(w) => openWs(w)} onSaveNew={saveNew} onClose={() => setWsDlg(null)} flash={flash} />}

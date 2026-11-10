@@ -34,7 +34,9 @@ const sha256 = createHash("sha256").update(data).digest("hex");
 const size = data.length;
 const sig = sign(null, Buffer.from(`fixit-update:v1\n${version}\n${sha256}\n${size}`), createPrivateKey(readFileSync(KEY))).toString("base64");
 const file = `Fixit-Editor-${version}.exe`;
-const manifest = { version, date: new Date().toISOString().slice(0, 10), notes: arg("--notes") ?? "", file, size, sha256, sig };
+const setup = `dist-win/Fixit-Editor-Setup-${version}.exe`; // インストーラーがあれば、サイトのダウンロードボタンはこちらを配る
+const installer = existsSync(setup) ? basename(setup) : undefined;
+const manifest = { version, date: new Date().toISOString().slice(0, 10), notes: arg("--notes") ?? "", file, size, sha256, sig, ...(installer ? { installer } : {}) };
 console.log(JSON.stringify({ ...manifest, sig: sig.slice(0, 12) + "…" }, null, 2));
 if (has("--dry")) process.exit(0);
 
@@ -42,5 +44,6 @@ const tmp = join(process.env.TMPDIR ?? "/tmp", "fixit-latest.json");
 writeFileSync(tmp, JSON.stringify(manifest, null, 2));
 run(["ssh", HOST, `mkdir -p '${DIR}'`]);
 run(["scp", "-q", exe, `${HOST}:${DIR}/${file}`]);
+if (installer) run(["scp", "-q", setup, `${HOST}:${DIR}/${installer}`]);
 run(["scp", "-q", tmp, `${HOST}:${DIR}/latest.json`]);
 console.log(`公開しました: ${basename(file)} v${version}`);

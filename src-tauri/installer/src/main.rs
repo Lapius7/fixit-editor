@@ -4,6 +4,7 @@
 // 管理者権限は使わない。現在のユーザー用に %LOCALAPPDATA%\Programs\Fixit Editor へ入れる。
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use tao::platform::windows::WindowBuilderExtWindows;
 use std::{env, fs, io, os::windows::process::CommandExt, path::{Path, PathBuf}, process::Command, thread, time::Duration};
 use tao::{
     dpi::LogicalSize,
@@ -19,7 +20,8 @@ const HTML: &str = include_str!("../ui/index.html");
 const VERSION: &str = match option_env!("FIXIT_VERSION") { Some(v) => v, None => env!("CARGO_PKG_VERSION") };
 
 const REG_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\FixitEditor";
-const EXE_NAME: &str = "Fixit-Editor.exe";
+const EXE_NAME: &str = "Fixit.exe";
+const OLD_EXE_NAME: &str = "Fixit-Editor.exe"; // 旧版の名前。入れ替えるときに消す
 const NO_WINDOW: u32 = 0x0800_0000; // CREATE_NO_WINDOW
 
 enum Ev { Js(String), Drag, Min, Exit }
@@ -83,6 +85,7 @@ fn put_exe(dir: &Path) -> Result<PathBuf, String> {
         if fs::rename(&to, &old).is_err() { let _ = fs::remove_file(&tmp); return Err("running".into()); }
     }
     fs::rename(&tmp, &to).map_err(|e| { let _ = fs::remove_file(&tmp); msg_err(e) })?;
+    let _ = fs::remove_file(dir.join(OLD_EXE_NAME)); // 旧版の名前の exe
     // 前回の更新で残った古い exe を片づける
     if let Ok(rd) = fs::read_dir(dir) { for e in rd.flatten() { if e.file_name().to_string_lossy().ends_with(".old") { let _ = fs::remove_file(e.path()); } } }
     // アンインストーラーは、このセットアップの exe(launcher)の複製
@@ -151,10 +154,11 @@ fn main() {
     let proxy = event_loop.create_proxy();
     let window = WindowBuilder::new()
         .with_title(if uninstall { "Fixit Editor Uninstall" } else { "Fixit Editor Setup" })
-        .with_inner_size(LogicalSize::new(680.0, 440.0))
+        .with_inner_size(LogicalSize::new(680.0, 400.0))
         .with_resizable(false)
         .with_maximizable(false)
         .with_decorations(false)
+        .with_undecorated_shadow(true)
         .build(&event_loop)
         .expect("window");
     if let Some(m) = window.current_monitor() {
@@ -168,7 +172,7 @@ fn main() {
     let p2 = proxy.clone();
     let webview = WebViewBuilder::new_with_web_context(&mut ctx)
         .with_html(html)
-        .with_background_color((246, 247, 251, 255))
+        .with_background_color((233, 224, 255, 255))
         .with_initialization_script("window.send=function(m){window.ipc.postMessage(JSON.stringify(m))};")
         .with_ipc_handler(move |req| {
             let Ok(v) = serde_json::from_str::<serde_json::Value>(req.body()) else { return };

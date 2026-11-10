@@ -6,7 +6,7 @@
 
 **가볍고 보기 좋은, 반투명 유리 느낌의 Windows용 코드 에디터.**
 
-![License](https://img.shields.io/badge/license-MIT-blue)
+![License](https://img.shields.io/badge/license-proprietary-lightgrey)
 ![Platform](https://img.shields.io/badge/platform-Windows-0078d4)
 ![Built with](https://img.shields.io/badge/built%20with-Tauri%20%C2%B7%20React%20%C2%B7%20CodeMirror%206-444)
 
@@ -18,7 +18,7 @@
 
 ## 개요
 
-Fixit Editor는 반투명 유리 느낌의 작은 코드 에디터입니다. 설치 프로그램 없이 `Fixit-Editor.exe` 파일 하나로 실행됩니다. CodeMirror 6와 Tauri로 만들어 빠르게 시작하고 가볍게 동작합니다.
+Fixit Editor는 반투명 유리 느낌의 작은 코드 에디터입니다. Windows용으로 설치 프로그램(`Fixit-Editor-Setup.exe`)과 단독 실행 파일 `Fixit-Editor.exe`를 모두 제공합니다. CodeMirror 6와 Tauri로 만들어 빠르게 시작하고 가볍게 동작합니다.
 
 설정, 통계, 워크스페이스는 이 PC에 저장됩니다. AI에 질문하거나, Lapount에 로그인해 동기화를 켜거나, 피드백을 보내거나, 익명 사용 횟수(항상 전송)와 설정에서 켠 익명 전송을 제외하면, 코딩 내용은 밖으로 나가지 않습니다.
 
@@ -35,6 +35,7 @@ Fixit Editor는 반투명 유리 느낌의 작은 코드 에디터입니다. 설
 - 화면 분할, 전체 검색, 명령 팔레트, 빠른 열기를 지원합니다.
 - 이미지, PDF, Word, 오디오, 비디오를 열 수 있습니다. Markdown과 HTML은 소스 옆에서 미리 볼 수 있습니다.
 - 터미널을 여러 개 열 수 있고, 탭 이름도 바꿀 수 있습니다.
+- 열려 있는 파일을 ▶(`Ctrl+Alt+R`)로 실행할 수 있습니다. 확장자별 명령은 설정에서 바꿀 수 있습니다.
 
 **원격과 워크스페이스**
 
@@ -80,4 +81,4 @@ bash scripts/build-win.sh   # dist-win/Fixit-Editor.exe 가 만들어집니다
 
 ## 라이선스
 
-[MIT](LICENSE)
+All rights reserved. 앱은 무료로 사용할 수 있지만, 코드의 복제·재배포·재사용은 허용되지 않습니다. 자세한 내용은 [LICENSE](LICENSE)를 참고하세요.

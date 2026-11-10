@@ -61,17 +61,34 @@ export const power: Extension = [
 // 選択範囲の背景。CodeMirror の標準は、改行を含む行を右端まで塗るので、
 // 「文字のない空白」まで選んだように見える。行末は改行1文字ぶんだけ塗る(VS Code と同じ)
 // 範囲を選んでいる間、エディタに cm-hasSel を付ける(テーマ側でカーソル行の帯を消すのに使う)
-// 折り返しオフで横にスクロールしたとき、sticky のガターの下を文字が通って重なって見える。
-// scrollLeft が 0 でない間だけ cm-hscroll を付け、CSS でガターをすりガラスにして隠す。
-export const hScrollClass = ViewPlugin.fromClass(class {
+// 折り返しオフで横にスクロールすると、字が行番号とミニマップの下を通る。字の側をマスクで隠す(位置は CSS 変数で渡す)
+export const hScrollMask = ViewPlugin.fromClass(class {
   constructor(readonly view: EditorView) {
     this.on = () => this.sync();
     view.scrollDOM.addEventListener("scroll", this.on, { passive: true });
+    // 画面の大きさやミニマップの幅が変わっても、マスクの位置を合わせ直す(古い値のままだと、字がミニマップの下に突き抜ける)
+    this.ro = new ResizeObserver(() => this.sync());
+    this.ro.observe(view.scrollDOM);
     this.sync();
   }
+  ro: ResizeObserver; seen = new Set<Element>();
   on: () => void;
-  sync() { this.view.dom.classList.toggle("cm-hscroll", this.view.scrollDOM.scrollLeft > 0.5); }
-  destroy() { this.view.scrollDOM.removeEventListener("scroll", this.on); this.view.dom.classList.remove("cm-hscroll"); }
+  update(u: ViewUpdate) { if (u.geometryChanged || u.viewportChanged) this.sync(); }
+  sync() {
+    const sc = this.view.scrollDOM, dom = this.view.dom, over = sc.scrollWidth > sc.clientWidth + 1;
+    // class ではなく data 属性で持つ(選択やフォーカスが変わると、CodeMirror が view.dom の class を書き直し、手で付けた class は消える。消えた間、字が行番号とミニマップの上に突き抜けていた)
+    if (over) dom.setAttribute("data-hmask", ""); else dom.removeAttribute("data-hmask");
+    if (!over) return;
+    const gw = (sc.querySelector(".cm-gutters") as HTMLElement | null)?.offsetWidth ?? 0;
+    const mw = (dom.querySelector(".cm-minimap-gutter") as HTMLElement | null)?.offsetWidth ?? 0;
+    // 端は、その先に字があるときだけ薄くぼかす(左端なら左は切らない。右端なら右は切らない)。切れ目の向きで、動かせる方向が分かる
+    const x = sc.scrollLeft, max = sc.scrollWidth - sc.clientWidth, F = 14;
+    dom.style.setProperty("--cm-l", `${x}px`);
+    dom.style.setProperty("--cm-lf", `${Math.min(F, Math.max(0, x))}px`);
+    dom.style.setProperty("--cm-r", `${x + sc.clientWidth - gw - mw}px`);
+    dom.style.setProperty("--cm-rf", `${Math.min(F, Math.max(0, max - x))}px`);
+  }
+  destroy() { this.view.scrollDOM.removeEventListener("scroll", this.on); this.view.dom.removeAttribute("data-hmask"); this.ro.disconnect(); }
 });
 export const hasSelClass = EditorView.editorAttributes.compute(["selection"], (st) => ({ class: st.selection.ranges.some((r) => !r.empty) ? "cm-hasSel" : "" }));
 const trimmedSelection = layer({
@@ -164,7 +181,7 @@ export const dynamic = (o: EditorOpts): Extension => [
   ] : [],
   o.scrollPastEnd ? scrollPastEnd() : [],
   drawSelection({ cursorBlinkRate: BLINK[o.cursorBlink] ?? 1200 }),
-  trimmedSelection, hasSelClass, hScrollClass,
+  trimmedSelection, hasSelClass, hScrollMask,
   EditorView.contentAttributes.of({ spellcheck: o.spellcheck ? "true" : "false" }),
   EditorState.readOnly.of(o.readOnly),
   EditorView.editable.of(!o.readOnly),

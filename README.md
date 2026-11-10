@@ -6,7 +6,7 @@
 
 **A light, frosted-glass code editor for Windows.**
 
-![License](https://img.shields.io/badge/license-MIT-blue)
+![License](https://img.shields.io/badge/license-proprietary-lightgrey)
 ![Platform](https://img.shields.io/badge/platform-Windows-0078d4)
 ![Built with](https://img.shields.io/badge/built%20with-Tauri%20%C2%B7%20React%20%C2%B7%20CodeMirror%206-444)
 
@@ -18,7 +18,7 @@
 
 ## Overview
 
-Fixit Editor is a small code editor with a frosted-glass look. It ships as a single `Fixit-Editor.exe` for Windows, with no installer. It is built on CodeMirror 6 and Tauri, so it starts fast and stays light.
+Fixit Editor is a small code editor with a frosted-glass look. It ships for Windows as an installer (`Fixit-Editor-Setup.exe`) and as a single `Fixit-Editor.exe`. It is built on CodeMirror 6 and Tauri, so it starts fast and stays light.
 
 Settings, statistics, and workspaces are stored on your PC. Nothing about your coding leaves it unless you ask an AI a question, log in to Lapount with sync turned on, send feedback, or turn on the optional anonymous reporting. The anonymous launch count is always sent.
 
@@ -35,6 +35,7 @@ Settings, statistics, and workspaces are stored on your PC. Nothing about your c
 - Split view, full-text search, a command palette, and quick open.
 - Open images, PDF, Word, audio, and video. Preview Markdown and HTML next to the source.
 - Several terminals, with renamable tabs.
+- Run the open file with ▶ (`Ctrl+Alt+R`); the command per extension is editable in Settings.
 
 **Remote and workspaces**
 
@@ -80,4 +81,4 @@ bash scripts/build-win.sh   # writes dist-win/Fixit-Editor.exe
 
 ## License
 
-[MIT](LICENSE)
+All rights reserved. You may use the app for free, but copying, redistributing, or reusing the code is not allowed. See [LICENSE](LICENSE).

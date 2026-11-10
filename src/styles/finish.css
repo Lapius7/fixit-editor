@@ -8,7 +8,7 @@
 .paper { -webkit-backdrop-filter: blur(calc(var(--blur, 10px) * 2.4 * var(--paper-k, 1))) saturate(calc(1 + (var(--sat, 1.8) - 1) * .625 * var(--paper-k, 1))); backdrop-filter: blur(calc(var(--blur, 10px) * 2.4 * var(--paper-k, 1))) saturate(calc(1 + (var(--sat, 1.8) - 1) * .625 * var(--paper-k, 1))); box-shadow: 0 0 0 1px var(--hair), 0 0 0 1px var(--hl) inset, 0 1px 2px var(--shadow-soft), 0 10px 28px -10px var(--shadow-soft); }
 [data-paper="0"] .paper { -webkit-backdrop-filter: none; backdrop-filter: none; }
 .paper::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: var(--spec); opacity: calc(.5 * var(--paper-k, 1)); z-index: 2; }
-.panes[data-split="true"] .paper[data-focus="true"] { box-shadow: 0 0 0 1.5px var(--accent), 0 0 0 1px var(--hl) inset, 0 10px 28px -10px var(--shadow-soft); }
+/* 操作中の画面の見せ方は base.css */
 .tab[aria-selected="true"], .tree-row[data-active="true"], .seg button[aria-pressed="true"], .icon-btn[data-on="true"] { -webkit-backdrop-filter: blur(12px) saturate(1.4); backdrop-filter: blur(12px) saturate(1.4); }
 .btn, .chip, .kr-key, .field, .sp-box, .chipbtn, .br-url { -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
 .qo, .ctx { -webkit-backdrop-filter: blur(calc(var(--blur, 10px) * 4.4)) saturate(calc(var(--sat, 1.8) + .1)); backdrop-filter: blur(calc(var(--blur, 10px) * 4.4)) saturate(calc(var(--sat, 1.8) + .1)); }
