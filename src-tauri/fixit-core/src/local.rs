@@ -164,6 +164,35 @@ pub fn dispatch(op: &str, q: &Q, body: Option<Vec<u8>>) -> Result<Reply, FsError
             fs::rename(&from, &to).map_err(io_err)?;
             Ok(Reply::Json(json!({ "ok": true })))
         }
+        "gitstatus" => {
+            // 状態は porcelain(-z)の生のまま返す。リポジトリでなければ repo: false
+            let dir = abs(q, "path")?;
+            let git = |args: &[&str]| -> Option<Vec<u8>> {
+                let mut c = std::process::Command::new("git");
+                c.args(["-c", "core.quotepath=off"]).args(args).current_dir(&dir);
+                let r = crate::run::run(c, None, std::time::Duration::from_secs(30), 64 * 1024 * 1024).ok()?;
+                if r.code == 0 { Some(r.out) } else { None }
+            };
+            let Some(top) = git(&["rev-parse", "--show-toplevel"]) else { return Ok(Reply::Json(json!({ "repo": false }))) };
+            let br = git(&["symbolic-ref", "--short", "-q", "HEAD"]).or_else(|| git(&["rev-parse", "--short", "HEAD"])).unwrap_or_default();
+            let st = git(&["status", "--porcelain=v1", "-z", "-uall"]).unwrap_or_default();
+            let raw = format!("{}\0{}\0{}", String::from_utf8_lossy(&top).trim_end(), String::from_utf8_lossy(&br).trim_end(), String::from_utf8_lossy(&st));
+            Ok(Reply::Json(json!({ "repo": true, "raw": raw })))
+        }
+        "githead" => {
+            let p = abs(q, "path")?;
+            let (dir, name) = match p.rfind('/') { Some(0) => ("/", &p[1..]), Some(i) => (&p[..i], &p[i + 1..]), None => (".", p.as_str()) };
+            let spec = format!("HEAD:./{name}");
+            let git = |args: &[&str]| -> Option<Vec<u8>> {
+                let mut c = std::process::Command::new("git");
+                c.args(args).current_dir(dir);
+                let r = crate::run::run(c, None, std::time::Duration::from_secs(30), 64 * 1024 * 1024).ok()?;
+                if r.code == 0 { Some(r.out) } else { None }
+            };
+            let size: u64 = git(&["cat-file", "-s", &spec]).and_then(|o| String::from_utf8_lossy(&o).trim().parse().ok()).unwrap_or(u64::MAX);
+            if size >= 2_000_000 { return Ok(Reply::Json(json!({ "text": null }))); }
+            Ok(Reply::Json(match git(&["show", &spec]) { Some(o) => json!({ "text": String::from_utf8_lossy(&o) }), None => json!({ "text": null }) }))
+        }
         "find" => {
             let root = abs(q, "path")?;
             let limit = num(q, "limit", 5000, 1, 50000) as usize;

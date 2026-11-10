@@ -294,7 +294,7 @@ fn runner_for(q: &Q) -> Result<Runner, FsError> {
     }
 }
 
-const READ: [&str; 7] = ["hosts", "home", "list", "read", "stat", "find", "grep"];
+const READ: [&str; 9] = ["hosts", "home", "list", "read", "stat", "find", "grep", "gitstatus", "githead"];
 const WRITE: [&str; 4] = ["write", "mkdir", "rm", "mv"];
 
 // body は write のときだけ使う
@@ -366,6 +366,22 @@ pub fn dispatch(op: &str, q: &Q, body: Option<Vec<u8>>) -> Result<Reply, FsError
                 return Err(FsError::new("同じ名前があります", 409, "EEXIST"));
             }
             Ok(Reply::Json(json!({ "ok": true })))
+        }
+        "gitstatus" => {
+            // 状態は porcelain(-z)の生のまま返す。リポジトリでなければ repo: false
+            let p = abs_path(q, "path")?;
+            let script = format!("cd -- {} 2>/dev/null || {{ printf NOREPO; exit 0; }}; top=$(git rev-parse --show-toplevel 2>/dev/null) || {{ printf NOREPO; exit 0; }}; br=$(git symbolic-ref --short -q HEAD || git rev-parse --short HEAD 2>/dev/null); printf '%s\\0%s\\0' \"$top\" \"$br\"; git -c core.quotepath=off status --porcelain=v1 -z -uall 2>/dev/null", sq(&p));
+            let out = r.sh(&script, None, 30000, BIG, &[0])?;
+            let o = String::from_utf8_lossy(&out).into_owned();
+            Ok(Reply::Json(if o == "NOREPO" { json!({ "repo": false }) } else { json!({ "repo": true, "raw": o }) }))
+        }
+        "githead" => {
+            let p = abs_path(q, "path")?;
+            let (dir, name) = match p.rfind('/') { Some(0) => ("/", &p[1..]), Some(i) => (&p[..i], &p[i + 1..]), None => (".", p.as_str()) };
+            let spec = sq(&format!("HEAD:./{name}"));
+            let script = format!("cd -- {} 2>/dev/null && s=$(git cat-file -s {spec} 2>/dev/null) && [ \"$s\" -lt 2000000 ] && {{ printf Y; git show {spec}; }} || printf N", sq(dir));
+            let out = r.sh(&script, None, 30000, BIG, &[0])?;
+            Ok(Reply::Json(if out.first() == Some(&b'Y') { json!({ "text": String::from_utf8_lossy(&out[1..]) }) } else { json!({ "text": null }) }))
         }
         "find" | "grep" => {
             let skip: Vec<String> = q.get("skip").map(|s| s.as_str()).unwrap_or("").split(',').filter(|s| is_skip(s)).map(String::from).collect();

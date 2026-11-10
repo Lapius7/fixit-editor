@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { ChevronRight, FileText, FileCode2, FileJson, FileType, Folder, FolderOpen, Image as ImageIcon, Film, Music } from "lucide-react";
 import { readDir, type Node } from "@/platform/fs";
 import { useSettings } from "@/features/settings/settings";
@@ -22,6 +22,10 @@ export const iconFor = (name: string) => {
   return <FileText className="ico" style={{ color: "var(--ink-3)" }} />;
 };
 
+// Git の印(M・A・U など)。親から関数で受ける(未対応のフォルダでは何も返さない)
+export type GitMark = "M" | "A" | "D" | "U" | "R" | "C" | "dir";
+export const GitMarks = createContext<(n: Node) => GitMark | undefined>(() => undefined);
+
 type Props = { nodes: Node[]; activePath: string | null; ctxPath: string | null; rev: number; onOpen: (n: Node, pin?: boolean) => void; onContext: (e: React.MouseEvent, n: Node) => void; onMove: (n: Node, dest: Node) => void; depth?: number };
 
 export default function FileTree({ nodes: all, activePath, ctxPath, rev, onOpen, onContext, onMove, depth = 0 }: Props) {
@@ -35,6 +39,7 @@ export default function FileTree({ nodes: all, activePath, ctxPath, rev, onOpen,
 }
 
 function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, depth, idx }: Omit<Props, "nodes"> & { n: Node; depth: number; idx: number }) {
+  const git = useContext(GitMarks)(n);
   const indent = useSettings().treeIndent;
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState<Node[] | undefined>();
@@ -72,12 +77,13 @@ function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, depth, i
 
   return (
     <li role="treeitem" aria-expanded={isDir ? open : undefined}>
-      <button className="tree-row" data-active={!isDir && activePath === n.path} data-ctx={ctxPath === n.path} data-drop={over} {...dragProps} onClick={click} onDoubleClick={() => { if (!isDir) onOpen(n, true); }}
+      <button className="tree-row" data-git={git} data-active={!isDir && activePath === n.path} data-ctx={ctxPath === n.path} data-drop={over} {...dragProps} onClick={click} onDoubleClick={() => { if (!isDir) onOpen(n, true); }}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContext(e, n); }}
         style={{ paddingLeft: 10 + depth * indent, ["--i" as string]: idx }}>
         <ChevronRight className="chev" data-open={open} data-hidden={!isDir} />
         {isDir ? (open ? <FolderOpen className="ico folder" /> : <Folder className="ico folder" />) : iconFor(n.name)}
         <span className="truncate">{n.name}</span>
+        {git && <span className="git-badge" data-g={git}>{git === "dir" ? "" : git === "U" ? "U" : git}</span>}
       </button>
       {isDir && kids && (
         <div className="collapse" data-open={open}>

@@ -239,3 +239,14 @@ button.sb:active { transform: scale(var(--ps)); }
 .kr-reset { width: 24px; height: 24px; flex: none; }
 .kr-group { padding: 12px 4px 4px; font-size: 11px; font-weight: 600; color: var(--ink-3); letter-spacing: .04em; }
 .set-note { min-height: 20px; font-size: 12px; color: var(--accent); margin: 0 0 6px; }
+
+/* Git の印: 変更のあるファイルは名前の色と右端の文字で、フォルダは右端の点で示す */
+.tree-row .git-badge { margin-left: auto; flex: none; font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: .02em; opacity: .9; }
+.tree-row .git-badge[data-g="dir"] { width: 6px; height: 6px; border-radius: 50%; background: var(--git-mod); opacity: .75; }
+.tree-row[data-git="M"] .truncate, .tree-row[data-git="R"] .truncate { color: var(--git-mod); }
+.tree-row[data-git="A"] .truncate, .tree-row[data-git="U"] .truncate { color: var(--git-add); }
+.tree-row[data-git="D"] .truncate, .tree-row[data-git="C"] .truncate { color: var(--git-del); }
+.tree-row[data-git="D"] .truncate { text-decoration: line-through; }
+.git-badge[data-g="M"], .git-badge[data-g="R"] { color: var(--git-mod); }
+.git-badge[data-g="A"], .git-badge[data-g="U"] { color: var(--git-add); }
+.git-badge[data-g="D"], .git-badge[data-g="C"] { color: var(--git-del); }

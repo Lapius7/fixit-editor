@@ -11,7 +11,8 @@ import { OUTLINE_EVENT } from "@/editor/Crumbs";
 import LangUI from "@/editor/LangUI";
 import { openFiles, isScript, type Edit, type Loc } from "@/editor/ts/client";
 import Editor, { dropStates, type Cursor, type Jump } from "@/editor/Editor";
-import FileTree, { canDrop } from "@/workbench/FileTree";
+import FileTree, { GitMarks, canDrop, type GitMark } from "@/workbench/FileTree";
+import { loadBase, loadGit, type GitInfo } from "@/features/git/git";
 import QuickOpen from "@/workbench/QuickOpen";
 import Viewer from "@/workbench/Viewer";
 import Terminal, { type TermApi } from "@/workbench/Terminal";
@@ -33,7 +34,7 @@ import Workspaces from "@/features/workspaces/Workspaces";
 import { Pin } from "lucide-react";
 import { Sparkles, Server, HardDrive, Unplug, FolderKanban, Eye, Code2, Maximize2, Minimize2 } from "lucide-react";
 import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
-import { displayPath, setRootNames } from "@/workbench/rootpath";
+import { displayPath, setRootNames, splitRoot } from "@/workbench/rootpath";
 import { getProfiles, switchProfile, useProfiles } from "@/features/settings/profiles";
 import { listShells, type ShellOpt } from "@/platform/pty";
 import { RemoteFile, checkDir, connKey, connLabel, pushRecent, rootHandle, sshUrl, type Conn, type RemoteDir } from "@/platform/remote";
@@ -274,7 +275,7 @@ export default function App() {
     if (st.finalNewline && text && !text.endsWith("\n")) text += "\n";
     const mark = () => { setTabs((p) => p.map((x) => (x.node.path === t.node.path ? { ...x, text: x.text === t.text ? text : x.text, saved: text } : x))); setPreview((v) => (v === t.node.path ? null : v)); };
     if (!t.node.handle) { mark(); return quiet ? undefined : flash(i18next.t("デモのファイルは、保存先がありません")); }
-    try { await writeFile(t.node.handle as FileSystemFileHandle, t.eol === "crlf" && st.remoteKeepEol ? text.replace(/\n/g, "\r\n") : text); mark(); noteSave(); if (!quiet) flash(i18next.t("保存しました")); }
+    try { await writeFile(t.node.handle as FileSystemFileHandle, t.eol === "crlf" && st.remoteKeepEol ? text.replace(/\n/g, "\r\n") : text); mark(); noteSave(); setGitTick((n) => n + 1); if (!quiet) flash(i18next.t("保存しました")); }
     catch (e) { flash(i18next.t("保存できませんでした: {{m}}", { m: (e as Error).message }), "error"); }
   }, [st.trimOnSave, st.finalNewline, st.remoteKeepEol]); // eslint-disable-line react-hooks/exhaustive-deps
   // 改行コードの切り替え。保存し直すまでは、ファイルは変わらない(未保存の印をつける)
@@ -289,6 +290,42 @@ export default function App() {
     const h = setTimeout(() => list.forEach((t) => saveTab(t, true)), st.autoSave * 1000);
     return () => clearTimeout(h);
   }, [tabs, st.autoSave, saveTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Git: 開いているフォルダがリポジトリなら、変更のあるファイルと、HEAD との差の元になる内容を調べる(読むだけ)
+  const [gits, setGits] = useState<Record<string, GitInfo | null>>({});
+  const [gitTick, setGitTick] = useState(0);
+  const [bases, setBases] = useState<Record<string, string | null>>({});
+  useEffect(() => {
+    const h = () => setGitTick((n) => n + 1);
+    window.addEventListener("focus", h);
+    return () => window.removeEventListener("focus", h);
+  }, []);
+  useEffect(() => {
+    if (!st.gitStatus) { setGits({}); return; }
+    let live = true;
+    const h = setTimeout(async () => {
+      const out: Record<string, GitInfo | null> = {};
+      await Promise.all(roots.map(async (r) => { if (r.conn) out[r.prefix] = await loadGit(r.conn, r.conn.path); }));
+      if (live) setGits(out);
+    }, 300);
+    return () => { live = false; clearTimeout(h); };
+  }, [roots, gitTick, st.gitStatus]);
+  const absOf = (n: Node) => (n.handle && (n.handle as { path?: string }).path) || null;
+  const gitMark = useCallback((n: Node): GitMark | undefined => {
+    const info = gits[splitRoot(n.path).prefix], abs = absOf(n);
+    if (!info || !abs) return undefined;
+    return n.kind === "dir" ? (info.dirs.has(abs) ? "dir" : undefined) : info.files.get(abs);
+  }, [gits]);
+  useEffect(() => {
+    let live = true;
+    for (const path of new Set([act[0], act[1]])) {
+      const t = tabs.find((x) => x.node.path === path);
+      const r = roots.find((x) => x.prefix === splitRoot(path ?? "").prefix), info = r && gits[r.prefix], abs = t && absOf(t.node);
+      if (!t || !isText(t) || !r?.conn || !info || !abs) { setBases((b) => (path && b[path] !== undefined ? { ...b, [path]: null } : b)); continue; }
+      void loadBase(r.conn, abs, info.files.get(abs)).then((v) => { if (live) setBases((b) => (b[path!] === v ? b : { ...b, [path!]: v })); });
+    }
+    return () => { live = false; };
+  }, [gits, act[0], act[1]]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const reload = async () => {
     const got = await Promise.all(roots.map(async (r) => ({ prefix: r.prefix, handle: r.handle, nodes: r.handle ? await readDir(r.handle, r.prefix).catch(() => null) : null })));
@@ -1206,7 +1243,7 @@ export default function App() {
             key={`${i}:${t.node.path}`} docKey={`${i}:${t.node.path}`} path={displayPath(t.node.path)} name={t.node.name} value={t.text} jump={jump[i]}
             onChange={(v) => { setTabs((p) => p.map((x) => (x.node.path === t.node.path && x.text !== v ? { ...x, text: v } : x))); setPreview((q) => (q === t.node.path ? null : q)); }}
             onCursor={(c) => setCur((p) => (i === 0 ? [c, p[1]] : [p[0], c]))}
-            onFocus={() => setFp(i)} onReady={(v) => { views.current[i] = v; }} onContext={editorMenu}
+            onFocus={() => setFp(i)} onReady={(v) => { views.current[i] = v; }} onContext={editorMenu} gitBase={bases[t.node.path]}
           />
           {previewKind(t.node.name) && (
             <div className="pv-pane" inert={!pv[t.node.path]}>
@@ -1224,6 +1261,7 @@ export default function App() {
   const goHit = (n: Node, h: { line: number; from: number; to: number }) => goto(n, h.line, h.from, h.to);
 
   return (
+    <GitMarks.Provider value={gitMark}>
     <div className="stage" onContextMenu={stageMenu}>
       <div className="window" data-side={side} data-sb={st.sbShow} data-tp={tp}>
         <aside className="sidebar" aria-label={i18next.t("サイドバー")}>
@@ -1343,6 +1381,7 @@ export default function App() {
             conn={root.conn ? `${connLabel(root.conn)} · ${root.conn.path}` : null} connKind={root.conn?.kind ?? null}
             onConn={() => setCn(true)} ws={st.wsStatus ? ws?.name ?? "" : null} wsColor={ws?.color} onWs={() => setWsDlg("ws")} onPop={(k) => setPop((p) => (p === k ? null : k))}
             onTerm={() => showTerm()} onSettings={() => setSetts("look")}
+            git={gits[root.prefix] ? { branch: gits[root.prefix]!.branch, changes: gits[root.prefix]!.files.size } : null} onGit={() => setGitTick((n) => n + 1)}
           />
         )}
       </div>
@@ -1359,5 +1398,6 @@ export default function App() {
       <LangUI onGoto={gotoLoc} onRename={applyRename} />
       {pMenu.v && <ContextMenu key={pMenu.key} out={pMenu.out} x={pMenu.v.x} y={pMenu.v.y} items={pMenu.v.items} onClose={() => setMenu(null)} />}
     </div>
+    </GitMarks.Provider>
   );
 }

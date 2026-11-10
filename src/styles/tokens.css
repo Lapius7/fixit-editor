@@ -25,7 +25,7 @@
   --term-bg: rgba(252, 252, 254, 0.8); --term-ink: #26292e;
   --bar: rgba(255, 255, 255, 0.35);
 
-  --editor-ink: #26292e; --gutter: #a0a7b2; --gutter-active: #4a5160;
+  --editor-ink: #26292e; --gutter: #a0a7b2; --gutter-active: #4a5160; --git-add: #2f9e5a; --git-mod: #3b7de0; --git-del: #d8454b; --git-untracked: #2f9e5a;
   --active-line: rgba(59, 111, 217, 0.07); --sel: rgba(59, 111, 217, 0.22);
   --match: rgba(255, 200, 60, 0.4); --match-now: rgba(255, 150, 40, 0.5);
   --indent: rgba(30, 40, 70, 0.1); --indent-on: rgba(59, 111, 217, 0.45);
@@ -50,7 +50,7 @@
   --term-bg: rgba(16, 18, 25, 0.78); --term-ink: #e6e9f0;
   --bar: rgba(0, 0, 0, 0.22);
 
-  --editor-ink: #dfe3ec; --gutter: #5f6778; --gutter-active: #b4bccb;
+  --editor-ink: #dfe3ec; --gutter: #5f6778; --gutter-active: #b4bccb; --git-add: #4cc07a; --git-mod: #6aa3ff; --git-del: #ff6b72; --git-untracked: #4cc07a;
   --active-line: rgba(255, 255, 255, 0.045); --sel: rgba(90, 140, 255, 0.3);
   --match: rgba(255, 200, 60, 0.28); --match-now: rgba(255, 150, 40, 0.42);
   --indent: rgba(255, 255, 255, 0.08); --indent-on: rgba(120, 160, 255, 0.55);

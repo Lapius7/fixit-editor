@@ -46,3 +46,27 @@ fn rm_guard() {
     assert!(!protected("C:/Users/x/proj"));
     assert!(!protected("/tmp/x"));
 }
+
+#[test]
+fn local_git() {
+    let d = std::env::temp_dir().join(format!("fx-git-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let r = d.to_string_lossy().replace('\\', "/");
+    // リポジトリでなければ repo: false
+    assert_eq!(js(dispatch("gitstatus", &q(&[("path", &r)]), None).unwrap())["repo"], false);
+    let git = |a: &[&str]| { let s = std::process::Command::new("git").args(["-c", "user.name=t", "-c", "user.email=t@t"]).args(a).current_dir(&d).status().unwrap(); assert!(s.success()); };
+    git(&["init", "-q"]);
+    std::fs::write(d.join("f.txt"), "a\nb\n").unwrap();
+    git(&["add", "."]);
+    git(&["commit", "-qm", "one"]);
+    std::fs::write(d.join("f.txt"), "a\nB\n").unwrap();
+    std::fs::write(d.join("n.txt"), "x\n").unwrap();
+    let s = js(dispatch("gitstatus", &q(&[("path", &r)]), None).unwrap());
+    assert_eq!(s["repo"], true);
+    let raw = s["raw"].as_str().unwrap();
+    assert!(raw.contains(" M f.txt\0") && raw.contains("?? n.txt\0"), "{raw:?}");
+    assert_eq!(js(dispatch("githead", &q(&[("path", &format!("{r}/f.txt"))]), None).unwrap())["text"], "a\nb\n");
+    assert!(js(dispatch("githead", &q(&[("path", &format!("{r}/n.txt"))]), None).unwrap())["text"].is_null());
+    let _ = std::fs::remove_dir_all(&d);
+}
