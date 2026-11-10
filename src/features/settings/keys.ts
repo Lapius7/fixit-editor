@@ -76,6 +76,7 @@ export const KEYS: KeyDef[] = [
   d(G.fold, "foldAll", "すべて折りたたむ", "Mod+Alt+[", e),
   d(G.fold, "unfoldAll", "すべて展開", "Mod+Alt+]", e),
   d(G.term, "newTerm", "新しいターミナル", "Mod+Shift+`", { inTerm: true }),
+  d(G.term, "runFile", "このファイルを実行(▶)", "Mod+Alt+R"),
   d(G.term, "closeTerm", "ターミナルを閉じる", "Mod+Alt+W", { inTerm: true }),
   d(G.term, "nextTerm", "次のターミナル", "Mod+Alt+.", { inTerm: true }),
   d(G.term, "prevTerm", "前のターミナル", "Mod+Alt+,", { inTerm: true }),

@@ -6,7 +6,7 @@
 
 **Un editor de código ligero y elegante para Windows, con aspecto de cristal esmerilado.**
 
-![License](https://img.shields.io/badge/license-MIT-blue)
+![License](https://img.shields.io/badge/license-proprietary-lightgrey)
 ![Platform](https://img.shields.io/badge/platform-Windows-0078d4)
 ![Built with](https://img.shields.io/badge/built%20with-Tauri%20%C2%B7%20React%20%C2%B7%20CodeMirror%206-444)
 
@@ -18,7 +18,7 @@
 
 ## Resumen
 
-Fixit Editor es un pequeño editor de código con aspecto de cristal esmerilado. Funciona con un solo archivo, `Fixit-Editor.exe`, sin instalador. Está hecho con CodeMirror 6 y Tauri, así que arranca rápido y consume poco.
+Fixit Editor es un pequeño editor de código con aspecto de cristal esmerilado. Para Windows hay un instalador (`Fixit-Editor-Setup.exe`) y un único archivo, `Fixit-Editor.exe`. Está hecho con CodeMirror 6 y Tauri, así que arranca rápido y consume poco.
 
 Los ajustes, las estadísticas y los espacios de trabajo se guardan en tu PC. Lo que programas no sale de ella, salvo cuando haces una pregunta a una IA, inicias sesión en Lapount con la sincronización activada, envías comentarios o se envía el recuento anónimo de uso.
 
@@ -35,6 +35,7 @@ Los ajustes, las estadísticas y los espacios de trabajo se guardan en tu PC. Lo
 - Vista dividida, búsqueda en todos los archivos, paleta de comandos y apertura rápida.
 - Abre imágenes, PDF, Word, audio y vídeo. Markdown y HTML se previsualizan junto al código fuente.
 - Varias terminales, con pestañas que se pueden renombrar.
+- Ejecuta el archivo abierto con ▶ (`Ctrl+Alt+R`); el comando por extensión se cambia en Ajustes.
 
 **Remoto y espacios de trabajo**
 
@@ -80,4 +81,4 @@ bash scripts/build-win.sh   # genera dist-win/Fixit-Editor.exe
 
 ## Licencia
 
-[MIT](LICENSE)
+Todos los derechos reservados. Puedes usar la aplicación gratis, pero no se permite copiar, redistribuir ni reutilizar el código. Consulta [LICENSE](LICENSE).

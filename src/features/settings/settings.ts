@@ -1,11 +1,11 @@
-import { kvGet, kvSet, kvWatch } from "@/platform/appdata";
+import { kvGet, kvSet, kvWatch } from "@/platform/appdata"; import { cleanRunners } from "@/features/run/runners";
 import { useSyncExternalStore } from "react";
 import { setWinTheme } from "@/shared/chrome";
 import { TAB_SIZE } from "@/shared/config";
 
 export type Dot = { x: number; y: number; c: string };
 export type Mode = "light" | "dark" | "auto";
-export type Cat = "look" | "layout" | "editor" | "cursor" | "assist" | "files" | "ws" | "term" | "status" | "motion" | "privacy" | "adv" | "history" | "ai" | "account";
+export type Cat = "look" | "layout" | "editor" | "cursor" | "assist" | "files" | "ws" | "term" | "run" | "status" | "motion" | "privacy" | "adv" | "history" | "ai" | "account";
 
 // 背景の色を選ぶ見本(画像の下段の丸)
 export const SWATCHES = ["#e4e6ec", "#f08bb4", "#f2836b", "#f5a65b", "#e6c85a", "#8ccf6f", "#4fc79a", "#4aa8f0", "#7a7cf0", "#b57cf0"];
@@ -14,7 +14,7 @@ export const MAX_DOTS = 5;
 
 export const CATS: { id: Cat | "keys"; label: string }[] = [
   { id: "look", label: "外観" }, { id: "layout", label: "レイアウト" }, { id: "editor", label: "エディタ" }, { id: "cursor", label: "カーソルと行番号" },
-  { id: "assist", label: "補完と入力" }, { id: "files", label: "ファイル" }, { id: "ws", label: "ワークスペース" }, { id: "term", label: "ターミナル" }, { id: "status", label: "ステータスバー" },
+  { id: "assist", label: "補完と入力" }, { id: "files", label: "ファイル" }, { id: "ws", label: "ワークスペース" }, { id: "term", label: "ターミナル" }, { id: "run", label: "実行" }, { id: "status", label: "ステータスバー" },
   { id: "motion", label: "アニメーション" }, { id: "privacy", label: "統計とプライバシー" }, { id: "adv", label: "詳細" }, { id: "account", label: "アカウント" }, { id: "ai", label: "AI" }, { id: "history", label: "変更履歴" }, { id: "keys", label: "ショートカット" },
 ];
 
@@ -100,7 +100,7 @@ const RAW = [
   e("syntax", "editor", "構文の色", "color", [["color", "鮮やか"], ["muted", "くすんだ色"], ["mono", "モノクロ"]], { css: "--syn-k", fmt: map({ color: "100%", muted: "55%", mono: "0%" }) }),
   b("commentItalic", "editor", "コメントを斜体にする", true, { css: "--com-style", fmt: (v) => (v ? "italic" : "normal") }),
   b("scrollPastEnd", "editor", "最後の行の下にも余白を取る", false),
-  e("scrollbar", "editor", "スクロールバー", "thin", [["thin", "細い"], ["auto", "標準"], ["none", "隠す"]], { css: "--sbw" }),
+  e("scrollbar", "editor", "スクロールバー", "thin", [["thin", "細い"], ["auto", "標準"], ["none", "隠す"]], { attr: "sb" }),
   b("spellcheck", "editor", "スペルチェック", false, { hint: "ブラウザの機能を使います" }),
   b("readOnly", "editor", "読み取り専用にする", false, { hint: "入力できなくなります" }),
 
@@ -161,6 +161,8 @@ const RAW = [
   b("termOpenOnLaunch", "term", "起動したらターミナルを開く", false),
   n("termMax", "term", "同時に開ける数", 6, { sec: "複数のターミナル", min: 1, max: 12, step: 1 }),
   b("termAutoClose", "term", "シェルが終わったらタブを閉じる", true, { hint: "切ると、Enter で閉じるまで残ります" }),
+  b("runSave", "run", "実行の前に保存する", true, { sec: "実行", hint: "▶ を押したとき、未保存の変更を先に保存します" }),
+  b("runClear", "run", "実行の前にターミナルの画面を消す", false, { sec: "実行" }),
   n("termFontSize", "term", "文字の大きさ", 12.5, { sec: "文字", min: 9, max: 24, step: 0.5, unit: "px" }),
   n("termLineHeight", "term", "行の高さ(倍率)", 1.3, { min: 1, max: 2, step: 0.05 }),
   n("termMinContrast", "term", "文字の最低コントラスト", 1, { min: 1, max: 7, step: 0.5, hint: "1 で補正しません" }),
@@ -188,7 +190,6 @@ const RAW = [
   b("sbWrap", "status", "折り返し", true),
   b("sbLang", "status", "言語", true),
   b("sbZoom", "status", "文字の大きさ", true),
-  b("sbSettings", "status", "設定のボタン", true),
 
   /* アニメーション */
   e("speed", "motion", "動きの速さ", "normal", [["off", "なし"], ["fast", "速く"], ["normal", "標準"], ["slow", "ゆっくり"]], { css: "--sp", fmt: map({ off: "0", fast: ".6", normal: "1", slow: "1.6" }), hint: "「なし」で、すべての動きを止めます" }),
@@ -217,11 +218,11 @@ export const DEFS: AnyDef[] = RAW;
 
 type Def = (typeof RAW)[number];
 export type Values = { [D in Def as D["id"]]: D["def"] };
-export type Settings = Values & { mode: Mode; dots: Dot[]; accent: string; keys: Record<string, string> };
+export type Settings = Values & { mode: Mode; dots: Dot[]; accent: string; keys: Record<string, string>; runners: Record<string, string> };
 
 const DEFAULTS = {
   ...Object.fromEntries(RAW.map((d) => [d.id, d.def])),
-  mode: "light", accent: ACCENTS[0], keys: {},
+  mode: "light", accent: ACCENTS[0], keys: {}, runners: {},
   dots: [{ x: 17, y: 14, c: "#59a0f7" }, { x: 86, y: 88, c: "#ffaa6e" }, { x: 12, y: 86, c: "#ffe6c8" }, { x: 85, y: 18, c: "#d8c1f0" }],
 } as Settings;
 
@@ -248,6 +249,7 @@ function clean(raw: unknown, base: Settings = DEFAULTS): Settings {
     if (dots.length) out.dots = dots;
   }
   if (r.keys && typeof r.keys === "object") out.keys = Object.fromEntries(Object.entries(r.keys).filter(([, v]) => typeof v === "string"));
+  if (r.runners) out.runners = cleanRunners(r.runners);
   return out as Settings;
 }
 
@@ -301,7 +303,7 @@ export const isChanged = (d: AnyDef) => (s as unknown as Record<string, unknown>
 export const changedCount = () => DEFS.filter(isChanged).length;
 export const resetOne = (id: string) => { const d = DEFS.find((x) => x.id === id); if (d) commit({ ...s, [d.id]: d.def }); };
 // 見た目と各項目を初期値に戻す(ショートカットは、別に戻す)
-export const resetAll = () => commit({ ...DEFAULTS, keys: s.keys });
+export const resetAll = () => commit({ ...DEFAULTS, keys: s.keys, runners: s.runners });
 export const exportJson = () => JSON.stringify(s, null, 2);
 export function importJson(text: string) {
   const raw = JSON.parse(text);

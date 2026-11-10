@@ -1,5 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { RotateCcw, Search as SearchIcon, Download, Upload, X } from "lucide-react";
+import { RotateCcw, Search as SearchIcon, Download, Upload, X, RefreshCw, Plus } from "lucide-react";
+import { RUN_DEFAULTS, RUN_MAX, cleanExt, validExt } from "@/features/run/runners";
+import { useUpdateState } from "@/features/update/update";
+import { IS_TAURI } from "@/shared/chrome";
 import { CATS, DEFS, changedCount, exportJson, importJson, isChanged, ms, resetAll, update, useSettings } from "@/features/settings/settings";
 import { Rows, Look } from "@/features/settings/SettingsParts";
 import HistoryView from "@/features/settings/HistoryView";
@@ -10,7 +13,8 @@ import { notify } from "@/shared/notify";
 import i18next from 'i18next'
 import { Trans } from 'react-i18next'
 
-export default function Settings({ onClose, first, out, onTheme }: { onClose: () => void; first?: string; out?: boolean; onTheme?: () => void }) {
+export default function Settings({ onClose, first, out, onTheme, onCheckUpdate }: { onClose: () => void; first?: string; out?: boolean; onTheme?: () => void; onCheckUpdate?: () => void }) {
+  const { checking, found: newVer } = useUpdateState();
   const [cat, setCat] = useState(CATS.some((c) => c.id === first) ? first! : "look");
   const [q, setQ] = useState("");
   const [only, setOnly] = useState(false);
@@ -68,6 +72,12 @@ export default function Settings({ onClose, first, out, onTheme }: { onClose: ()
             </button>
           ))}
           <span style={{ flex: 1 }} />
+          {onCheckUpdate && IS_TAURI && (
+            <div className="set-upd">
+              <span className="tnum">Fixit Editor v{__APP_VERSION__}</span>
+              <button className="btn" disabled={checking} onClick={onCheckUpdate}><RefreshCw size={14} className={checking ? "spin" : undefined} /><Trans i18nKey={checking ? "確認しています…" : newVer ? "新しい版があります" : "更新を確認"} /></button>
+            </div>
+          )}
           <div className="set-io">
             <button className="btn" onClick={doExport}><Download size={14} /><Trans i18nKey="書き出す" /></button>
             <button className="btn" onClick={() => file.current?.click()}><Upload size={14} /><Trans i18nKey="読み込む" /></button>
@@ -83,6 +93,7 @@ export default function Settings({ onClose, first, out, onTheme }: { onClose: ()
             </div>
             <button className="chipbtn" aria-pressed={only} onClick={() => setOnly(!only)}><Trans i18nKey="変えたものだけ" />{changed ? ` ${changed}` : ""}</button>
             <button className="chipbtn" disabled={!changed} onClick={() => { resetAll(); notify(i18next.t("設定を初期値に戻しました"), "success"); }}><RotateCcw size={13} /><Trans i18nKey="すべて戻す" /></button>
+            <button className="icon-btn" aria-label={i18next.t("閉じる")} title={i18next.t("閉じる")} onClick={close}><X /></button>
           </div>
           <div className="set-body scroll" ref={body}>
             <div key={searching ? "search" : cat} className="set-fade">
@@ -93,6 +104,7 @@ export default function Settings({ onClose, first, out, onTheme }: { onClose: ()
                 {cat === "look" && onTheme && <div className="set-theme-link"><div><Trans i18nKey="プレビューを見ながら編集" /><small><Trans i18nKey="エディタの右にパネルをひらき、画面そのままで変えられます" /></small></div><button className="btn" data-primary="true" onClick={() => { setClosing(true); setTimeout(onTheme, ms(180)); }}><Trans i18nKey="パネルで編集" /></button></div>}
                 {cat === "look" && <Look />}
                 <Rows defs={DEFS.filter((d) => d.cat === cat)} />
+                {cat === "run" && <RunList />}
               </>
             )}
             </div>
@@ -163,6 +175,40 @@ function Keys() {
         );
       })}
       {!rows.length && <p style={{ color: "var(--ink-3)" }}><Trans i18nKey="見つかりません" /></p>}
+    </section>
+  );
+}
+
+// 実行(▶)のコマンド一覧。初期値の拡張子も書き換えられ、空にすると「その拡張子では実行しない」になる
+function RunList() {
+  const s = useSettings();
+  const [ext, setExt] = useState("");
+  const [cmd, setCmd] = useState("");
+  const all = { ...RUN_DEFAULTS, ...s.runners };
+  const exts = Object.keys(all).sort((a, b) => (a in RUN_DEFAULTS ? 0 : 1) - (b in RUN_DEFAULTS ? 0 : 1) || a.localeCompare(b));
+  const set = (k: string, v: string) => update({ runners: { ...s.runners, [k]: v } });
+  const drop = (k: string) => { const n = { ...s.runners }; delete n[k]; update({ runners: n }); };
+  const e = cleanExt(ext), ok = validExt(e) && !!cmd.trim() && !(e in all && all[e] === cmd.trim()) && (e in all || Object.keys(s.runners).length < RUN_MAX);
+  const add = () => { if (!ok) return; set(e, cmd.trim()); setExt(""); setCmd(""); };
+  return (
+    <section className="set-sec">
+      <h3><Trans i18nKey="実行するコマンド" /></h3>
+      <p className="set-note"><Trans i18nKey="拡張子ごとに、▶ で走らせるコマンドを決めます。{file} はファイルのパス、{dir} はフォルダ、{name} はファイル名、{stem} は拡張子を除いた名前です。実行はファイルのあるフォルダで行います。" /></p>
+      {exts.map((k) => {
+        const own = k in s.runners, def = k in RUN_DEFAULTS, changed = own && (!def || s.runners[k] !== RUN_DEFAULTS[k]);
+        return (
+          <div className="kr" key={k}>
+            <span className="run-ext tnum">.{k}</span>
+            <input className="field run-cmd" spellCheck={false} value={all[k]} placeholder={i18next.t("実行しない")} aria-label={i18next.t(".{{ext}} の実行コマンド", { ext: k })} onChange={(ev) => set(k, ev.target.value)} />
+            <button className="icon-btn kr-reset" aria-label={i18next.t(def ? "初期値に戻す" : "削除")} style={{ visibility: changed ? "visible" : "hidden" }} onClick={() => drop(k)}>{def ? <RotateCcw /> : <X />}</button>
+          </div>
+        );
+      })}
+      <div className="kr run-add">
+        <input className="field run-ext-in" spellCheck={false} value={ext} placeholder={i18next.t("拡張子 (例: rb)")} aria-label={i18next.t("追加する拡張子")} onChange={(ev) => setExt(ev.target.value)} onKeyDown={(ev) => { if (ev.key === "Enter") add(); }} />
+        <input className="field run-cmd" spellCheck={false} value={cmd} placeholder={i18next.t("コマンド (例: ruby {file})")} aria-label={i18next.t("追加するコマンド")} onChange={(ev) => setCmd(ev.target.value)} onKeyDown={(ev) => { if (ev.key === "Enter") add(); }} />
+        <button className="btn" disabled={!ok} onClick={add}><Plus size={14} /><Trans i18nKey="追加" /></button>
+      </div>
     </section>
   );
 }

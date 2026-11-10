@@ -27,6 +27,15 @@ export default function Crumbs({ view, path, ver, extra, trailOn = true }: { vie
   const parts = path.split("/").filter(Boolean);
   // 先頭のほうはまとめて「…」にし、ホバーで全体を見せる。末尾の 2 つ(フォルダ › ファイル)は全文を出す
   const KEEP = 2, head = parts.length > KEEP + 1 ? parts.slice(0, parts.length - KEEP) : [], tail = parts.slice(head.length);
+  // 幅が足りないときは、左(ファイルの場所)を切って、いまいる関数など右端を見せる
+  const trailEl = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const t = trailEl.current, b = box.current; if (!t || !b) return;
+    const fit = () => { t.scrollLeft = t.scrollWidth; b.toggleAttribute("data-cut", t.scrollLeft > 0); };
+    fit();
+    const ro = new ResizeObserver(fit); ro.observe(t);
+    return () => ro.disconnect();
+  });
   const [more, setMore] = useState<{ x: number; y: number } | null>(null);
   const showMore = (el: HTMLElement) => { const r = el.getBoundingClientRect(); setMore({ x: Math.max(8, Math.min(r.left, innerWidth - 320)), y: r.bottom + 4 }); };
 
@@ -66,7 +75,7 @@ export default function Crumbs({ view, path, ver, extra, trailOn = true }: { vie
 
   return (
     <div ref={box} className="bc" data-off={!trailOn || undefined} role="navigation" aria-label={i18next.t("パンくず")}>
-      <div className="bc-trail">
+      <div ref={trailEl} className="bc-trail">
         {head.length > 0 && (
           <span className="bc-seg bc-more" tabIndex={0} aria-label={head.join("/")}
             onMouseEnter={(e) => showMore(e.currentTarget)} onFocus={(e) => showMore(e.currentTarget)}
@@ -80,7 +89,7 @@ export default function Crumbs({ view, path, ver, extra, trailOn = true }: { vie
           return (
             <span key={i} className="bc-seg" data-last={i === tr.length - 1}>
               <ChevronRight aria-hidden />
-              <button className="bc-sym" onClick={(e) => open(e.currentTarget, sibs)}><i data-k={s.kind}>{BADGE[s.kind] ?? "·"}</i><span className="bc-name">{s.name}</span></button>
+              <button className="bc-sym" onClick={(e) => open(e.currentTarget, sibs)}><span className="bc-name">{s.name}</span></button>
             </span>
           );
         })}

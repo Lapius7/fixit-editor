@@ -11,7 +11,7 @@ const LIGHT = { background: "#00000000", foreground: "#26292e", cursor: "#3b6fd9
 const DARK = { background: "#00000000", foreground: "#e6e9f0", cursor: "#7aa2ff", selectionBackground: "#5a8cff55", black: "#3a3f4b", red: "#fc6a5d", green: "#67d4a4", yellow: "#d0bf69", blue: "#7aa2ff", magenta: "#fc5fa3", cyan: "#5dd8ff", white: "#e6e9f0" };
 const FONT = (): string => getComputedStyle(document.documentElement).getPropertyValue("--font-mono").trim() || "monospace";
 
-export type TermApi = { copy: () => void; paste: () => void; clear: () => void; focus: () => void };
+export type TermApi = { copy: () => void; paste: () => void; clear: () => void; focus: () => void; send: (text: string) => void };
 type Props = {
   id: number;
   active: boolean;       // この画面が前に出ているか(ほかのタブの間は隠すだけで、接続は残す)
@@ -64,8 +64,13 @@ export default function TerminalSession({ id, active, open, focusKey, host: sshH
       return w as unknown as Sock;
     })();
     ws.current = sock;
-    sock.onopen = () => size();
-    sock.onmessage = (e) => t.write(typeof e.data === "string" ? e.data : new Uint8Array(e.data as ArrayBuffer));
+    // 「実行」の入力は、シェルの起動(rc の読み込みなど)が終わって出力が落ち着くまで預かる。起動中に送ると、シェルに捨てられる
+    const pending: string[] = [];
+    let ready = false, idle = 0;
+    const flush = () => { clearTimeout(idle); ready = true; if (sock.readyState === 1) for (const x of pending.splice(0)) sock.send(x); };
+    const arm = (ms: number) => { clearTimeout(idle); idle = window.setTimeout(flush, ms); };
+    sock.onopen = () => { size(); arm(4000); };
+    sock.onmessage = (e) => { t.write(typeof e.data === "string" ? e.data : new Uint8Array(e.data as ArrayBuffer)); if (!ready) arm(300); };
     sock.onclose = () => {
       if (s.termAutoClose) cb.current.onExit(id);
       else t.write(i18next.t("\r\n\u001b[2m[終了しました。Enter で閉じます]\u001b[0m"));
@@ -78,10 +83,11 @@ export default function TerminalSession({ id, active, open, focusKey, host: sshH
       paste: () => navigator.clipboard.readText().then((x) => t.paste(x)).catch(() => {}),
       clear: () => t.clear(),
       focus: () => t.focus(),
+      send: (x) => { if (ready && sock.readyState === 1) sock.send(x); else pending.push(x); },
     });
     const ro = new ResizeObserver(() => size());
     ro.observe(host.current!);
-    return () => { ro.disconnect(); cb.current.register(id, null); sock.onclose = null; sock.close(); t.dispose(); };
+    return () => { clearTimeout(idle); ro.disconnect(); cb.current.register(id, null); sock.onclose = null; sock.close(); t.dispose(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 見た目の設定は、作り直さず、動いている画面にそのまま反映する

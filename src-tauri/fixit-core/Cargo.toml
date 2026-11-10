@@ -3,7 +3,7 @@ name = "fixit-core"
 version = "0.0.1"
 description = "フィクシットエディタの Rust 側の中身(ファイル操作・Claude の呼び出し)。Tauri には依存しない"
 authors = ["Lapius"]
-license = "MIT"
+license-file = "../../LICENSE"
 edition = "2021"
 
 [dependencies]

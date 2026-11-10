@@ -34,8 +34,8 @@ html[data-tcbar="normal"] .term-body .xterm-scrollable-element > .scrollbar.vert
 html[data-tcbar="none"] .term-body .xterm-scrollable-element > .scrollbar { display: none !important; }
 
 /* エディタや一覧の細いバー: 色だけそろえ、近づいたら濃くする */
-.scroll, .cm-scroller { scrollbar-color: var(--press) transparent; }
-.scroll:hover, .cm-scroller:hover { scrollbar-color: var(--ink-3) transparent; }
+
+
 
 /* 分割の向き・境界線・ドラッグ */
 .panes[data-dragging="true"] > .slot { pointer-events: none; user-select: none; }
@@ -44,12 +44,17 @@ html[data-tcbar="none"] .term-body .xterm-scrollable-element > .scrollbar { disp
   transition: left calc(var(--split-t) * var(--sp)) var(--split-spring), top calc(var(--split-t) * var(--sp)) var(--split-spring), width calc(var(--split-t) * var(--sp)) var(--split-spring), height calc(var(--split-t) * var(--sp)) var(--split-spring); }
 .split-grip[data-dir="col"] { width: 14px; margin-left: -7px; cursor: col-resize; }
 .split-grip[data-dir="row"] { height: 14px; margin-top: -7px; cursor: row-resize; }
-.split-grip::after { content: ""; position: absolute; left: 50%; top: 50%; border-radius: 4px; transform: translate(-50%, -50%);
-  background: var(--press); box-shadow: 0 0 0 .5px color-mix(in srgb, #fff 40%, transparent) inset; transition: background-color calc(.18s * var(--sp)) var(--out), height calc(.5s * var(--sp)) var(--split-spring), width calc(.5s * var(--sp)) var(--split-spring), box-shadow calc(.3s * var(--sp)) var(--out); }
-.split-grip[data-dir="col"]::after { width: 4px; height: 40px; }
-.split-grip[data-dir="row"]::after { width: 40px; height: 4px; }
-.split-grip[data-dir="col"]:hover::after, .split-grip[data-dir="col"][data-drag="true"]::after { background: var(--accent); height: 64px; }
-.split-grip[data-dir="row"]:hover::after, .split-grip[data-dir="row"][data-drag="true"]::after { background: var(--accent); width: 64px; }
+/* 持ち手: ふだんは小さなつまみ。近づくと、境目いっぱいの細い線へのびて、アクセント色になる(つかんだ境目だけが変わる) */
+.split-grip::after { content: ""; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; border-radius: 999px; background: var(--press);
+  transition: width calc(.28s * var(--sp)) var(--out), height calc(.28s * var(--sp)) var(--out), background-color calc(.2s * var(--sp)) var(--ease), opacity calc(.2s * var(--sp)) var(--ease); }
+.split-grip[data-dir="col"]::after { width: 3px; height: 36px; }
+.split-grip[data-dir="row"]::after { height: 3px; width: 36px; }
+.split-grip[data-dir="col"]:hover::after, .split-grip[data-dir="col"][data-drag="true"]::after { width: 2px; height: 100%; background: var(--accent); }
+.split-grip[data-dir="row"]:hover::after, .split-grip[data-dir="row"][data-drag="true"]::after { height: 2px; width: 100%; background: var(--accent); }
+.split-grip[data-drag="true"]::after { opacity: 1; }
+.split-grip:not([data-drag="true"]):hover::after { opacity: .6; }
+body:has(.split-grip[data-dir="col"][data-drag="true"]) { cursor: col-resize; user-select: none; }
+body:has(.split-grip[data-dir="row"][data-drag="true"]) { cursor: row-resize; user-select: none; }
 @keyframes grip-in { from { opacity: 0; transform: scale(.3); } to { opacity: 1; transform: none; } }
 
 /* ドラッグ中、落とす先を示す */
@@ -70,3 +75,18 @@ html[data-tcbar="none"] .term-body .xterm-scrollable-element > .scrollbar { disp
 .tab[data-drop="before"]::before { left: 0; }
 .tab[data-drop="after"]::before { right: 0; }
 .tab[draggable="true"] { -webkit-user-drag: element; }
+
+/* スクロールバー(全体): 細い丸のつまみだけ。溝は透明で、つまみは触れたときに濃くなる。
+   標準の scrollbar-width / scrollbar-color を指定すると ::-webkit-scrollbar が効かなくなるので、ここでは使わない */
+html { --sb-w: 10px; } html[data-sb="auto"] { --sb-w: 14px; }
+::-webkit-scrollbar { width: var(--sb-w); height: var(--sb-w); background: transparent; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--press); background-clip: padding-box; border: 3px solid transparent; border-radius: 999px; min-height: 36px; min-width: 36px; transition: background-color .2s; }
+::-webkit-scrollbar-thumb:hover { background-color: var(--ink-3); background-clip: padding-box; }
+::-webkit-scrollbar-thumb:active { background-color: var(--accent); background-clip: padding-box; }
+::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+
+/* 画面が動いている間は、ミニマップを隠す。大きさが変わり続ける間に描くと、古い絵が伸びて見える。止まったら描き直して、ふわっと戻す */
+.cm-minimap-gutter { transition: opacity calc(.22s * var(--sp)) var(--out, ease); }
+.panes[data-moving] .cm-minimap-gutter { opacity: 0; transition-duration: calc(.12s * var(--sp)); }
+.slot[data-born] .cm-minimap-gutter { opacity: 0; }

@@ -6,7 +6,7 @@
 
 **轻巧好看、磨砂玻璃风格的 Windows 代码编辑器。**
 
-![License](https://img.shields.io/badge/license-MIT-blue)
+![License](https://img.shields.io/badge/license-proprietary-lightgrey)
 ![Platform](https://img.shields.io/badge/platform-Windows-0078d4)
 ![Built with](https://img.shields.io/badge/built%20with-Tauri%20%C2%B7%20React%20%C2%B7%20CodeMirror%206-444)
 
@@ -18,7 +18,7 @@
 
 ## 概述
 
-Fixit Editor 是一款磨砂玻璃风格的小型代码编辑器。无需安装程序，只有一个 `Fixit-Editor.exe` 文件即可运行。它基于 CodeMirror 6 和 Tauri 构建，启动快、占用轻。
+Fixit Editor 是一款磨砂玻璃风格的小型代码编辑器。Windows 版同时提供安装程序（`Fixit-Editor-Setup.exe`）和单文件的 `Fixit-Editor.exe`。它基于 CodeMirror 6 和 Tauri 构建，启动快、占用轻。
 
 设置、统计和工作区都保存在本机。除非你向 AI 提问、登录 Lapount 并开启同步、发送反馈，或开启设置中的匿名上报（匿名使用次数始终发送），否则你的编码内容不会离开这台电脑。
 
@@ -35,6 +35,7 @@ Fixit Editor 是一款磨砂玻璃风格的小型代码编辑器。无需安装�
 - 支持分屏、全文搜索、命令面板和快速打开。
 - 可打开图片、PDF、Word、音频和视频。Markdown 和 HTML 可在源码旁预览。
 - 可同时打开多个终端，标签页也能重命名。
+- 点击 ▶（`Ctrl+Alt+R`）即可运行当前文件，各扩展名对应的命令可在设置中修改。
 
 **远程与工作区**
 
@@ -80,4 +81,4 @@ bash scripts/build-win.sh   # 生成 dist-win/Fixit-Editor.exe
 
 ## 许可证
 
-[MIT](LICENSE)
+保留所有权利。可免费使用本应用,但禁止复制、再分发或复用代码。详见 [LICENSE](LICENSE)。

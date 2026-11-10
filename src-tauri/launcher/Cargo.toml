@@ -3,7 +3,7 @@ name = "fixit-launcher"
 version = "0.0.1"
 description = "Fixit Editor 1 ファイル配布用の起動ファイル"
 authors = ["Lapius"]
-license = "MIT"
+license-file = "../../LICENSE"
 edition = "2021"
 build = "build.rs"
 

@@ -75,7 +75,10 @@
 /* 浮いたエディタ面。角丸は窓(14) − 余白(8) より内側に合わせて 12 */
 .paper { position: relative; min-width: 0; min-height: 0; border-radius: 12px; overflow: hidden; background: var(--paper);
   box-shadow: 0 0 0 1px var(--hair), 0 1px 2px var(--shadow-soft), 0 8px 24px -8px var(--shadow-soft); transition: box-shadow calc(.15s * var(--sp)) var(--ease); }
-.panes[data-split="true"] .paper[data-focus="true"] { box-shadow: 0 0 0 1.5px var(--accent), 0 8px 24px -8px var(--shadow-soft); }
+/* 操作中の画面は、枠線ではなく影の浮き上がりで示す。ほかの画面は少し沈める */
+.panes[data-split="true"] .paper[data-focus="true"] { box-shadow: 0 0 0 1px var(--hair), 0 2px 4px var(--shadow-soft), 0 16px 36px -10px var(--shadow-soft); }
+.panes[data-split="true"] .paper .cm-scroller { transition: opacity calc(.2s * var(--sp)) var(--ease); }
+.panes[data-split="true"] .paper:not([data-focus="true"]) .cm-scroller { opacity: .72; }
 .paper .cm-editor { height: 100%; }
 .empty p { margin: 0; line-height: 20px; }
 kbd { font: 500 11px/18px var(--font-sans); padding: 0 6px; border-radius: 5px; background: var(--s3); box-shadow: 0 1px 1px var(--shadow-soft), 0 0 0 1px var(--hair); display: inline-block; min-width: 20px; text-align: center; color: var(--ink-2); }
@@ -242,6 +245,10 @@ button.sb:active { transform: scale(var(--ps)); }
 @keyframes blink { 50% { opacity: .55; } }
 .kr-reset { width: 24px; height: 24px; flex: none; }
 .kr-group { padding: 12px 4px 4px; font-size: 11px; font-weight: 600; color: var(--ink-3); letter-spacing: .04em; }
+.run-ext { flex: none; width: 56px; font-size: 13px; color: var(--ink-2); text-align: right; }
+.run-cmd { flex: 1; min-width: 0; height: 30px; font-family: var(--font-mono); font-size: 12.5px; }
+.run-ext-in { flex: none; width: 128px; height: 30px; }
+.run-add { margin-top: 10px; }
 .set-note { min-height: 20px; font-size: 12px; color: var(--accent); margin: 0 0 6px; }
 
 /* Git の印: 変更のあるファイルは名前の色と右端の文字で、フォルダは右端の点で示す */

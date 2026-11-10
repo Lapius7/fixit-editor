@@ -123,5 +123,5 @@ export const diagnostics: Extension = linter(source, { delay: 450 });
 export const minimap: Extension = showMinimap.compute(["doc"], () => ({
   create: () => ({ dom: Object.assign(document.createElement("div"), { className: "fx-minimap" }) }),
   displayText: "characters",
-  showOverlay: "mouse-over",
+  showOverlay: "always",
 }));

@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from "react";
 import { IS_TAURI } from "@/shared/chrome";
 import { UPDATE_URL } from "@/shared/config";
 
@@ -35,4 +36,20 @@ export async function applyUpdate(m: Manifest): Promise<"no_launcher" | "error">
   } catch (e) {
     return String(e) === "no_launcher" ? "no_launcher" : "error";
   }
+}
+
+// ---- 確認の状態(右上の印と設定画面の「更新を確認」が、同じ状態を見る) ----
+type St = { found: Manifest | null; checking: boolean };
+let st: St = { found: null, checking: false };
+const subs = new Set<() => void>();
+const put = (n: Partial<St>) => { st = { ...st, ...n }; subs.forEach((f) => f()); };
+export const useUpdateState = () => useSyncExternalStore((f) => { subs.add(f); return () => { subs.delete(f); }; }, () => st);
+
+/** 新しい版を確かめて、見つかれば右上の印に出す。確認中の二重実行は無視して null を返す */
+export async function runCheck(): Promise<Manifest | null | "error"> {
+  if (st.checking) return null;
+  put({ checking: true });
+  const r = await checkUpdate();
+  put({ checking: false, ...(r === "error" ? {} : { found: r }) });
+  return r;
 }

@@ -31,7 +31,7 @@ html, body { height: 100%; overflow: hidden; }
 body {
   font: 400 14px/20px var(--font);
   color: var(--fg);
-  background: var(--bg);
+  background: linear-gradient(150deg, #c9dcff 0%, #e9e0ff 52%, #ffe9d2 100%);
   -webkit-font-smoothing: antialiased;
   user-select: none;
   cursor: default;
@@ -81,7 +81,7 @@ h1 { font-weight: 500; font-size: 22px; line-height: 30px; letter-spacing: -.005
 
 .fact { margin-top: 20px; padding: 12px 14px; border-radius: var(--r-ctl); background: rgba(255,255,255,.55); box-shadow: inset 0 0 0 1px var(--line); }
 .fact small { display: block; color: var(--fg-3); font-size: 12px; line-height: 16px; }
-.fact code { display: block; margin-top: 2px; font: 400 13px/20px "Cascadia Mono", Consolas, monospace; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: text; }
+.fact code { display: block; margin-top: 2px; font: 400 12.5px/20px "Cascadia Mono", Consolas, monospace; color: var(--fg); overflow-wrap: anywhere; user-select: text; }
 
 /* チェックボックス */
 .chk { display: flex; align-items: center; gap: 10px; min-height: 40px; margin-top: 10px; cursor: pointer; }
