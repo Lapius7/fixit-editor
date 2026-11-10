@@ -45,7 +45,7 @@ import Workspaces from "@/features/workspaces/Workspaces";
 import { GitBranch, Pin, History, MessageSquareText, RefreshCw, ArrowUpCircle } from "lucide-react";
 import { Play } from "lucide-react";
 import { runnerFor, buildCommand } from "@/features/run/runners";
-import { Sparkles, Server, FolderKanban, Eye, Maximize2, Minimize2 } from "lucide-react";
+import { Sparkles, Server, FolderKanban, Eye, Maximize2, Minimize2, ImageIcon, ClipboardCopy } from "lucide-react";
 import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
 import { displayPath, setRootNames, splitRoot } from "@/workbench/rootpath";
 import { getProfiles, switchProfile, useProfiles } from "@/features/settings/profiles";
@@ -54,7 +54,8 @@ import { RemoteFile, checkDir, connKey, connLabel, lastDir, normConn, showPath, 
 import { DEMO_NAME, DEMO_TREE } from "@/shared/demo";
 import { IS_TAURI } from "@/shared/chrome";
 import { createDir, createFile, moveEntry, pickFolder, pickPcFolder, readDir, removeEntry, renameFile, supportsFs, writeFile, writeBlob, freeName, type Node } from "@/platform/fs";
-import { load } from "@/platform/load";
+import { getFile, isImageName, load } from "@/platform/load";
+import { copyImage } from "@/shared/clipimage";
 import { langName } from "@/editor/lang";
 import { APP_NAME } from "@/shared/config";
 import BrowserDock from "@/features/browser/BrowserDock";
@@ -70,6 +71,7 @@ import { LEAF0, boxes, flipAround, fromPair, isLeaf, joints, leaves, nextId, onT
 import { addNode, dirOf, exists, moveNode, removeNode, renameNode } from "@/workbench/treeops";
 import { DEFS, isDark, ms, update, useSettings } from "@/features/settings/settings";
 import type { Tab } from "@/shared/types";
+import { ask } from "@/shared/ask";
 import i18next from 'i18next'
 import { Trans } from 'react-i18next'
 
@@ -331,10 +333,10 @@ export default function App() {
     setPreview(null);
     closeMany([preview], true);
   }); // eslint-disable-line react-hooks/exhaustive-deps
-  const close = (path: string) => {
+  const close = async (path: string) => {
     if (pinned.has(path)) return;
     const t = tabOf(path);
-    if (t && st.confirmClose && isText(t) && t.text !== t.saved && !confirm(i18next.t("{{name}} は保存されていません。閉じますか?", { name: t.node.name }))) return;
+    if (t && st.confirmClose && isText(t) && t.text !== t.saved && !(await ask({ message: i18next.t("{{name}} は保存されていません。閉じますか?", { name: t.node.name }), ok: i18next.t("保存せずに閉じる"), danger: true }))) return;
     closeMany([path], true);
   };
   // 分割中、もう一方の画面にも出しているタブは、この画面から外すだけにする
@@ -481,7 +483,7 @@ export default function App() {
 
   // フォルダ(複数も可)を切り替える。対応するワークスペースがあれば、その状態(タブ・分割・ターミナル)も戻す
   const enterMany = async (specs: Spec[], target?: Workspace) => {
-    if (dirtyList.length && st.confirmClose && !confirm(i18next.t("保存していない変更が {{length}} 件あります。切り替えると失われます。続けますか?", { length: dirtyList.length }))) return false;
+    if (dirtyList.length && st.confirmClose && !(await ask({ message: i18next.t("保存していない変更が {{length}} 件あります。切り替えると失われます。続けますか?", { length: dirtyList.length }), danger: true }))) return false;
     flushWs();
     restoring.current = true;
     const my = ++gen.current;
@@ -686,11 +688,11 @@ export default function App() {
   };
   const addConn = async (conn: Conn) => { const t = connTarget(conn); await addRoot(t.name, t.handle, t.ref, conn); };
   // フォルダをワークスペースから外す(ディスク上のフォルダは消さない)
-  const removeRoot = (prefix: string) => {
+  const removeRoot = async (prefix: string) => {
     const r = roots.find((x) => x.prefix === prefix);
     if (!r || roots.length < 2) return;
     const under = tabs.filter((t) => rootOfPath(t.node.path) === r);
-    if (under.some((t) => dirtyList.includes(t)) && st.confirmClose && !confirm(i18next.t("保存していない変更があります。フォルダを外すと失われます。続けますか?"))) return;
+    if (under.some((t) => dirtyList.includes(t)) && st.confirmClose && !(await ask({ message: i18next.t("保存していない変更があります。フォルダを外すと失われます。続けますか?"), danger: true }))) return;
     closeMany(under.map((t) => t.node.path), true);
     const next = roots.filter((x) => x !== r);
     setRoots(next);
@@ -809,6 +811,20 @@ export default function App() {
     return n.handle && "path" in n.handle ? (n.handle as unknown as { path: string }).path : (rr.conn?.path ?? "") + n.path.slice(rr.prefix.length);
   };
   const copyText = (s: string, m = i18next.t("コピーしました")) => navigator.clipboard.writeText(s).then(() => flash(m), () => flash(i18next.t("コピーできませんでした")));
+  // 画像はクリップボードへ PNG で(ファイルの中身。編集中の画像は、編集画面のコピーボタンから)
+  const copyImg = (n: Node) => copyImage(getFile(n).then((f) => (!f.type && /\.svg$/i.test(n.name) ? new Blob([f], { type: "image/svg+xml" }) : f))).then(() => flash(i18next.t("画像をコピーしました")), () => flash(i18next.t("画像をコピーできませんでした")));
+  const copyBody = async (n: Node) => {
+    const open = tabs.find((x) => x.node.path === n.path);
+    if (open && isText(open)) return copyText(open.text, i18next.t("中身をコピーしました"));
+    const r = await load(n).catch(() => null);
+    if (r?.view.kind === "text") copyText(r.view.text, i18next.t("中身をコピーしました"));
+    else flash(i18next.t("テキストではないため、中身をコピーできません"));
+  };
+  const fileExtras = (n: Node) => [
+    ...(isImageName(n.name) ? [{ label: i18next.t("画像をコピー"), icon: ic(ImageIcon), run: () => void copyImg(n) }] : []),
+    ...(previewKind(n.name) ? [{ label: i18next.t("プレビューで開く"), icon: ic(Eye), run: () => { openOrFocus(n); setPv((p) => ({ ...p, [n.path]: "preview" })); } }] : []),
+    ...(!isImageName(n.name) && !/\.(pdf|mp3|wav|ogg|m4a|flac|aac|mp4|webm|mov|m4v|docx)$/i.test(n.name) ? [{ label: i18next.t("中身をコピー"), icon: ic(ClipboardCopy), run: () => void copyBody(n) }] : []),
+  ];
 
   /* ---------- 分割・ターミナル ---------- */
   // 画面の木を差し替え、なくなった画面の持ち物(タブの割り振り・カーソル・エディタの状態)を片づける
@@ -1226,6 +1242,7 @@ export default function App() {
           { label: i18next.t("開く"), icon: ic(Files), run: () => openOrFocus(n) },
           split ? { label: i18next.t("もう一方の画面で開く"), icon: ic(Columns2), keys: "", run: () => openSplit(n) } : splitSub(n),
           { label: i18next.t("AI チャットに添える"), icon: ic(Sparkles), run: () => void fileToAi(n) },
+          ...fileExtras(n),
           { type: "sep" as const },
         ] : []),
         { label: i18next.t("新規ファイル"), icon: ic(FilePlus), keys: K("newFile"), run: () => create("file", dir ? n : null) },
@@ -1282,6 +1299,7 @@ export default function App() {
         { label: i18next.t("すべて閉じる"), keys: K("closeAll"), run: () => closeMany(tabs.map((x) => x.node.path)) },
         { type: "sep" },
         { label: i18next.t("AI チャットに添える"), icon: ic(Sparkles), run: () => void fileToAi(t.node) },
+        ...fileExtras(t.node),
         ...(!split ? [splitSub(t.node)] : [
         ...ids.map((id, k) => ({
           label: ids.length === 2 ? i18next.t("{{A}}の画面で開く", { A: k ? B : A }) : i18next.t("{{n}} 番目の画面で開く", { n: k + 1 }),
@@ -1562,7 +1580,7 @@ export default function App() {
             {br && <BrowserDock onClose={() => setBr(false)} />}
             {ai && <ColGrip width={st.aiW} def={440} min={280} max={900} dir={-1} onChange={(w) => update({ aiW: w })} />}
             <AiDock open={ai} job={aiJob} quote={aiQuote} resolve={clipOf} getCtx={aiCtx} onClose={() => setAi(false)} onSettings={() => setSetts("ai")} />
-            <GitPanel open={gitOpen} conn={root.conn ?? null} root={gits[root.prefix]?.root ?? null} rev={gitTick} onClose={() => setGitOpen(false)} onChanged={() => { setGitTick((n) => n + 1); void syncTabs(); }} guard={() => !dirtyList.length || confirm(i18next.t("保存していない変更が {{length}} 件あります。ファイルが書き換わると失われることがあります。続けますか?", { length: dirtyList.length }))} />
+            <GitPanel open={gitOpen} conn={root.conn ?? null} root={gits[root.prefix]?.root ?? null} rev={gitTick} onClose={() => setGitOpen(false)} onChanged={() => { setGitTick((n) => n + 1); void syncTabs(); }} guard={() => !dirtyList.length || ask({ message: i18next.t("保存していない変更が {{length}} 件あります。ファイルが書き換わると失われることがあります。続けますか?", { length: dirtyList.length }), danger: true })} />
             </div>
             {sess.length > 0 && (
               <div className="term-wrap" data-open={term && shown} data-drag={dragT}>

@@ -50,3 +50,10 @@
 .acct-av[data-loading="true"]::after { content: ""; position: absolute; inset: 0; background: var(--press); animation: acct-pulse 1.1s ease-in-out infinite alternate; }
 @keyframes acct-pulse { from { opacity: .35; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .acct-av[data-loading="true"]::after { animation: none; } }
+/* フィードバックのやりとり: 状態の印・自分の書き込み・続けて書く欄 */
+.fb-item > header .fb-st { margin-right: auto; height: 18px; padding: 0 6px; border-radius: 9px; background: var(--press); font: 11px/18px var(--font-sans); color: var(--ink-2); }
+.fb-item > header .fb-st[data-done] { color: var(--ink-3); }
+.fb-reply[data-mine] { margin-left: 24px; background: transparent; box-shadow: 0 0 0 1px var(--hair); }
+.fb-act { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.fb-compose { margin-top: 8px; }
+.fb-compose textarea { display: block; width: 100%; height: 88px; padding: 8px 10px; resize: none; font: 13px/20px var(--font-sans); color: inherit; overscroll-behavior: contain; }

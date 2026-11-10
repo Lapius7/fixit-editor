@@ -1,13 +1,13 @@
 import { kvGet, kvSet } from "@/platform/appdata";
 import i18next from "i18next";
-import { ERROR_URL, FEEDBACK_URL, USAGE_STORE_KEY, USAGE_URL } from "@/shared/config";
+import { ERROR_URL, FEEDBACK_URL, LINK_URL, USAGE_STORE_KEY, USAGE_URL } from "@/shared/config";
 import { get } from "@/features/settings/settings";
 import { getStats } from "@/features/stats/stats";
 import { installId, osFamily } from "./telemetry";
-import { getToken } from "@/features/account/auth";
+import { authFetch, getAccount, getToken, subscribeAccount } from "@/features/account/auth";
 
-const post = (url: string, body: unknown) =>
-  fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), keepalive: true, credentials: "omit", referrerPolicy: "no-referrer" });
+const post = (url: string, body: unknown, token?: string | null) =>
+  fetch(url, { method: "POST", headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body), keepalive: true, credentials: "omit", referrerPolicy: "no-referrer" });
 
 // ---- エラー報告(常に送る。設定項目はない) ----
 // 送るのは種類・メッセージ・呼び出し順だけ。パスやユーザー名は、送る前に消す
@@ -43,6 +43,8 @@ async function sendUsage(): Promise<void> {
   if (!import.meta.env.PROD || !get().statsOn) return;
   const st = getStats(), now = new Date(), y = new Date(now.getTime() - 86400_000);
   const id = installId();
+  // ログイン中は、アカウントに紐づけて送る(サイトのダッシュボードに出る)
+  const token = getAccount() ? await getToken() : null;
   let sent: Record<string, string> = {};
   try { sent = JSON.parse(kvGet(USAGE_STORE_KEY) || "{}"); } catch { /* 読めなければ送り直す */ }
   for (const day of [dayKey(y), dayKey(now)]) {
@@ -51,15 +53,27 @@ async function sendUsage(): Promise<void> {
     const sig = `${d.sec}:${d.chars}:${d.keys}:${d.saves}`;
     if (sent[day] === sig) continue;
     try {
-      const r = await post(USAGE_URL, { v: 1, id, day, sec: d.sec, chars: d.chars, keys: d.keys, saves: d.saves, langs: d.langs });
+      const r = await post(USAGE_URL, { v: 1, id, day, sec: d.sec, chars: d.chars, keys: d.keys, saves: d.saves, langs: d.langs }, token);
       if (r.ok) sent[day] = sig;
     } catch { /* 次回また送る */ }
   }
   try { kvSet(USAGE_STORE_KEY, JSON.stringify(Object.fromEntries(Object.entries(sent).slice(-4)))); } catch { /* 残せない */ }
 }
+// ログインしたら、この端末でログイン前に送った利用状況をアカウントに紐づける(起動時にログイン済みでも 1 回)
+let linked = "";
+async function linkInstall(): Promise<void> {
+  const uid = getAccount()?.id ?? "";
+  if (!import.meta.env.PROD || !uid || uid === linked) return;
+  try {
+    const r = await authFetch(LINK_URL, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: installId() }) });
+    if (r?.ok) linked = uid;
+  } catch { /* 次のログイン・起動でやり直す */ }
+}
 export function startUsageReports(): void {
   sendUsage();
   setInterval(sendUsage, 6 * 3600_000);
+  void linkInstall();
+  subscribeAccount(() => { void linkInstall(); });
 }
 
 // ---- フィードバック(画面から送る。押したときだけ) ----

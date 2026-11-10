@@ -43,12 +43,31 @@
 .iv-panel { flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 8px 12px; min-height: 48px; box-shadow: 0 -1px 0 var(--hair); }
 .iv-acts { margin-left: auto; display: flex; gap: 8px; }
 .iv-fld { display: flex; align-items: center; gap: 8px; }
-.iv-fld span, .iv-rng span { font-size: 12px; line-height: 20px; color: var(--ink-3); }
+.iv-fld span { font-size: 12px; line-height: 20px; color: var(--ink-3); }
 .iv-num { width: 88px; height: 32px; padding: 0 10px; font-variant-numeric: tabular-nums; }
-.iv-rng { display: flex; align-items: center; gap: 8px; }
-.iv-rng span { width: 72px; }
-.iv-rng input[type="range"] { width: 120px; accent-color: var(--accent); }
-.iv-rng em { width: 44px; text-align: right; font: normal 12px/20px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--ink-2); }
+/* 色の調整: つまみは 2〜4 列の格子、右にモノクロ・色を反転・リセット */
+.iv-adj { flex: 1 1 560px; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 24px; }
+.iv-rngs { flex: 1 1 360px; max-width: 520px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 24px; }
+.iv-rng { display: flex; flex-direction: column; min-width: 0; cursor: pointer; }
+.iv-rng-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; line-height: 20px; }
+.iv-rng-h span { color: var(--ink-2); white-space: nowrap; }
+.iv-rng-h output { font-variant-numeric: tabular-nums; color: var(--ink-3); transition: color calc(.12s * var(--sp)) var(--ease); }
+.iv-rng[data-changed] output { color: var(--accent); }
+.iv-rng input { -webkit-appearance: none; appearance: none; width: 100%; height: 20px; margin: 0; background: transparent; cursor: pointer; }
+.iv-rng input::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--accent) var(--fill, 0%), var(--press) var(--fill, 0%)); }
+.iv-rng input::-moz-range-track { height: 4px; border-radius: 2px; background: var(--press); }
+.iv-rng input::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--accent); }
+.iv-rng input::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; border: 0; background: #fff; box-shadow: 0 0 0 1px var(--hair), 0 1px 4px var(--shadow-soft); transition: transform calc(.15s * var(--sp)) var(--out); }
+.iv-rng input::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; border: 0; background: #fff; box-shadow: 0 0 0 1px var(--hair), 0 1px 4px var(--shadow-soft); }
+.iv-rng input:active::-webkit-slider-thumb { transform: scale(1.15); }
+.iv-rng input:focus-visible { outline: 0; }
+.iv-rng input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--accent), 0 1px 4px var(--shadow-soft); }
+.iv-adj-side { display: flex; align-items: center; gap: 4px 16px; flex-wrap: wrap; }
+.iv-chk { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 2px; font-size: 12px; line-height: 20px; color: var(--ink-2); background: none; white-space: nowrap; }
+.iv-chk i { flex: none; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 5px; background: var(--field); box-shadow: 0 0 0 1px var(--hair) inset; transition: background-color calc(.12s * var(--sp)) var(--ease), box-shadow calc(.12s * var(--sp)) var(--ease); }
+.iv-chk i svg { width: 12px; height: 12px; stroke-width: 3; color: #fff; }
+.iv-chk[aria-checked="true"] i { background: var(--accent); box-shadow: none; }
+.iv-chk:hover { color: var(--ink); }
 
 /* 編集モーダル(外側をクリックしても閉じない) */
 .dlg.ie { width: min(1080px, calc(100vw - 48px)); height: min(780px, calc(100vh - 48px)); padding: 0; display: flex; flex-direction: column; }

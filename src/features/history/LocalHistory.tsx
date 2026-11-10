@@ -5,6 +5,7 @@ import i18next from "i18next";
 import { Trans } from "react-i18next";
 import { ms } from "@/features/settings/settings";
 import { clearFile, diffLines, snapshots } from "@/features/history/history";
+import { ask } from "@/shared/ask";
 
 type Props = { path: string; name: string; current: string; onRestore: (text: string) => void; onClose: () => void; out?: boolean };
 
@@ -43,7 +44,7 @@ export default function LocalHistory({ path, name, current, onRestore, onClose, 
         ) : <p className="set-none"><Trans i18nKey="まだ履歴がありません" /></p>}
         <p className="lh-hint">{i18next.t("選んだ版に戻すと、赤い行は復活し、緑の行は消えます。保存するまでファイルは変わりません。")}</p>
         <div className="dlg-foot">
-          {list.length > 0 && <button className="btn" onClick={() => { if (confirm(i18next.t("このファイルの履歴を全部消しますか?(ファイルは変わりません)"))) { clearFile(path); setList([]); } }}><Trash2 size={14} /><span>{i18next.t("履歴を消す")}</span></button>}
+          {list.length > 0 && <button className="btn" onClick={async () => { if (await ask({ message: i18next.t("このファイルの履歴を全部消しますか?(ファイルは変わりません)"), ok: i18next.t("消す"), danger: true })) { clearFile(path); setList([]); } }}><Trash2 size={14} /><span>{i18next.t("履歴を消す")}</span></button>}
           <span style={{ flex: 1 }} />
           <button className="btn" onClick={() => close()}>{i18next.t("閉じる")}</button>
           {snap && <button className="btn" data-primary="true" disabled={snap.text === current} onClick={() => close(() => onRestore(snap.text))}><Undo2 size={14} /><span>{i18next.t("この版に戻す")}</span></button>}

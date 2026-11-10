@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Flame, Keyboard, Timer, Type } from "lucide-react";
 import { ms, update, useSettings } from "@/features/settings/settings";
 import { clearStats, dur, lastDays, summary, useStats } from "@/features/stats/stats";
+import { ask } from "@/shared/ask";
 import i18next from 'i18next'
 import { Trans } from 'react-i18next'
 
@@ -100,7 +101,7 @@ export default function StatsView({ onClose, out }: { onClose: () => void; out?:
         <footer className="st-foot">
           <span>{sm.since} <Trans i18nKey="から記録・この PC にだけ保存" /></span>
           <button className="btn" onClick={() => update({ statsOn: !s.statsOn })}>{s.statsOn ? i18next.t("記録を止める") : i18next.t("記録を始める")}</button>
-          <button className="btn" onClick={() => { if (confirm(i18next.t("統計をすべて消します。元に戻せません。"))) clearStats(); }}><Trans i18nKey="消す" /></button>
+          <button className="btn" onClick={async () => { if (await ask({ message: i18next.t("統計をすべて消します。元に戻せません。"), ok: i18next.t("消す"), danger: true })) clearStats(); }}><Trans i18nKey="消す" /></button>
         </footer>
       </div>
     </div>

@@ -17,8 +17,9 @@ import { warmJaFont } from "@/shared/fontwarm";
 import { refreshProfile } from "@/features/account/auth";
 import { startSync } from "@/features/account/sync";
 import { startReplies } from "@/features/account/replies";
+import { AskHost } from "@/shared/ask";
 
-createRoot(document.getElementById("root")!).render(<><App /><Splash /><Notifier /><HoverTip /></>);
+createRoot(document.getElementById("root")!).render(<><App /><Splash /><Notifier /><HoverTip /><AskHost /></>);
 startStats();
 initSegSlide();
 warmJaFont();

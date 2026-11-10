@@ -1,6 +1,6 @@
 import { useSettings } from "@/features/settings/settings";
 import { useEffect, useRef, useState } from "react";
-import { ChevronRight, ChevronsDownUp, ChevronsUpDown, SlidersHorizontal, X } from "lucide-react";
+import { Check, ChevronRight, ChevronsDownUp, ChevronsUpDown, SlidersHorizontal, X } from "lucide-react";
 import { NO_SCOPE, scopeTest, searchRoots, type FileHits, type Hit, type Opt, type Scope } from "@/editor/find";
 import type { Node } from "@/platform/fs";
 import i18next from 'i18next'
@@ -47,9 +47,9 @@ export default function SearchPanel({ roots, live, seed, onOpen }: Props) {
       </div>
       {showSc && (
         <div className="sp-scope">
-          <label className="sp-scope-row"><span>{i18next.t("含めるファイル")}</span><input value={sc.inc} onChange={(e) => setSc({ ...sc, inc: e.target.value })} placeholder="*.ts, src/**" spellCheck={false} aria-label={i18next.t("含めるファイル")} /></label>
-          <label className="sp-scope-row"><span>{i18next.t("除外するファイル")}</span><input value={sc.exc} onChange={(e) => setSc({ ...sc, exc: e.target.value })} placeholder="*.test.ts, dist" spellCheck={false} aria-label={i18next.t("除外するファイル")} /></label>
-          <button className="sp-scope-open" data-on={sc.open} aria-pressed={sc.open} onClick={() => setSc({ ...sc, open: !sc.open })}>{i18next.t("開いているタブだけ")}</button>
+          <label className="sp-scope-f"><span>{i18next.t("含めるファイル")}</span><input className="sp-scope-in" value={sc.inc} onChange={(e) => setSc({ ...sc, inc: e.target.value })} placeholder="*.ts, src/**" spellCheck={false} /></label>
+          <label className="sp-scope-f"><span>{i18next.t("除外するファイル")}</span><input className="sp-scope-in" value={sc.exc} onChange={(e) => setSc({ ...sc, exc: e.target.value })} placeholder="*.test.ts, dist" spellCheck={false} /></label>
+          <button className="sp-scope-open" role="checkbox" aria-checked={sc.open} onClick={() => setSc({ ...sc, open: !sc.open })}><i aria-hidden="true">{sc.open && <Check />}</i><span>{i18next.t("開いているタブだけ")}</span></button>
         </div>
       )}
       <div className="sp-sum"><span aria-live="polite">{sum}{scoped && res.length > 0 ? i18next.t("(絞り込み中)") : ""}</span>{res.length > 1 && <span className="sp-sum-acts"><button className="sp-opt" title={i18next.t("すべて折りたたむ")} aria-label={i18next.t("すべて折りたたむ")} onClick={() => setShut(new Set(res.map((r) => r.node.path)))}><ChevronsDownUp /></button><button className="sp-opt" title={i18next.t("すべて開く")} aria-label={i18next.t("すべて開く")} onClick={() => setShut(new Set())}><ChevronsUpDown /></button></span>}</div>

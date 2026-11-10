@@ -45,6 +45,7 @@ export const LAPOUNT_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIj
 export const LAPOUNT_CLIENT_ID = "lp_fixit";
 export const SYNC_URL = `${API_BASE}/api/sync`;
 export const MY_FEEDBACK_URL = `${API_BASE}/api/me/feedback`;
+export const LINK_URL = `${API_BASE}/api/me/link`; // ログイン前の利用状況を、この端末の ID からアカウントへ紐づける
 export const SYNC_POLL_MS = 60_000; // 他の端末の変更を見に行く間隔
 export const SYNC_PUSH_DELAY_MS = 4_000; // 変更が止まってから送るまでの待ち
 export const REPLY_POLL_MS = 5 * 60_000; // フィードバックの返信を見に行く間隔

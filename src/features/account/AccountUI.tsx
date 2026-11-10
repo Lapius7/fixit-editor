@@ -2,11 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { ExternalLink, LogIn, LogOut, RefreshCw, Trash2 } from "lucide-react";
 import i18next from "i18next";
 import { Trans } from "react-i18next";
-import { logout, openLoginPage, refreshProfile, startLogin, useAccount, type Account, type LoginFlow } from "./auth";
+import { logout, openExternal, openLoginPage, refreshProfile, startLogin, useAccount, type Account, type LoginFlow } from "./auth";
 import { deleteCloudData, setSyncOn, syncNow, useSync } from "./sync";
 import { notify } from "@/shared/notify";
+import { SITE_URL } from "@/shared/config";
+import { ask } from "@/shared/ask";
 
 const ACCOUNT_PAGE = "https://account.lapius7.com/";
+// サイトのダッシュボード。サイトの言語は ja/en/ko だけなので、それ以外は英語
+const dashboardUrl = () => { const l = i18next.language.slice(0, 2); return `${SITE_URL}/${["ja", "en", "ko"].includes(l) ? l : "en"}/dashboard`; };
 
 // アイコン。読み込めないとき・未設定のときは、名前の頭文字
 export function Avatar({ user, size = 28 }: { user: Pick<Account, "name" | "avatar">; size?: number }) {
@@ -121,9 +125,16 @@ export function AccountSettings() {
         <div className="acct-row">
           <button className="btn" disabled={!sy.on || sy.busy} onClick={() => void syncNow()}><RefreshCw size={14} /><span><Trans i18nKey="今すぐ同期" /></span></button>
           <button className="btn" onClick={async () => {
-            if (!confirm(i18next.t("クラウドに置いた同期データをすべて消しますか?この PC のデータは消えません。"))) return;
+            if (!(await ask({ message: i18next.t("クラウドに置いた同期データをすべて消しますか?この PC のデータは消えません。"), ok: i18next.t("消す"), danger: true }))) return;
             notify((await deleteCloudData()) ? i18next.t("クラウドの同期データを消しました") : i18next.t("消せませんでした"));
           }}><Trash2 size={14} /><span><Trans i18nKey="クラウドのデータを消す" /></span></button>
+        </div>
+      </section>
+      <section className="set-sec">
+        <h3><Trans i18nKey="統計" /></h3>
+        <p className="acct-note"><Trans i18nKey="ログイン中は、1 日ごとのコーディング時間などの合計をこのアカウントに紐づけて送ります。ログインする前にこの PC から送った分も、まとめて紐づけます。サイトのダッシュボードで、PC をまたいだ合計を見られます。" /></p>
+        <div className="acct-row">
+          <button className="btn" onClick={() => void openExternal(dashboardUrl())}><ExternalLink size={14} /><span><Trans i18nKey="ダッシュボードを開く" /></span></button>
         </div>
       </section>
     </>

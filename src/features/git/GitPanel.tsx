@@ -12,7 +12,7 @@ import {
 
 type Tab = "changes" | "tree" | "log" | "branches";
 type Side = "staged" | "unstaged" | "conflict";
-type Props = { open: boolean; conn: Conn | null; root: string | null; rev: number; onClose: () => void; onChanged: () => void; guard?: () => boolean };
+type Props = { open: boolean; conn: Conn | null; root: string | null; rev: number; onClose: () => void; onChanged: () => void; guard?: () => boolean | Promise<boolean> };
 
 const ROW = 28, LANE = 12, COLORS = 8;
 const base = (p: string) => p.slice(p.lastIndexOf("/") + 1);
@@ -84,7 +84,7 @@ export function GitPanel({ open, conn, root, rev, onClose, onChanged, guard }: P
   const run = async (label: string, body: Record<string, unknown>, after?: () => void) => {
     if (!conn || !root || busy) return;
     // 作業フォルダのファイルを書き換える操作は、未保存のタブがあれば先に確かめる
-    if (REWRITES.has(String(body.cmd)) && guard && !guard()) return;
+    if (REWRITES.has(String(body.cmd)) && guard && !(await guard())) return;
     setBusy(label); setErr("");
     try { await gitWrite(conn, root, body); after?.(); onChanged(); await load(); }
     catch (e) { setErr(msg(e)); }

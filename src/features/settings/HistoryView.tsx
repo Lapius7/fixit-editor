@@ -5,6 +5,7 @@ import { Trans } from "react-i18next";
 import { DEFS } from "@/features/settings/settings";
 import { KEYS } from "@/features/settings/keys";
 import { canRevert, clearHistory, revert, useHistory, type Change, type Entry } from "@/features/settings/history";
+import { ask } from "@/shared/ask";
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const when = (t: number) => new Intl.DateTimeFormat(i18next.language, { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(t);
@@ -58,7 +59,7 @@ export default function HistoryView() {
     <section className="set-sec">
       <div className="hv-top">
         <p className="hv-note"><Trans i18nKey="設定を変えるたびに、変更前と変更後の値をこの端末に残します。「元に戻す」は履歴を消さず、戻した記録を新しく足します。" /></p>
-        {list.length > 0 && <button className="btn" onClick={() => { if (confirm(i18next.t("設定の履歴を全部消しますか?(いまの設定は変わりません)"))) clearHistory(); }}><Trash2 size={14} /><span>{i18next.t("履歴を消す")}</span></button>}
+        {list.length > 0 && <button className="btn" onClick={async () => { if (await ask({ message: i18next.t("設定の履歴を全部消しますか?(いまの設定は変わりません)"), ok: i18next.t("消す"), danger: true })) clearHistory(); }}><Trash2 size={14} /><span>{i18next.t("履歴を消す")}</span></button>}
       </div>
       {rev.length ? <ol className="hv-list">{rev.map((e) => <Item key={e.id} e={e} all={list} />)}</ol> : <p className="set-none"><Trans i18nKey="まだ履歴がありません" /></p>}
     </section>

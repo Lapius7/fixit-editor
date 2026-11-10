@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, Crop, FileX2, Pencil, FlipHorizontal2, FlipVertical2, Link2, Maximize, Redo2, RotateCcw, RotateCw, Save, Scaling, SlidersHorizontal, Undo2, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Check, Copy, Crop, FileX2, Pencil, Link2, Maximize, Redo2, RotateCcw, RotateCw, Save, Scaling, SlidersHorizontal, TrianglesCenterlineDashedHorizontal, TrianglesCenterlineDashedVertical, Undo2, X, ZoomIn, ZoomOut } from "lucide-react";
 import i18next from "i18next";
 import { notify } from "@/shared/notify";
+import { copyImage } from "@/shared/clipimage";
 import { ms } from "@/features/settings/settings";
+import { ask } from "@/shared/ask";
 
 // 画像ビューア。拡大・縮小・ドラッグ移動と、切り抜き・回転・反転・サイズ変更・色の調整
 export const IMAGE_SAVE = "fixit:image-save";
@@ -86,8 +88,8 @@ export default function ImageView(p: Props) {
   const [dirty, setDirty] = useState(false);
   const [closing, setClosing] = useState(false);
   const can = !!p.onSave && EDITABLE.test(p.name);
-  const close = (force?: boolean) => {
-    if (!force && dirty && !confirm(i18next.t("編集した内容を破棄しますか?"))) return;
+  const close = async (force?: boolean) => {
+    if (!force && dirty && !(await ask({ message: i18next.t("編集した内容を破棄しますか?"), ok: i18next.t("破棄する"), danger: true }))) return;
     setClosing(true);
     setTimeout(() => { setOpen(false); setClosing(false); setDirty(false); }, ms(180));
   };
@@ -239,6 +241,7 @@ function Pane({ id, url, name, onSave, edit, onEdit, onDirty }: PaneProps) {
     setSt((p) => p && { items: [...p.items.slice(0, p.i + 1), c].slice(-HIST), i: Math.min(p.i + 1, HIST - 1) });
     setMode(null);
   };
+  const copy = () => { if (cur) copyImage(cur).then(() => notify(i18next.t("画像をコピーしました")), () => notify(i18next.t("画像をコピーできませんでした"), "error")); };
   const undo = () => setSt((p) => p && p.i > 0 ? { ...p, i: p.i - 1 } : p);
   const redo = () => setSt((p) => p && p.i < p.items.length - 1 ? { ...p, i: p.i + 1 } : p);
 
@@ -365,9 +368,23 @@ function Pane({ id, url, name, onSave, edit, onEdit, onDirty }: PaneProps) {
   const act = (label: string, Icon: typeof Crop, fn: () => void, off?: boolean) => (
     <button className="icon-btn" aria-label={label} title={label} disabled={!cur || off} onClick={fn}><Icon /></button>
   );
-  const slider = (label: string, v: number, min: number, max: number, set: (n: number) => void, unit = "%") => (
-    <label className="iv-rng"><span>{label}</span><input type="range" min={min} max={max} step={1} value={v} onChange={(e) => set(+e.target.value)} /><em>{v}{unit}</em></label>
+  // 調整のつまみ。初期値から動かすと値の色が変わり、ダブルクリックで初期値に戻る
+  const slider = (k: "b" | "c" | "s" | "blur", label: string, max: number, unit = "%") => {
+    const v = adj[k], set = (n: number) => setAdj((a) => ({ ...a, [k]: n }));
+    return (
+      <label className="iv-rng" data-changed={v !== ADJ0[k] || undefined}>
+        <span className="iv-rng-h"><span>{label}</span><output>{v}{unit}</output></span>
+        <input type="range" min={0} max={max} step={1} value={v} title={i18next.t("ダブルクリックで元に戻す")} style={{ "--fill": `${(v / max) * 100}%` } as React.CSSProperties}
+          onChange={(e) => set(+e.target.value)} onDoubleClick={() => set(ADJ0[k])} />
+      </label>
+    );
+  };
+  const check = (k: "gray" | "inv", label: string) => (
+    <button className="iv-chk" role="checkbox" aria-checked={adj[k]} onClick={() => setAdj((a) => ({ ...a, [k]: !a[k] }))}>
+      <i aria-hidden="true">{adj[k] && <Check />}</i><span>{label}</span>
+    </button>
   );
+  const adjDirty = (Object.keys(ADJ0) as (keyof Adj)[]).some((k) => adj[k] !== ADJ0[k]);
 
   return (
     <div className="iv" tabIndex={-1} ref={root} data-edit={edit} onKeyDown={key}>
@@ -387,6 +404,7 @@ function Pane({ id, url, name, onSave, edit, onEdit, onDirty }: PaneProps) {
         <span className="iv-info">{cur ? `${W} × ${H} px` : ""}{dirty ? ` · ${i18next.t("編集済み")}` : ""}</span>
         {!edit && onEdit && (
           <div className="iv-grp iv-tools">
+            {act(i18next.t("画像をコピー"), Copy, copy)}
             <button className="btn" onClick={onEdit} disabled={!cur}><Pencil />{i18next.t("編集")}</button>
           </div>
         )}
@@ -395,10 +413,11 @@ function Pane({ id, url, name, onSave, edit, onEdit, onDirty }: PaneProps) {
             {tool("crop", i18next.t("切り抜き"), Crop)}
             {act(i18next.t("左に回転"), RotateCcw, () => rotate(false))}
             {act(i18next.t("右に回転"), RotateCw, () => rotate(true))}
-            {act(i18next.t("左右反転"), FlipHorizontal2, () => flip(true))}
-            {act(i18next.t("上下反転"), FlipVertical2, () => flip(false))}
+            {act(i18next.t("左右反転"), TrianglesCenterlineDashedVertical, () => flip(true))}
+            {act(i18next.t("上下反転"), TrianglesCenterlineDashedHorizontal, () => flip(false))}
             {tool("resize", i18next.t("サイズ変更"), Scaling)}
             {tool("adjust", i18next.t("色の調整"), SlidersHorizontal)}
+            {act(i18next.t("画像をコピー"), Copy, copy)}
             <i className="iv-sep" aria-hidden="true" />
             {act(i18next.t("元に戻す"), Undo2, undo, !st || st.i === 0)}
             {act(i18next.t("やり直す"), Redo2, redo, !st || st.i >= st.items.length - 1)}
@@ -445,17 +464,19 @@ function Pane({ id, url, name, onSave, edit, onEdit, onDirty }: PaneProps) {
             </>
           )}
           {mode === "adjust" && (
-            <>
-              {slider(i18next.t("明るさ"), adj.b, 0, 200, (n) => setAdj((a) => ({ ...a, b: n })))}
-              {slider(i18next.t("コントラスト"), adj.c, 0, 200, (n) => setAdj((a) => ({ ...a, c: n })))}
-              {slider(i18next.t("彩度"), adj.s, 0, 200, (n) => setAdj((a) => ({ ...a, s: n })))}
-              {slider(i18next.t("ぼかし"), adj.blur, 0, 20, (n) => setAdj((a) => ({ ...a, blur: n })), "px")}
-              <div className="seg" role="group">
-                <button aria-pressed={adj.gray} onClick={() => setAdj((a) => ({ ...a, gray: !a.gray }))}>{i18next.t("モノクロ")}</button>
-                <button aria-pressed={adj.inv} onClick={() => setAdj((a) => ({ ...a, inv: !a.inv }))}>{i18next.t("色を反転")}</button>
+            <div className="iv-adj">
+              <div className="iv-rngs">
+                {slider("b", i18next.t("明るさ"), 200)}
+                {slider("c", i18next.t("コントラスト"), 200)}
+                {slider("s", i18next.t("彩度"), 200)}
+                {slider("blur", i18next.t("ぼかし"), 20, "px")}
               </div>
-              <button className="btn" onClick={() => setAdj(ADJ0)}>{i18next.t("リセット")}</button>
-            </>
+              <div className="iv-adj-side">
+                {check("gray", i18next.t("モノクロ"))}
+                {check("inv", i18next.t("色を反転"))}
+                <button className="btn" disabled={!adjDirty} onClick={() => setAdj(ADJ0)}><RotateCcw />{i18next.t("リセット")}</button>
+              </div>
+            </div>
           )}
           <div className="iv-acts">
             <button className="btn" onClick={() => setMode(null)}><X />{i18next.t("キャンセル")}</button>

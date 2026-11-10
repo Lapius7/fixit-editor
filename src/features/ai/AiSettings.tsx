@@ -5,6 +5,7 @@ import i18next from "i18next";
 import { Trans } from "react-i18next";
 import { PROVIDERS, PROVIDER_NAME, setEnabled, setKey, setProvider, tail, useAi, useLink, type Provider } from "@/features/ai/store";
 import { login, refreshLink } from "@/features/ai/link";
+import { ask } from "@/shared/ask";
 
 function KeyRow({ p }: { p: Provider }) {
   const cfg = useAi();
@@ -16,7 +17,7 @@ function KeyRow({ p }: { p: Provider }) {
       <div className="ai-set-line">
         <input id={`ai-key-${p}`} className="field" type="password" autoComplete="off" spellCheck={false} value={v} placeholder={saved ? i18next.t("保存済み({{tail}})。変えるときだけ入力", { tail: tail(saved) }) : "API key"} onChange={(e) => setV(e.target.value)} />
         <button className="btn" disabled={!v.trim()} onClick={() => { setKey(p, v); setV(""); }}><Check size={14} /><span>{i18next.t("保存")}</span></button>
-        <button className="btn" disabled={!saved} onClick={() => { if (confirm(i18next.t("保存した API キーを消しますか?"))) setKey(p, ""); }}><Trash2 size={14} /><span>{i18next.t("消す")}</span></button>
+        <button className="btn" disabled={!saved} onClick={async () => { if (await ask({ message: i18next.t("保存した API キーを消しますか?"), ok: i18next.t("消す"), danger: true })) setKey(p, ""); }}><Trash2 size={14} /><span>{i18next.t("消す")}</span></button>
       </div>
     </div>
   );

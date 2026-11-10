@@ -191,13 +191,17 @@ button.sb:active { transform: scale(var(--ps)); }
 .sp-opt svg { width: 14px; height: 14px; stroke-width: 1.8; flex: none; }
 .sp-sum { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 36px; padding: 0 4px; font-size: 12px; line-height: 20px; color: var(--ink-3); }
 .sp-sum-acts { display: inline-flex; gap: 2px; flex: none; }
-.sp-scope { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; animation: rise calc(.18s * var(--sp)) var(--out) both; }
-.sp-scope-row { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: 9px; background: var(--field); box-shadow: 0 0 0 1px var(--hair) inset; font-size: 12px; line-height: 20px; color: var(--ink-3); }
-.sp-scope-row:focus-within { box-shadow: 0 0 0 2px var(--accent) inset; }
-.sp-scope-row span { flex: none; width: 5.5em; }
-.sp-scope-row input { flex: 1; min-width: 0; height: 26px; border: 0; outline: 0; background: none; font: 12px/20px var(--font-mono); color: var(--ink); }
-.sp-scope-open { align-self: flex-start; height: 24px; padding: 0 10px; border-radius: 12px; font-size: 12px; line-height: 20px; color: var(--ink-2); background: var(--press); transition: background-color calc(.12s * var(--sp)) var(--ease), color calc(.12s * var(--sp)) var(--ease); }
-.sp-scope-open[data-on="true"] { background: var(--accent); color: #fff; }
+.sp-scope { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; animation: rise calc(.18s * var(--sp)) var(--out) both; }
+.sp-scope-f { display: flex; flex-direction: column; gap: 4px; }
+.sp-scope-f > span { padding: 0 2px; font-size: 11px; line-height: 16px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-scope-in { width: 100%; height: 30px; padding: 0 10px; border: 0; outline: 0; border-radius: 9px; background: var(--field); box-shadow: 0 0 0 1px var(--hair) inset; font: 12px/20px var(--font-mono); color: var(--ink); }
+.sp-scope-in:focus { box-shadow: 0 0 0 2px var(--accent) inset; }
+.sp-scope-in::placeholder { color: var(--ink-3); }
+.sp-scope-open { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; height: 28px; padding: 0 2px; font-size: 12px; line-height: 20px; color: var(--ink-2); background: none; }
+.sp-scope-open i { flex: none; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 5px; background: var(--field); box-shadow: 0 0 0 1px var(--hair) inset; transition: background-color calc(.12s * var(--sp)) var(--ease), box-shadow calc(.12s * var(--sp)) var(--ease); }
+.sp-scope-open i svg { width: 12px; height: 12px; stroke-width: 3; color: #fff; }
+.sp-scope-open[aria-checked="true"] i { background: var(--accent); box-shadow: none; }
+.sp-scope-open:hover { color: var(--ink); }
 .sp-res { flex: 1; min-height: 0; }
 .sp-file { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 6px; border-radius: 6px; font-weight: 500; width: 100%; text-align: left; }
 .sp-file:hover { background: var(--s2); }
@@ -273,3 +277,7 @@ button.sb:active { transform: scale(var(--ps)); }
 .git-badge[data-g="M"], .git-badge[data-g="R"] { color: var(--git-mod); }
 .git-badge[data-g="A"], .git-badge[data-g="U"] { color: var(--git-add); }
 .git-badge[data-g="D"], .git-badge[data-g="C"] { color: var(--git-del); }
+
+/* 確認ダイアログ(shared/ask.tsx)。ほかのモーダルや右クリックメニューより上に出す */
+.qo-backdrop.ask-layer { z-index: 100; }
+.dlg.ask p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }

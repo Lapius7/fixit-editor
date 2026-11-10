@@ -11,6 +11,7 @@ export type View =
 const ext = (n: string) => (n.includes(".") ? n.split(".").pop()!.toLowerCase() : "");
 const IMAGE = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "avif"]);
 const AUDIO = new Set(["mp3", "wav", "ogg", "m4a", "flac", "aac"]);
+export const isImageName = (n: string) => IMAGE.has(ext(n));
 const VIDEO = new Set(["mp4", "webm", "mov", "m4v"]);
 const MIME: Record<string, string> = { svg: "image/svg+xml", pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", mp3: "audio/mpeg", mp4: "video/mp4", webm: "video/webm" };
 

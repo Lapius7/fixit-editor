@@ -7,27 +7,53 @@ import { notify } from "@/shared/notify";
 import { sendFeedback, type FeedbackKind } from "./report";
 import { useAccount } from "@/features/account/auth";
 import { Avatar } from "@/features/account/AccountUI";
-import { loadReplies, markRepliesSeen, useReplies, type MyFeedback } from "@/features/account/replies";
+import { loadReplies, markRepliesSeen, postReply, useReplies, type MyFeedback } from "@/features/account/replies";
 
 const KINDS: [FeedbackKind, string][] = [["bug", "不具合"], ["idea", "要望"], ["other", "その他"]];
 const KIND_NAME: Record<string, string> = { bug: "不具合", idea: "要望", other: "その他" };
 const when = (t: number) => new Date(t).toLocaleString(i18next.language, { dateStyle: "medium", timeStyle: "short" });
 
-// 自分が送ったものと、返信
+// スレッドに続けて書き込む欄。開いたときだけ出す
+function ReplyBox({ id }: { id: number }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  if (!open) return <div className="fb-act"><button className="btn" onClick={() => setOpen(true)}><Trans i18nKey="返信する" /></button></div>;
+  const send = async () => {
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    const r = await postReply(id, text.trim());
+    setBusy(false);
+    if (r === "ok") { setText(""); setOpen(false); notify(i18next.t("送りました。ありがとうございます"), "success"); }
+    else notify(r === "rate" ? i18next.t("送りすぎです。しばらくしてからもう一度送ってください") : i18next.t("送れませんでした。ネットワークを確かめてください"), "error");
+  };
+  return (
+    <div className="fb-compose">
+      <textarea className="field" autoFocus value={text} maxLength={2000} placeholder={i18next.t("このフィードバックに続けて書く")} aria-label={i18next.t("返信する")} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void send(); }} />
+      <div className="fb-act">
+        <button className="btn" disabled={busy} onClick={() => { setOpen(false); setText(""); }}><Trans i18nKey="やめる" /></button>
+        <button className="btn" data-primary="true" disabled={!text.trim() || busy} onClick={send}><Trans i18nKey={busy ? "送っています…" : "送る"} /></button>
+      </div>
+    </div>
+  );
+}
+
+// 自分が送ったものと、やりとり
 function Mine({ items }: { items: MyFeedback[] }) {
   if (!items.length) return <p className="fb-note"><Trans i18nKey="ログイン中に送ったフィードバックが、ここに並びます。" /></p>;
   return (
     <div className="fb-list overscroll-contain">
       {items.map((f) => (
         <article key={f.id} className="fb-item">
-          <header><span>{i18next.t(KIND_NAME[f.kind] ?? "その他")}</span><time>{when(f.ts)}</time></header>
+          <header><span>{i18next.t(KIND_NAME[f.kind] ?? "その他")}</span><span className="fb-st" data-done={f.status === "done" || undefined}>{i18next.t(f.status === "done" ? "対応済み" : "受付中")}</span><time>{when(f.ts)}</time></header>
           <p>{f.message}</p>
           {f.replies.map((r) => (
-            <div key={r.id} className="fb-reply" data-new={!r.seen || undefined}>
-              <header><b><Trans i18nKey="開発者からの返信" /></b><time>{when(r.ts)}</time></header>
+            <div key={r.id} className="fb-reply" data-mine={r.mine || undefined} data-new={(!r.seen && !r.mine) || undefined}>
+              <header><b><Trans i18nKey={r.mine ? "あなた" : "開発者からの返信"} /></b><time>{when(r.ts)}</time></header>
               <p>{r.body}</p>
             </div>
           ))}
+          <ReplyBox id={f.id} />
         </article>
       ))}
     </div>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Download, FolderKanban, HardDrive, Monitor, Pencil, Pin, Plus, Server, Trash2, Upload, UserRound } from "lucide-react";
 import { ms } from "@/features/settings/settings";
+import { ask } from "@/shared/ask";
 import {
   createProfile, exportProfile, getProfiles, importProfile, preview, removeProfile, renameProfile, switchProfile, useProfiles,
 } from "@/features/settings/profiles";
@@ -131,7 +132,7 @@ export default function Workspaces({ initial, curId, saveName, max, onOpen, onSa
                     <button className="icon-btn" data-on={!!w.profile} aria-label={i18next.t("プロファイルを結びつける")} title={i18next.t("開くとき切り替えるプロファイル(押すたびに変わります)")} onClick={() => linkNext(w)}><UserRound /></button>
                     <button className="icon-btn" data-on={!!w.pinned} aria-label={i18next.t("上に固定")} title={w.pinned ? i18next.t("固定を外す") : i18next.t("上に固定")} onClick={() => patchWs(w.id, { pinned: !w.pinned })}><Pin /></button>
                     <button className="icon-btn" aria-label={i18next.t("名前を変える")} title={i18next.t("名前を変える")} onClick={() => setRen({ id: w.id, v: w.name })}><Pencil /></button>
-                    <button className="icon-btn" aria-label={i18next.t("削除")} title={i18next.t("削除(フォルダのファイルは消えません)")} onClick={() => { if (confirm(i18next.t("ワークスペース「{{name}}」を削除しますか?\n(フォルダのファイルは消えません)", { name: w.name }))) removeWs(w.id); }}><Trash2 /></button>
+                    <button className="icon-btn" aria-label={i18next.t("削除")} title={i18next.t("削除(フォルダのファイルは消えません)")} onClick={async () => { if (await ask({ message: i18next.t("ワークスペース「{{name}}」を削除しますか?\n(フォルダのファイルは消えません)", { name: w.name }), ok: i18next.t("削除"), danger: true })) removeWs(w.id); }}><Trash2 /></button>
                   </div>
                 </div>
               ))}
@@ -159,7 +160,7 @@ export default function Workspaces({ initial, curId, saveName, max, onOpen, onSa
                     <div className="ws-acts">
                       <button className="icon-btn" aria-label={i18next.t("名前を変える")} title={i18next.t("名前を変える")} onClick={() => setRen({ id: p.id, v: p.name })}><Pencil /></button>
                       <button className="icon-btn" aria-label={i18next.t("削除")} title={pf.list.length <= 1 ? i18next.t("最後のひとつは消せません") : i18next.t("削除")} disabled={pf.list.length <= 1}
-                        onClick={() => { if (confirm(i18next.t("プロファイル「{{name}}」を削除しますか?", { name: p.name }))) removeProfile(p.id); }}><Trash2 /></button>
+                        onClick={async () => { if (await ask({ message: i18next.t("プロファイル「{{name}}」を削除しますか?", { name: p.name }), ok: i18next.t("削除"), danger: true })) removeProfile(p.id); }}><Trash2 /></button>
                     </div>
                   </div>
                 );
