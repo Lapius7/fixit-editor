@@ -825,5 +825,7 @@
   "いまの中身と同じです": "Same as the current content",
   "選んだ版に戻すと、赤い行は復活し、緑の行は消えます。保存するまでファイルは変わりません。": "Restoring this version brings back the red lines and removes the green ones. The file does not change until you save.",
   "このファイルの履歴を全部消しますか?(ファイルは変わりません)": "Delete all history for this file? (The file itself is unchanged)",
-  "この版に戻す": "Restore this version"
+  "この版に戻す": "Restore this version",
+  "1日あたり {{arg0}}": "{{arg0}} per day",
+  "いちばん多い時間帯 {{h}} 時台": "Busiest hour: {{h}}:00"
 }

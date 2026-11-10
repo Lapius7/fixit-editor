@@ -119,7 +119,14 @@
 
 /* AI パネル(右側) */
 .ai-dock { flex: 0 0 min(38%, 440px); min-width: 0; display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; background: var(--paper); box-shadow: 0 0 0 1px var(--hair); -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5); }
-.ai-dock { position: relative; }
+.ai-dock { position: relative; animation: ai-dock-in calc(.42s * var(--sp)) var(--out) both; }
+.ai-dock > * { animation: ai-dock-body calc(.42s * var(--sp)) var(--out) both; }
+.ai-dock[data-closing="true"] { animation: ai-dock-out calc(.26s * var(--sp)) var(--out) both; pointer-events: none; }
+.ai-dock[data-closing="true"] > * { animation: ai-dock-body-out calc(.2s * var(--sp)) var(--out) both; }
+@keyframes ai-dock-in { from { flex-basis: 0; margin-left: calc(var(--pane-gap, 8px) * -1); opacity: 0; } to { flex-basis: min(38%, 440px); margin-left: 0; opacity: 1; } }
+@keyframes ai-dock-out { from { flex-basis: min(38%, 440px); margin-left: 0; opacity: 1; } to { flex-basis: 0; margin-left: calc(var(--pane-gap, 8px) * -1); opacity: 0; } }
+@keyframes ai-dock-body { from { transform: translateX(28px); filter: blur(calc(var(--ab) * .8)); } to { transform: none; filter: none; } }
+@keyframes ai-dock-body-out { to { transform: translateX(20px); filter: blur(calc(var(--ab) * .8)); } }
 .ai-hist-bg { position: absolute; inset: 0; z-index: 5; }
 .ai-hist { position: absolute; z-index: 6; top: 42px; left: 8px; right: 8px; max-height: min(60%, 420px); overflow-y: auto; overscroll-behavior: contain; padding: 4px; border-radius: 12px; background: color-mix(in srgb, var(--paper) 94%, transparent); -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5); box-shadow: 0 0 0 1px var(--hair), 0 12px 32px -8px rgb(20 30 60 / .25); animation: rise calc(.22s * var(--sp)) var(--out) both; }
 .ai-hist-row { display: flex; align-items: center; gap: 2px; border-radius: 8px; }
