@@ -1,8 +1,4 @@
-import { createRoot } from "react-dom/client";
-import "@fontsource-variable/inter";
-import "@fontsource-variable/noto-sans-jp";
-import "@fontsource-variable/jetbrains-mono";
-import "./styles.css";
-import App from "./App";
+// 起動の入口。アプリ版では、データフォルダの内容をメモリに読み込んでから、本体を読み込む
+import { initStore } from "@/platform/appdata";
 
-createRoot(document.getElementById("root")!).render(<App />);
+initStore().finally(() => void import("./boot"));

@@ -1,0 +1,183 @@
+/* ============ 仕上げ: 動きとガラス ============ */
+:root { --out: cubic-bezier(0.16, 1, 0.3, 1); --spec: linear-gradient(180deg, rgba(255,255,255,.34), rgba(255,255,255,0) 42%); }
+:root[data-theme="dark"] { --spec: linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,0) 40%); }
+
+/* ガラスの質感: 上端の光、面の重なり */
+.window::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: var(--spec); z-index: 0; }
+.window > * { position: relative; z-index: 1; }
+.paper { -webkit-backdrop-filter: blur(calc(24px * var(--paper-k, 1))) saturate(calc(1 + .5 * var(--paper-k, 1))); backdrop-filter: blur(calc(24px * var(--paper-k, 1))) saturate(calc(1 + .5 * var(--paper-k, 1))); box-shadow: 0 0 0 1px var(--hair), 0 0 0 1px var(--hl) inset, 0 1px 2px var(--shadow-soft), 0 10px 28px -10px var(--shadow-soft); }
+[data-paper="0"] .paper { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.paper::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: var(--spec); opacity: calc(.5 * var(--paper-k, 1)); z-index: 2; }
+.panes[data-split="true"] .paper[data-focus="true"] { box-shadow: 0 0 0 1.5px var(--accent), 0 0 0 1px var(--hl) inset, 0 10px 28px -10px var(--shadow-soft); }
+.tab[aria-selected="true"], .tree-row[data-active="true"], .seg button[aria-pressed="true"], .icon-btn[data-on="true"] { -webkit-backdrop-filter: blur(12px) saturate(1.4); backdrop-filter: blur(12px) saturate(1.4); }
+.btn, .chip, .kr-key, .field, .sp-box, .chipbtn { -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.qo, .ctx { -webkit-backdrop-filter: blur(44px) saturate(1.9); backdrop-filter: blur(44px) saturate(1.9); }
+.qo::before, .ctx::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: var(--spec); z-index: 0; }
+.qo > *, .ctx > * { position: relative; z-index: 1; }
+.qo { position: relative; }
+.cm-tooltip { -webkit-backdrop-filter: blur(30px) saturate(1.8) !important; backdrop-filter: blur(30px) saturate(1.8) !important; }
+.qo-backdrop { backdrop-filter: blur(8px) saturate(1.2); -webkit-backdrop-filter: blur(8px) saturate(1.2); }
+
+/* 動きの土台: 入りは ease-out、出は短く */
+@keyframes pop { from { opacity: 0; transform: scale(0.95) translateY(-6px); filter: blur(calc(var(--ab) * 1.00)); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); filter: blur(calc(var(--ab) * 0.67)); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes tab-in { from { opacity: 0; transform: translateY(5px) scale(0.92); filter: blur(calc(var(--ab) * 0.67)); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes tab-out { to { opacity: 0; transform: scale(0.88); filter: blur(calc(var(--ab) * 0.67)); max-width: 0; padding: 0; margin: 0 -2px; } }
+@keyframes row-in { from { opacity: 0; transform: translateX(-8px); filter: blur(calc(var(--ab) * 0.50)); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes win-in { from { opacity: 0; transform: scale(0.97) translateY(14px); filter: blur(calc(var(--ab) * 2.00)); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes slide-up { from { opacity: 0; transform: translateY(16px); filter: blur(calc(var(--ab) * 1.00)); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes pane-in { from { opacity: 0; transform: translateX(18px) scale(.985); filter: blur(calc(var(--ab) * 1.00)); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes item-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 var(--accent); } 100% { box-shadow: 0 0 0 8px transparent; } }
+.window { animation: win-in calc(.7s * var(--sp)) var(--out) both; }
+.window, .stage { transition-timing-function: var(--out); }
+.window { transition: grid-template-columns calc(.4s * var(--sp)) var(--out); }
+.window[data-side="false"] .sidebar { opacity: 0; transform: translateX(-16px); filter: blur(calc(var(--ab) * 1.00)); }
+.sidebar { transition: opacity calc(.3s * var(--sp)) var(--out), transform calc(.4s * var(--sp)) var(--out), filter calc(.3s * var(--sp)) var(--out); }
+.main { transition: padding calc(.4s * var(--sp)) var(--out); }
+.paper .cm-editor { animation: rise calc(.4s * var(--sp)) var(--out) both; }
+.tab { transition: background-color calc(.2s * var(--sp)) var(--out), color calc(.2s * var(--sp)) var(--out), box-shadow calc(.25s * var(--sp)) var(--out), transform calc(.15s * var(--sp)) var(--out); animation: tab-in calc(.32s * var(--sp)) var(--out) both; }
+.tab[data-closing="true"] { animation: tab-out calc(.22s * var(--sp)) var(--out) forwards; }
+.tab:active { transform: scale(.98); }
+.tab[data-other="true"] { box-shadow: 0 0 0 1px var(--edge) inset; }
+.tab-x { transition: opacity calc(.18s * var(--sp)) var(--out), background-color calc(.15s * var(--sp)) var(--out), transform calc(.15s * var(--sp)) var(--out); transform: scale(.8); }
+.tab:hover .tab-x, .tab[aria-selected="true"] .tab-x { transform: none; }
+.tab-x:active { transform: scale(.9); }
+.tree-row { transition: background-color calc(.2s * var(--sp)) var(--out), box-shadow calc(.25s * var(--sp)) var(--out), transform calc(.15s * var(--sp)) var(--out); }
+.tree-row:active { transform: scale(.985); }
+.tree > ul > li > .tree-row { animation: row-in calc(.5s * var(--sp)) var(--out) both; animation-delay: calc((calc(var(--i, 0) * 32ms + 150ms)) * var(--sp)); }
+.collapse { transition: grid-template-rows calc(.32s * var(--sp)) var(--out), opacity calc(.26s * var(--sp)) var(--out); }
+.collapse li { transition: transform calc(.32s * var(--sp)) var(--out); transform: translateY(-4px); }
+.collapse[data-open="true"] li { transform: none; }
+.chev { transition: transform calc(.26s * var(--sp)) var(--out); }
+.icon-btn, .btn, .open-btn, .sb, .sp-opt, .set-tab, .seg button, .sw, .chipbtn { transition-duration: calc(.2s * var(--sp)); transition-timing-function: var(--out); }
+.icon-btn, .btn, .open-btn { transition-property: background-color, color, transform, box-shadow; }
+.icon-btn svg { transition: transform calc(.25s * var(--sp)) var(--out); }
+.icon-btn:hover svg { transform: scale(1.1); }
+.icon-btn:active svg { transform: none; }
+.btn:hover, .open-btn:hover:not(:disabled) { box-shadow: 0 0 0 1px var(--hair), 0 1px 2px var(--shadow-soft), 0 4px 12px -4px var(--shadow-soft); }
+.field, .sp-box, .kr-key { transition: box-shadow calc(.2s * var(--sp)) var(--out), background-color calc(.2s * var(--sp)) var(--out); }
+.field:focus, .sp-box:focus-within { animation: pulse calc(.5s * var(--sp)) var(--out); }
+
+/* ダイアログ類 */
+.qo-backdrop { animation: fade calc(.25s * var(--sp)) var(--out) both; }
+.qo-backdrop[data-closing="true"] { animation: fade-out calc(.18s * var(--sp)) var(--out) forwards; }
+.qo { animation: pop calc(.34s * var(--sp)) var(--out) both; }
+.qo-backdrop[data-closing="true"] .qo { opacity: 0; transform: scale(.96) translateY(-4px); filter: blur(calc(var(--ab) * 0.67)); transition: opacity calc(.16s * var(--sp)) var(--out), transform calc(.18s * var(--sp)) var(--out), filter calc(.16s * var(--sp)) var(--out); }
+.qo-list li { transition: background-color calc(.12s * var(--sp)) var(--out), color calc(.12s * var(--sp)) var(--out); animation: item-in calc(.25s * var(--sp)) var(--out) both; animation-delay: calc((calc(var(--i, 0) * 16ms)) * var(--sp)); }
+.qo-list li:nth-child(n+14) { animation-delay: calc((220ms) * var(--sp)); }
+
+/* 右クリックメニュー: 項目を順に */
+.ctx { animation: pop calc(.22s * var(--sp)) var(--out) both; }
+.ctx[data-closing="true"] { opacity: 0; transform: scale(.96); filter: blur(calc(var(--ab) * 0.50)); transition: opacity calc(.1s * var(--sp)) var(--out), transform calc(.1s * var(--sp)) var(--out), filter calc(.1s * var(--sp)) var(--out); }
+.ctx > .ctx-item, .ctx > .ctx-title { animation: item-in calc(.26s * var(--sp)) var(--out) both; }
+.ctx > :nth-child(1) { animation-delay: calc((10ms) * var(--sp)); } .ctx > :nth-child(2) { animation-delay: calc((22ms) * var(--sp)); } .ctx > :nth-child(3) { animation-delay: calc((34ms) * var(--sp)); }
+.ctx > :nth-child(4) { animation-delay: calc((46ms) * var(--sp)); } .ctx > :nth-child(5) { animation-delay: calc((58ms) * var(--sp)); } .ctx > :nth-child(6) { animation-delay: calc((70ms) * var(--sp)); }
+.ctx > :nth-child(n+7) { animation-delay: calc((80ms) * var(--sp)); }
+.ctx-item { transition: background-color calc(.1s * var(--sp)) var(--out), color calc(.1s * var(--sp)) var(--out); }
+
+/* スイッチ・メッシュ・ステータス */
+.switch { transition: background-color calc(.3s * var(--sp)) var(--out); }
+.switch::after { width: 18px; transition: transform calc(.3s * var(--sp)) var(--out), width calc(.2s * var(--sp)) var(--out); }
+.switch:active::after { width: 22px; }
+.switch[aria-checked="true"]:active::after { transform: translateX(12px); }
+.mesh-dot { transition: width calc(.25s * var(--sp)) var(--out), height calc(.25s * var(--sp)) var(--out), margin calc(.25s * var(--sp)) var(--out), transform calc(.2s * var(--sp)) var(--out), box-shadow calc(.25s * var(--sp)) var(--out); }
+.mesh-dot:hover { transform: scale(1.12); box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+.mesh { animation: fade calc(.5s * var(--sp)) var(--out) both; }
+.sb-msg { animation: rise calc(.3s * var(--sp)) var(--out) both; }
+.sp-file, .sp-hit { transition: background-color calc(.15s * var(--sp)) var(--out); }
+.sp-res > * { animation: item-in calc(.3s * var(--sp)) var(--out) both; }
+.unsupported { animation: rise calc(.5s * var(--sp)) var(--out) both; }
+.view > img, .view > video { animation: rise calc(.5s * var(--sp)) var(--out) both; }
+
+/* ライト/ダークの切り替えを滑らかに */
+html.theme-fade, html.theme-fade * { transition: background-color calc(.45s * var(--sp)) var(--out), color calc(.45s * var(--sp)) var(--out), border-color calc(.45s * var(--sp)) var(--out), box-shadow calc(.45s * var(--sp)) var(--out), fill calc(.45s * var(--sp)) var(--out) !important; }
+.tree, .tabbar, .sp-res { scroll-behavior: smooth; }
+
+/* ============ 面ごとの役割(同じ見た目を並べない) ============
+   窓・ダイアログ・メニュー … ガラス(ぼかし+大きな影)。浮いている層だけ
+   エディタ                 … 唯一の「盛り上がった面」
+   ターミナル               … へこんだ面(内側の影。外には影を落とさない)
+   サイドバー               … 面を持たない。選択は左の線
+   タブ                     … 下線。ステータスバー … 区切り線で並ぶ平らな帯 */
+:root { --term-bg: rgba(24, 32, 56, 0.07); --term-line: rgba(20, 30, 60, 0.1); }
+:root[data-theme="dark"] { --term-bg: rgba(5, 7, 11, 0.5); --term-line: rgba(0, 0, 0, 0.5); }
+
+/* サイドバー: 面なし、選択は線 */
+.side-head { padding: 0 8px 0 18px; }
+.title { font-size: 12px; font-weight: 600; letter-spacing: .06em; color: var(--ink-2); }
+.tree-row { position: relative; border-radius: calc(var(--r-sm) * var(--rk, 1)); color: var(--ink-2); }
+.tree-row:hover { background: var(--s2); color: var(--ink); }
+.tree-row[data-active="true"] { background: color-mix(in srgb, var(--accent) 10%, transparent); box-shadow: none; color: var(--ink); font-weight: 500; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.tree-row[data-active="true"]::before { content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; border-radius: 2px; background: var(--accent); }
+.side-foot { padding: 0; margin: 0 12px; border-top: 1px solid var(--hair); }
+.open-btn { height: 40px; justify-content: flex-start; padding: 0 6px; border-radius: 0; background: none; box-shadow: none; color: var(--ink-2); font-weight: 400; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.open-btn:hover:not(:disabled) { background: none; color: var(--ink); box-shadow: none; }
+
+/* タブ: 下線で示す */
+.tabbar { gap: 0; padding: 0 4px 0 0; align-items: flex-end; padding-bottom: 10px; }
+.tabbar > .icon-btn { align-self: center; margin-bottom: 0; }
+.tab { border-radius: calc(var(--r-sm) * var(--rk, 1)) calc(var(--r-sm) * var(--rk, 1)) 0 0; padding: 0 6px 0 14px; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.tab:hover { background: var(--s2); }
+.tab[aria-selected="true"] { background: none; color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); }
+.tab[data-other="true"] { box-shadow: inset 0 -1px 0 var(--ink-3); }
+.tab:active { transform: none; }
+
+/* エディタ: 唯一の盛り上がった面 */
+.paper { border-radius: calc(var(--r-lg) * var(--rk, 1) - 2px); }
+
+/* ターミナル: へこんだ面。開閉は包みの高さ(0fr↔1fr)で動かし、中身の大きさは変えない */
+.term-wrap { flex: none; display: flex; flex-direction: column; justify-content: flex-end; interpolate-size: allow-keywords; height: 0; overflow: hidden; opacity: 0; visibility: hidden;
+  transition: height calc(.38s * var(--sp)) var(--out), opacity calc(.24s * var(--sp)) var(--out), visibility 0s linear calc(.38s * var(--sp)); }
+.term-wrap[data-open="true"] { height: auto; opacity: 1; visibility: visible; transition-delay: 0s; }
+.term-wrap[data-drag="true"] { transition: none; }
+.term-clip { flex: none; display: flex; flex-direction: column; transform: translateY(36px); transition: transform calc(.38s * var(--sp)) var(--out); }
+.term-wrap[data-open="true"] > .term-clip { transform: none; }
+.term-wrap[data-drag="true"] > .term-clip { transition: none; } /* 下端は動かさず、上の縁が持ち上がって現れる */
+.term-grip { height: 8px; flex: none; cursor: row-resize; position: relative; }
+.term-grip::after { content: ""; position: absolute; left: 50%; top: 3px; width: 36px; height: 2px; border-radius: 2px; transform: translateX(-50%); background: var(--press); transition: background-color .2s var(--out), width .25s var(--out); }
+.term-grip:hover::after, .term-grip[data-drag="true"]::after { background: var(--accent); width: 56px; }
+.term { flex: none; display: flex; flex-direction: column; overflow: hidden; border-radius: calc(var(--r-md) * var(--rk, 1));
+  background: color-mix(in srgb, var(--term-bg) calc(var(--term-a, 1) * 100%), transparent);
+  box-shadow: 0 1px 4px var(--term-line) inset, 0 0 0 1px var(--hair); }
+.term-head { height: 30px; flex: none; display: flex; align-items: center; gap: 2px; padding: 0 4px 0 6px; font: 500 11.5px/20px var(--font-mono); color: var(--ink-3); box-shadow: 0 -1px 0 var(--hair) inset; }
+.term-tab { height: 22px; max-width: 180px; display: inline-flex; align-items: center; gap: 6px; padding: 0 3px 0 8px; border-radius: calc(var(--r-sm) * var(--rk, 1)); cursor: default; transition: background-color .15s var(--out), color .15s var(--out); }
+.term-tab svg { width: 12px; height: 12px; flex: none; stroke-width: 1.8; }
+.term-tab:hover { color: var(--ink-2); background: var(--s2); }
+.term-tab[aria-selected="true"] { color: var(--ink); background: var(--press); }
+.term-tab .tab-x { width: 16px; height: 16px; opacity: 0; transform: none; }
+.term-tab:hover .tab-x, .term-tab[aria-selected="true"] .tab-x { opacity: 1; }
+.term-tab .tab-x svg { width: 10px; height: 10px; }
+.term-rename { width: 110px; height: 18px; border: 0; outline: 0; padding: 0 4px; border-radius: 4px; background: var(--s3); font: inherit; color: var(--ink); box-shadow: 0 0 0 1.5px var(--accent) inset; }
+.term-head > .icon-btn { width: 24px; height: 24px; }
+.term-views { flex: 1; min-height: 0; display: flex; }
+.term-body { flex: 1; min-width: 0; min-height: 0; padding: 6px 0 4px var(--term-pad, 12px); }
+.term-body[hidden] { display: none; }
+.term-body .xterm-viewport { background: transparent !important; overscroll-behavior: contain; }
+
+/* ステータスバー: 平らな帯と区切り線 */
+.statusbar { gap: 0; padding: 0; font: 11.5px/20px var(--font-mono); box-shadow: 0 1px 0 var(--hair) inset; }
+.sb { height: 100%; border-radius: 0; padding: 0 10px; }
+.statusbar > .sb:first-child { padding-left: 14px; }
+[data-sbdiv="on"] .sb + .sb { box-shadow: 1px 0 0 var(--hair) inset; }
+[data-sbdiv="on"] .sb-sp + .sb { box-shadow: 1px 0 0 var(--hair) inset; }
+.sb-n { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: #fff; font: 600 10px/16px var(--font-sans); text-align: center; }
+.sb-dot { background: var(--accent); }
+
+/* 空の画面: 左下に寄せた文字と、罫線で区切った操作の一覧 */
+.empty { height: 100%; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; padding: 0 clamp(24px, 8%, 72px) clamp(24px, 10%, 64px); color: var(--ink-3); }
+.empty > * { animation: rise calc(.6s * var(--sp)) var(--out) both; }
+.empty p { margin: 0; }
+.empty .empty-title { font-size: clamp(28px, 4vw, 40px); line-height: 48px; font-weight: 300; letter-spacing: -.01em; color: var(--ink); }
+.empty .empty-sub { margin-top: 6px; line-height: 20px; }
+.empty-acts { list-style: none; margin: 28px 0 0; padding: 0; width: min(340px, 100%); border-top: 1px solid var(--hair); }
+.empty-acts li { border-bottom: 1px solid var(--hair); animation: item-in calc(.5s * var(--sp)) var(--out) both; }
+.empty-acts li:nth-child(1) { animation-delay: calc(120ms * var(--sp)); } .empty-acts li:nth-child(2) { animation-delay: calc(170ms * var(--sp)); }
+.empty-acts li:nth-child(3) { animation-delay: calc(220ms * var(--sp)); } .empty-acts li:nth-child(4) { animation-delay: calc(270ms * var(--sp)); }
+.empty-acts button { width: 100%; height: 36px; display: flex; align-items: center; justify-content: space-between; color: var(--ink-2); transition: color .15s var(--out), padding .25s var(--out); }
+.empty-acts button:hover { color: var(--accent); padding-left: 6px; }
+.empty-acts .keys { display: inline-flex; gap: 3px; }
+
+/* 内容が入れ替わる所(設定のカテゴリ、サイドバーのパネル)は、入りに動きを付ける */
+.set-fade { animation: rise calc(.26s * var(--sp)) var(--out) both; }
+.sp, nav.tree { animation: rise calc(.22s * var(--sp)) var(--out) both; }

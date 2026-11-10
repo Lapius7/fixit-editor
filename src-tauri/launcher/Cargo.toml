@@ -1,0 +1,18 @@
+[package]
+name = "fixit-launcher"
+version = "0.0.1"
+description = "Fixit Editor 1 ファイル配布用の起動ファイル"
+authors = ["Lapius"]
+license = "MIT"
+edition = "2021"
+build = "build.rs"
+
+# 本体の workspace とは別に作る(本体の exe と dll を内包するため、あとからビルドする)
+[workspace]
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

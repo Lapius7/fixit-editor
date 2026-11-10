@@ -1,0 +1,144 @@
+// アプリのデータ(設定・AI の会話履歴など)をフォルダの JSON ファイルに残す。Tauri に依存しない。
+// 1 つのキー(例 "fixit:settings:v1")が 1 つのファイル(fixit_settings_v1.json)に対応する。
+use std::{collections::HashMap, fs, io::Write, path::{Path, PathBuf}};
+
+const MAX_VALUE: usize = 32 << 20; // 1 つの値の上限(32MB)
+const MAX_KEY: usize = 64;
+
+// キーは "fixit:" で始まり、小文字・数字・: - だけ。ファイル名に使うので、パスの区切りなどは通さない
+fn valid(key: &str) -> bool {
+    key.starts_with("fixit:") && key.len() > 6 && key.len() <= MAX_KEY && key.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b':' || b == b'-')
+}
+
+fn file_of(dir: &Path, key: &str) -> Result<PathBuf, String> {
+    if !valid(key) { return Err("キーが正しくありません".into()); }
+    Ok(dir.join(format!("{}.json", key.replace(':', "_"))))
+}
+
+fn key_of(name: &str) -> Option<String> {
+    let k = name.strip_suffix(".json")?.replace('_', ":");
+    if valid(&k) { Some(k) } else { None }
+}
+
+// フォルダの中のデータを全部読む。読めないファイルは飛ばす
+pub fn load(dir: &Path) -> HashMap<String, String> {
+    let mut m = HashMap::new();
+    let Ok(rd) = fs::read_dir(dir) else { return m };
+    for e in rd.flatten() {
+        let Some(name) = e.file_name().to_str().and_then(key_of) else { continue };
+        if let Ok(md) = e.metadata() { if !md.is_file() || md.len() as usize > MAX_VALUE { continue; } }
+        if let Ok(s) = fs::read_to_string(e.path()) { m.insert(name, s); }
+    }
+    m
+}
+
+// 1 つだけ読む。なければ None
+pub fn read(dir: &Path, key: &str) -> Option<String> {
+    let p = file_of(dir, key).ok()?;
+    if fs::metadata(&p).ok()?.len() as usize > MAX_VALUE { return None; }
+    fs::read_to_string(p).ok()
+}
+
+// 各ファイルの「更新の目印」(更新時刻と大きさ)。ほかのウィンドウが書き換えたかを、中身を読まずに調べるために使う
+pub fn stamps(dir: &Path) -> HashMap<String, String> {
+    let mut m = HashMap::new();
+    let Ok(rd) = fs::read_dir(dir) else { return m };
+    for e in rd.flatten() {
+        let Some(k) = e.file_name().to_str().and_then(key_of) else { continue };
+        let Ok(md) = e.metadata() else { continue };
+        if !md.is_file() { continue; }
+        let t = md.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_nanos()).unwrap_or(0);
+        m.insert(k, format!("{t}-{}", md.len()));
+    }
+    m
+}
+
+// 一時ファイルの名前。ウィンドウ(プロセス)ごと・書き込みごとに変え、同時に書いても衝突させない
+fn tmp_of(p: &Path) -> PathBuf {
+    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    p.with_extension(format!("json.{}-{n}.tmp", std::process::id()))
+}
+
+// 書く。一時ファイルに書いてから置き換えるので、途中で落ちても元のファイルは壊れない。value が None なら消す
+pub fn save(dir: &Path, key: &str, value: Option<&str>) -> Result<(), String> {
+    let p = file_of(dir, key)?;
+    match value {
+        None => match fs::remove_file(&p) { Ok(()) => Ok(()), Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()), Err(e) => Err(e.to_string()) },
+        Some(v) => {
+            if v.len() > MAX_VALUE { return Err("データが大きすぎます".into()); }
+            fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+            let tmp = tmp_of(&p);
+            let mut f = fs::File::create(&tmp).map_err(|e| e.to_string())?;
+            f.write_all(v.as_bytes()).and_then(|_| f.sync_all()).map_err(|e| { let _ = fs::remove_file(&tmp); e.to_string() })?;
+            drop(f);
+            // 他のウィンドウが開いている最中だと置き換えに失敗することがあるので、少し待って数回やり直す
+            let mut r = fs::rename(&tmp, &p);
+            for _ in 0..5 { if r.is_ok() { break; } std::thread::sleep(std::time::Duration::from_millis(30)); r = fs::rename(&tmp, &p); }
+            r.map_err(|e| { let _ = fs::remove_file(&tmp); e.to_string() })
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn tmp(n: &str) -> PathBuf { let d = std::env::temp_dir().join(format!("fixit-store-test-{}-{}", n, std::process::id())); let _ = fs::remove_dir_all(&d); d }
+
+    #[test]
+    fn roundtrip_and_delete() {
+        let d = tmp("rt");
+        save(&d, "fixit:settings:v1", Some("{\"a\":1}")).unwrap();
+        save(&d, "fixit:ai-chats:v1", Some("[]")).unwrap();
+        save(&d, "fixit:settings:v1", Some("{\"a\":2}")).unwrap();
+        let m = load(&d);
+        assert_eq!(m.len(), 2);
+        assert_eq!(m["fixit:settings:v1"], "{\"a\":2}");
+        assert_eq!(m["fixit:ai-chats:v1"], "[]");
+        save(&d, "fixit:settings:v1", None).unwrap();
+        save(&d, "fixit:settings:v1", None).unwrap(); // 無いものを消してもエラーにしない
+        assert_eq!(load(&d).len(), 1);
+        assert!(fs::read_dir(&d).unwrap().flatten().all(|e| !e.file_name().to_string_lossy().ends_with(".tmp")));
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn rejects_bad_keys() {
+        let d = tmp("bad");
+        for k in ["../x", "fixit:../x", "settings", "fixit:a/b", "fixit:A", "fixit:a\\b", "fixit:", &format!("fixit:{}", "a".repeat(80))] {
+            assert!(save(&d, k, Some("x")).is_err(), "{k}");
+        }
+        assert!(!d.exists());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn ignores_foreign_files() {
+        let d = tmp("foreign");
+        fs::create_dir_all(&d).unwrap();
+        fs::write(d.join("notes.txt"), "x").unwrap();
+        fs::write(d.join("other.json"), "x").unwrap();
+        fs::write(d.join("fixit_settings_v1.json"), "ok").unwrap();
+        let m = load(&d);
+        assert_eq!(m.len(), 1);
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn read_stamps_and_parallel_writes() {
+        let d = tmp("par");
+        assert_eq!(read(&d, "fixit:settings:v1"), None);
+        save(&d, "fixit:settings:v1", Some("{\"a\":1}")).unwrap();
+        assert_eq!(read(&d, "fixit:settings:v1").as_deref(), Some("{\"a\":1}"));
+        let s1 = stamps(&d)["fixit:settings:v1"].clone();
+        save(&d, "fixit:settings:v1", Some("{\"a\":22}")).unwrap();
+        assert_ne!(stamps(&d)["fixit:settings:v1"], s1);
+        // 同じキーへ同時に書いても、壊れず、どちらかの完全な値が残る
+        let hs: Vec<_> = (0..8).map(|i| { let d = d.clone(); std::thread::spawn(move || { for j in 0..30 { save(&d, "fixit:stats:v1", Some(&format!("{{\"v\":{i}{j}}}"))).unwrap(); } }) }).collect();
+        for h in hs { h.join().unwrap(); }
+        let v = read(&d, "fixit:stats:v1").unwrap();
+        assert!(v.starts_with("{\"v\":") && v.ends_with('}'));
+        assert!(fs::read_dir(&d).unwrap().flatten().all(|e| !e.file_name().to_string_lossy().ends_with(".tmp")));
+        let _ = fs::remove_dir_all(&d);
+    }
+}

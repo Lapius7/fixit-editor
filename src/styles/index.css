@@ -1,0 +1,11 @@
+/* 読み込み順がそのまま CSS の優先順位になる。順番を変えない */
+@import "./tokens.css";
+@import "./base.css";
+@import "./finish.css";
+@import "./appearance.css";
+@import "./split.css";
+@import "./workspaces.css";
+@import "./window.css";
+@import "./panels.css";
+@import "./stats.css";
+@import "./setup.css";

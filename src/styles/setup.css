@@ -1,0 +1,10 @@
+/* 初回セットアップ */
+.dlg.setup { width: min(460px, calc(100vw - 32px)); }
+.su-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 40px; padding: 4px 0; }
+.su-l { display: flex; flex-direction: column; min-width: 0; }
+.su-l small { color: var(--ink-3); font-size: 12px; line-height: 16px; }
+.su-c { flex: none; display: flex; align-items: center; }
+.su-sep { height: 1px; margin: 8px 0; background: var(--hair); }
+.dlg.setup .seg button { justify-content: center; }
+.sw[data-on="true"] { box-shadow: 0 0 0 1px rgba(0,0,0,.12) inset, 0 0 0 2px var(--s1), 0 0 0 4px var(--accent); }
+.dlg.setup .dlg-foot { margin-top: 17px; }

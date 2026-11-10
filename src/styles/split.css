@@ -1,0 +1,83 @@
+/* ---------- ターミナルのカーソル ----------
+   xterm が差し込む CSS(点滅は step-end でぱっと切り替わる)を、こちらで上書きする */
+@keyframes tc-fade { 0%, 45% { opacity: 1; } 75%, 100% { opacity: .18; } }
+.term-body .xterm-rows .xterm-cursor { border-radius: calc(3px * var(--rk, 1)); }
+.term-body .xterm-rows .xterm-cursor.xterm-cursor-block { background-color: color-mix(in srgb, var(--ink) 26%, transparent) !important; color: inherit !important; }
+.term-body .xterm-rows .xterm-cursor.xterm-cursor-bar { background: none !important; box-shadow: inset var(--tc-w, 2px) 0 0 color-mix(in srgb, var(--ink) 55%, transparent) !important; border-radius: 0; }
+.term-body .xterm-rows .xterm-cursor.xterm-cursor-underline { background: none !important; box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--ink) 55%, transparent) !important; border-radius: 0; }
+.term-body .xterm-rows .xterm-cursor.xterm-cursor-outline { outline: 1.5px solid color-mix(in srgb, var(--ink) 55%, transparent) !important; outline-offset: -1.5px; background: none !important; }
+/* 点滅: ふわっと薄くなって戻る。ぱっと切り替えにもできる */
+html[data-tcblink="smooth"] .term-body .xterm-rows .xterm-cursor.xterm-cursor-blink { animation: tc-fade calc(1.2s * max(var(--sp), .01)) var(--ease) infinite !important; }
+html[data-tcblink="step"] .term-body .xterm-rows .xterm-cursor.xterm-cursor-blink { animation-timing-function: step-end !important; }
+@media (prefers-reduced-motion: reduce) { .term-body .xterm-rows .xterm-cursor.xterm-cursor-blink { animation: none !important; } }
+
+/* ---------- タブ・分割の伸び縮み ----------
+   新しいタブは自分の幅まで伸び、閉じるタブは縮んで消える。残りのタブは、その分だけ詰まる・広がる。
+   --tw はタブの幅(App 側で、出す前・閉じる前に測る) */
+@keyframes tab-in { from { opacity: 0; max-width: 0; min-width: 0; padding-inline: 0; transform: translateY(5px) scale(.92); filter: blur(calc(var(--ab) * 0.67)); } to { opacity: 1; max-width: var(--tw, var(--tab-w, 220px)); transform: none; filter: none; } }
+@keyframes tab-out { from { max-width: var(--tw, var(--tab-w, 220px)); } to { opacity: 0; max-width: 0; min-width: 0; padding-inline: 0; transform: scale(.88); filter: blur(calc(var(--ab) * 0.67)); } }
+.tab { flex: 0 1 auto; min-width: 84px; overflow: hidden; animation: none; position: relative; }
+.tab[data-fresh="true"] { animation: tab-in calc(.34s * var(--sp)) var(--out) backwards; }
+.tab[data-closing="true"] { min-width: 0; animation: tab-out calc(.22s * var(--sp)) var(--out) forwards; }
+/* 分割: 右の画面が横から広がり、左の画面が譲る。閉じるときは逆に縮む */
+.panes { grid-template-columns: 1fr 0fr; gap: 0; transition: grid-template-columns calc(.6s * var(--sp)) var(--split-melt), gap calc(.6s * var(--sp)) var(--split-melt); }
+.panes[data-split="true"] { grid-template-columns: 1fr 1fr; gap: var(--pane-gap, 8px); }
+.panes > .paper:nth-child(2) { opacity: 0; transform: translateX(24px) scale(.985); filter: blur(calc(var(--ab) * 1.00)); transition: opacity calc(.35s * var(--sp)) var(--out), transform calc(.6s * var(--sp)) var(--split-melt), filter calc(.35s * var(--sp)) var(--out); }
+.panes[data-split="true"] > .paper:nth-child(2) { opacity: 1; transform: none; filter: none; }
+.panes:not([data-split="true"]) > .paper:nth-child(2) { pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .panes, .panes > .paper:nth-child(2) { transition: none; } }
+
+/* ターミナルのスクロールバー: 端に貼りつく四角い棒をやめ、内側に浮く丸棒にする。ふだんは薄く、近づくと濃くなる */
+.term-body .xterm-scrollable-element > .scrollbar.vertical { width: 14px !important; }
+.term-body .xterm-scrollable-element > .scrollbar.vertical { top: 6px !important; height: calc(100% - 12px) !important; }
+.term-body .xterm-scrollable-element > .scrollbar.vertical.invisible { opacity: 1 !important; visibility: visible !important; } /* スクロールできるときは、止まっていても薄く見せる */
+.term-body .xterm-scrollable-element > .scrollbar.vertical > .slider {
+  width: 6px !important; left: auto !important; right: 3px; border-radius: 6px; background: color-mix(in srgb, var(--ink) 16%, transparent) !important;
+  transition: width calc(.16s * var(--sp)) var(--out), right calc(.16s * var(--sp)) var(--out), background-color calc(.16s * var(--sp)) var(--out);
+}
+.term-body .xterm-scrollable-element > .scrollbar.vertical:hover > .slider { width: 8px !important; right: 2px; background: color-mix(in srgb, var(--ink) 34%, transparent) !important; }
+.term-body .xterm-scrollable-element > .scrollbar.vertical > .slider.active { width: 8px !important; right: 2px; background: color-mix(in srgb, var(--ink) 48%, transparent) !important; }
+html[data-tcbar="normal"] .term-body .xterm-scrollable-element > .scrollbar.vertical > .slider { width: 9px !important; right: 2px; }
+html[data-tcbar="none"] .term-body .xterm-scrollable-element > .scrollbar { display: none !important; }
+
+/* エディタや一覧の細いバー: 色だけそろえ、近づいたら濃くする */
+.scroll, .cm-scroller { scrollbar-color: var(--press) transparent; }
+.scroll:hover, .cm-scroller:hover { scrollbar-color: var(--ink-3) transparent; }
+
+/* 分割の向き・境界線・ドラッグ */
+.panes { position: relative; }
+html[data-splitdir="row"] .panes { grid-template-columns: 1fr; grid-template-rows: 1fr 0fr; transition: grid-template-rows calc(.6s * var(--sp)) var(--split-melt), gap calc(.6s * var(--sp)) var(--split-melt); }
+html[data-splitdir="row"] .panes[data-split="true"] { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+html[data-splitdir="row"] .panes > .paper:nth-child(2) { transform: translateY(24px) scale(.985); }
+html[data-splitdir="row"] .panes[data-split="true"] > .paper:nth-child(2) { transform: none; }
+.panes[data-dragging="true"] { transition: none; }
+.panes[data-dragging="true"] > .paper { pointer-events: none; user-select: none; }
+
+.split-grip { position: absolute; z-index: 3; touch-action: none; opacity: 0; animation: grip-in calc(.5s * var(--sp)) var(--split-spring) calc(.55s * var(--sp)) both;
+  left: calc((100% - var(--pane-gap, 8px)) * var(--split-r, .5) + var(--pane-gap, 8px) / 2 - 7px); top: 0; bottom: 0; width: 14px; cursor: col-resize; }
+.split-grip::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 40px; border-radius: 4px; transform: translate(-50%, -50%);
+  background: var(--press); box-shadow: 0 0 0 .5px color-mix(in srgb, #fff 40%, transparent) inset; transition: background-color calc(.18s * var(--sp)) var(--out), height calc(.5s * var(--sp)) var(--split-spring), width calc(.5s * var(--sp)) var(--split-spring), box-shadow calc(.3s * var(--sp)) var(--out); }
+.split-grip:hover::after, .split-grip[data-drag="true"]::after { background: var(--accent); height: 64px; }
+html[data-splitdir="row"] .split-grip { left: 0; right: 0; width: auto; top: calc((100% - var(--pane-gap, 8px)) * var(--split-r, .5) + var(--pane-gap, 8px) / 2 - 7px); bottom: auto; height: 14px; cursor: row-resize; }
+html[data-splitdir="row"] .split-grip::after { width: 40px; height: 4px; }
+html[data-splitdir="row"] .split-grip:hover::after, html[data-splitdir="row"] .split-grip[data-drag="true"]::after { width: 64px; height: 4px; }
+@keyframes grip-in { from { opacity: 0; transform: scale(.3); } to { opacity: 1; transform: none; } }
+
+/* ドラッグ中、落とす先を示す */
+.drop-hint { position: absolute; z-index: 4; pointer-events: none; border-radius: calc(var(--r-lg) * var(--rk, 1) - 2px); overflow: hidden;
+  background: linear-gradient(160deg, color-mix(in srgb, #fff 22%, transparent), color-mix(in srgb, var(--accent) 12%, transparent) 55%, color-mix(in srgb, var(--accent) 20%, transparent));
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 80%, transparent) inset, 0 0 0 .5px color-mix(in srgb, #fff 60%, transparent), 0 1px 0 color-mix(in srgb, #fff 55%, transparent) inset, 0 0 42px color-mix(in srgb, var(--accent) 30%, transparent) inset, 0 12px 32px -12px color-mix(in srgb, var(--accent) 45%, transparent);
+  -webkit-backdrop-filter: blur(10px) saturate(1.6); backdrop-filter: blur(10px) saturate(1.6);
+  transition: left calc(.5s * var(--sp)) var(--split-spring), width calc(.5s * var(--sp)) var(--split-spring), top calc(.5s * var(--sp)) var(--split-spring), height calc(.5s * var(--sp)) var(--split-spring);
+  animation: hint-in calc(.34s * var(--sp)) var(--split-melt) both; }
+/* ガラスの面を、ゆっくり光が流れる */
+.drop-hint::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, color-mix(in srgb, #fff 30%, transparent) 50%, transparent 65%) no-repeat -100% 0 / 200% 100%; animation: hint-sheen calc(1.8s * var(--sp)) ease-in-out infinite; }
+@keyframes hint-in { from { opacity: 0; transform: scale(.97); filter: blur(calc(var(--ab) * .8)); } }
+@keyframes hint-sheen { 0% { background-position: -100% 0; } 60%, 100% { background-position: 100% 0; } }
+@media (prefers-reduced-motion: reduce) { .drop-hint::after { animation: none; } }
+
+/* タブの並べ替え: 落とす位置に線を出す */
+.tab[data-drop]::before { content: ""; position: absolute; top: 5px; bottom: 5px; width: 2px; border-radius: 2px; background: var(--accent); }
+.tab[data-drop="before"]::before { left: 0; }
+.tab[data-drop="after"]::before { right: 0; }
+.tab[draggable="true"] { -webkit-user-drag: element; }
