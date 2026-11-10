@@ -25,13 +25,15 @@ import Settings from "@/features/settings/Settings";
 import StatsView from "@/features/stats/StatsView";
 import Setup, { needSetup } from "@/app/Setup";
 import { noteSave } from "@/features/stats/stats";
+import { moveFile, recordSave } from "@/features/history/history";
+import LocalHistory from "@/features/history/LocalHistory";
 import { sendPing } from "@/features/telemetry/telemetry";
 import SearchPanel from "@/workbench/SearchPanel";
 import ContextMenu, { type Item } from "@/workbench/ContextMenu";
 import Dialog from "@/workbench/Dialog";
 import Connect from "@/features/workspaces/Connect";
 import Workspaces from "@/features/workspaces/Workspaces";
-import { Pin } from "lucide-react";
+import { Pin, History } from "lucide-react";
 import { Sparkles, Server, HardDrive, Unplug, FolderKanban, Eye, Code2, Maximize2, Minimize2 } from "lucide-react";
 import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
 import { displayPath, setRootNames, splitRoot } from "@/workbench/rootpath";
@@ -127,6 +129,7 @@ export default function App() {
   const [qo, setQo] = useState(false);
   const [cn, setCn] = useState(false);
   const [wsDlg, setWsDlg] = useState<null | "ws" | "profile">(null);
+  const [lh, setLh] = useState<string | null>(null); // ローカル履歴を開いているファイルのパス
   const [statsOpen, setStatsOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(needSetup);
   // 初回セットアップで選び終えてから、1 日 1 回だけ匿名の利用数を送る(開発中は送らない)
@@ -157,7 +160,7 @@ export default function App() {
   const [dlg, setDlg] = useState<Dlg | null>(null);
   // 外から閉じられても、閉じるアニメーションが終わるまで残す
   const pQo = usePresence(qo), pPal = usePresence(pal), pSetts = usePresence(setts), pDlg = usePresence(dlg), pCn = usePresence(cn);
-  const pTp = usePresence(tp, 400), pWs = usePresence(wsDlg), pStats = usePresence(statsOpen), pSetup = usePresence(setupOpen), pPop = usePresence(pop, 140), pMenu = usePresence(menu, 140);
+  const pTp = usePresence(tp, 400), pWs = usePresence(wsDlg), pLh = usePresence(lh), pStats = usePresence(statsOpen), pSetup = usePresence(setupOpen), pPop = usePresence(pop, 140), pMenu = usePresence(menu, 140);
   const views = useRef<Pair<EditorView | null>>([null, null]);
   const apis = useRef(new Map<number, TermApi>());
   const seq = useRef(0);
@@ -275,7 +278,7 @@ export default function App() {
     if (st.finalNewline && text && !text.endsWith("\n")) text += "\n";
     const mark = () => { setTabs((p) => p.map((x) => (x.node.path === t.node.path ? { ...x, text: x.text === t.text ? text : x.text, saved: text } : x))); setPreview((v) => (v === t.node.path ? null : v)); };
     if (!t.node.handle) { mark(); return quiet ? undefined : flash(i18next.t("デモのファイルは、保存先がありません")); }
-    try { await writeFile(t.node.handle as FileSystemFileHandle, t.eol === "crlf" && st.remoteKeepEol ? text.replace(/\n/g, "\r\n") : text); mark(); noteSave(); setGitTick((n) => n + 1); if (!quiet) flash(i18next.t("保存しました")); }
+    try { await writeFile(t.node.handle as FileSystemFileHandle, t.eol === "crlf" && st.remoteKeepEol ? text.replace(/\n/g, "\r\n") : text); mark(); noteSave(); recordSave(t.node.path, text, t.saved); setGitTick((n) => n + 1); if (!quiet) flash(i18next.t("保存しました")); }
     catch (e) { flash(i18next.t("保存できませんでした: {{m}}", { m: (e as Error).message }), "error"); }
   }, [st.trimOnSave, st.finalNewline, st.remoteKeepEol]); // eslint-disable-line react-hooks/exhaustive-deps
   // 改行コードの切り替え。保存し直すまでは、ファイルは変わらない(未保存の印をつける)
@@ -605,7 +608,7 @@ export default function App() {
       onSubmit: async (name) => {
         if (name === n.name) return;
         try {
-          const np = `${dirOf(n.path)}/${name}`;
+          const np = `${dirOf(n.path)}/${name}`; if (n.kind === "file") moveFile(n.path, np);
           let handle = n.handle;
           if (rr.conn) {
             const parent = (n.parent ?? rr.handle) as unknown as RemoteDir;
@@ -886,6 +889,7 @@ export default function App() {
         codeToPng(v, n.split("/").pop() || "code").then((b) => shareShot(b, n.split("/").pop() || "code")).then((r) => flash(r === "copied" ? i18next.t("画像をクリップボードにコピーしました") : i18next.t("画像を保存しました"))).catch(() => flash(i18next.t("画像を作れませんでした")));
       },
       goSymbol: () => { dispatchEvent(new Event(OUTLINE_EVENT)); },
+      localHistory: () => { if (tab && isText(tab)) setLh(tab.node.path); },
       searchAll: () => {
         const v = ev(), s = v ? v.state.sliceDoc(v.state.selection.main.from, v.state.selection.main.to) : "";
         setSeed(s && !s.includes("\n") ? s : ""); setSide(true); setPanel("search");
@@ -1009,6 +1013,7 @@ export default function App() {
         { label: word ? i18next.t("「{{arg0}}」を全体から探す", { arg0: word.length > 14 ? word.slice(0, 14) + "…" : word }) : i18next.t("全文検索"), icon: ic(SearchIcon), keys: K("searchAll"), run: () => { setSeed(word && !word.includes("\n") ? word : ""); setSide(true); setPanel("search"); } },
         { label: i18next.t("行へ移動"), keys: K("gotoLine"), run: r("gotoLine") },
         { label: i18next.t("シンボルへ移動(アウトライン)"), keys: K("goSymbol"), run: () => run("goSymbol") },
+        { label: i18next.t("ローカル履歴"), keys: K("localHistory"), run: () => run("localHistory") },
         { type: "sep" },
         ...(split ? [
         { label: i18next.t("もう一方の画面へ送る"), icon: ic(ArrowLeftRight), keys: K("moveTab"), run: () => tab && sendTo(tab.node, fp === 0 ? 1 : 0, true), disabled: !tab },
@@ -1080,6 +1085,7 @@ export default function App() {
       x: e.clientX, y: e.clientY, path: p,
       items: [
         { label: pinned.has(p) ? i18next.t("ピン留めを外す") : i18next.t("ピン留めする"), icon: ic(Pin), run: () => togglePin(p) },
+        ...(isText(t) ? [{ label: i18next.t("ローカル履歴"), icon: ic(History), run: () => setLh(p) }] : []),
         { label: i18next.t("閉じる"), icon: ic(X), keys: K("closeTab"), run: () => close(p), disabled: pinned.has(p) },
         { label: i18next.t("他を閉じる"), run: () => closeMany(tabs.filter((x) => x !== t).map((x) => x.node.path)), disabled: tabs.length < 2 },
         { label: i18next.t("右を閉じる"), run: () => closeMany(tabs.slice(i + 1).map((x) => x.node.path)), disabled: i >= tabs.length - 1 },
@@ -1389,6 +1395,7 @@ export default function App() {
       {pQo.v && <QuickOpen key={pQo.key} out={pQo.out} roots={rootsLite} onPick={(n) => open(n)} onClose={() => setQo(false)} />}
       {pPal.v && <Palette key={pPal.key} out={pPal.out} cmds={wsCmds} onClose={() => setPal(false)} />}
       {pSetts.v && <Settings onTheme={() => { setSetts(null); setTp(true); }} key={pSetts.key} out={pSetts.out} first={pSetts.v} onClose={() => setSetts(null)} />}
+      {pLh.v && (() => { const lt = tabs.find((x) => x.node.path === pLh.v); return lt && isText(lt) ? <LocalHistory key={pLh.key} out={pLh.out} path={lt.node.path} name={lt.node.name} current={lt.text} onRestore={(text) => setTabs((p) => p.map((x) => (x.node.path === lt.node.path && isText(x) ? { ...x, text } : x)))} onClose={() => setLh(null)} /> : null; })()}
       {pDlg.v && <Dialog key={pDlg.key} out={pDlg.out} {...pDlg.v} onClose={() => setDlg(null)} />}
       {pWs.v && <Workspaces key={pWs.key} out={pWs.out} initial={pWs.v} curId={ws?.id ?? null} saveName={root.conn ? root.name : root.handle ? root.name : ""} max={st.wsMax} onOpen={(w) => openWs(w)} onSaveNew={saveNew} onClose={() => setWsDlg(null)} flash={flash} />}
       {pSetup.v && <Setup key={pSetup.key} out={pSetup.out} onClose={() => setSetupOpen(false)} />}

@@ -300,3 +300,32 @@
 
 /* ミニマップは、字を淡く(真っ黒に見えないように) */
 .cm-minimap-gutter canvas { opacity: .6; }
+
+/* ローカル履歴 */
+.dlg.lh { width: min(880px, calc(100vw - 32px)); }
+.lh h2 { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.lh h2 svg { flex: none; color: var(--ink-2); }
+.lh-name { margin-left: 4px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px/20px var(--font-mono); color: var(--ink-3); font-weight: 400; }
+.lh-body { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 12px; height: min(420px, 60vh); }
+.lh-list { list-style: none; margin: 0; padding: 4px; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 2px; border-radius: 12px; background: var(--s1); box-shadow: 0 0 0 1px var(--hair) inset; }
+.lh-list button { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 0; padding: 6px 10px; border-radius: 8px; text-align: left; font-size: 12px; line-height: 20px; }
+.lh-list button b { font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
+.lh-list button span { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.lh-list button:hover { background: var(--s3); }
+.lh-list button[data-on="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.lh-list i { font-style: normal; }
+.lh-add { color: var(--git-add); }
+.lh-del { color: var(--git-del); }
+.lh-diff { overflow: auto; overscroll-behavior: contain; border-radius: 12px; background: var(--s1); box-shadow: 0 0 0 1px var(--hair) inset; padding: 4px 0; font: 12px/20px var(--font-mono); outline: 0; }
+.lh-diff .set-none { margin: 12px; }
+.lh-line { display: flex; min-width: max-content; }
+.lh-line > i { flex: none; width: 24px; text-align: center; font-style: normal; color: var(--ink-3); user-select: none; }
+.lh-line > span { white-space: pre; padding-right: 12px; }
+.lh-line[data-k="+"] { background: color-mix(in srgb, var(--git-add) 14%, transparent); }
+.lh-line[data-k="-"] { background: color-mix(in srgb, var(--git-del) 14%, transparent); }
+.lh-line[data-k="+"] > i { color: var(--git-add); }
+.lh-line[data-k="-"] > i { color: var(--git-del); }
+.lh-hint { margin: 12px 0 0 !important; font-size: 12px; line-height: 20px; color: var(--ink-3) !important; }
+.lh .dlg-foot .btn svg { flex: none; }
+.lh .dlg-foot .btn[disabled] { opacity: .45; pointer-events: none; }
+.lh .dlg-foot .btn { display: inline-flex; align-items: center; gap: 6px; }

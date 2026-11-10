@@ -819,5 +819,11 @@
   "{{n}} か所の名前を変えました": "Renamed {{n}} places",
   "型情報・定義へ移動・参照検索・リネーム(JS・TS)": "Type info, go to definition, find references, rename (JS/TS)",
   "Git の変更を表示(ファイルの印・行の変更・ブランチ)": "Show Git changes (file marks, changed lines, branch)",
-  "Git のブランチ(クリックで更新)": "Git branch (click to refresh)"
+  "Git のブランチ(クリックで更新)": "Git branch (click to refresh)",
+  "ローカル履歴": "Local history",
+  "いまと同じ": "Same as now",
+  "いまの中身と同じです": "Same as the current content",
+  "選んだ版に戻すと、赤い行は復活し、緑の行は消えます。保存するまでファイルは変わりません。": "Restoring this version brings back the red lines and removes the green ones. The file does not change until you save.",
+  "このファイルの履歴を全部消しますか?(ファイルは変わりません)": "Delete all history for this file? (The file itself is unchanged)",
+  "この版に戻す": "Restore this version"
 }

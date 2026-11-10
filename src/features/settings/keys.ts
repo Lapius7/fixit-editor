@@ -49,6 +49,7 @@ export const KEYS: KeyDef[] = [
   d(G.find, "findPrev", "前を検索", "Shift+F3", e),
   d(G.find, "gotoLine", "行へ移動", "Mod+G", e),
   d(G.find, "goSymbol", "シンボルへ移動(アウトライン)", "Mod+Shift+O"),
+  d(G.find, "localHistory", "ローカル履歴", "Mod+Alt+H"),
   d(G.sel, "selectNext", "次の同じ語も選択", "Mod+D", e),
   d(G.sel, "selectMatches", "同じ語をすべて選択", "Mod+Shift+L", e),
   d(G.sel, "selectLine", "行を選択", "Mod+L", e),
