@@ -224,10 +224,12 @@ function DiffView({ conn, root, file, staged, untracked, hash }: { conn: Conn; r
   if (!lines.length) return <p className="git-diff-note">{i18next.t("表示できる差分がありません")}</p>;
   const MAX = 400, shown = lines.slice(0, MAX);
   return (
-    <pre className="git-diff scroll" tabIndex={0}>
-      {shown.map((l, i) => <span key={i} className="git-dl" data-t={l.t}>{l.text || " "}</span>)}
-      {lines.length > MAX && <span className="git-dl" data-t="meta">{i18next.t("…残り {{n}} 行", { n: lines.length - MAX })}</span>}
-    </pre>
+    <div className="git-diff scroll" tabIndex={0}>
+      <div className="git-dw">
+        {shown.map((l, i) => <span key={i} className="git-dl" data-t={l.t}>{l.text || " "}</span>)}
+        {lines.length > MAX && <span className="git-dl" data-t="meta">{i18next.t("…残り {{n}} 行", { n: lines.length - MAX })}</span>}
+      </div>
+    </div>
   );
 }
 

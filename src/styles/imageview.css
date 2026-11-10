@@ -1,0 +1,50 @@
+/* 画像ビューア(拡大・移動と、切り抜きなどの編集) */
+.iv { height: 100%; display: flex; flex-direction: column; min-height: 0; outline: 0; }
+.iv-bar { flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 8px 12px; min-height: 48px; box-shadow: 0 1px 0 var(--hair); }
+.iv-grp { display: flex; align-items: center; gap: 2px; }
+.iv-tools { margin-left: auto; }
+.iv-sep { width: 1px; height: 16px; background: var(--hair); margin: 0 6px; flex: none; }
+.iv-zoom { min-width: 56px; height: 28px; padding: 0 8px; border-radius: 8px; font: 500 12px/20px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; transition: background-color calc(.12s * var(--sp)) var(--ease), color calc(.12s * var(--sp)) var(--ease); }
+.iv-zoom:hover { background: var(--s2); color: var(--ink); }
+.iv-info { font-size: 12px; line-height: 20px; color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.iv .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; }
+.iv .btn svg { width: 14px; height: 14px; stroke-width: 1.8; flex: none; }
+.iv-save { margin-left: 8px; }
+.iv button:disabled { opacity: .4; pointer-events: none; }
+
+.iv-stage { position: relative; flex: 1; min-height: 0; display: flex; overflow: auto; padding: 24px; overscroll-behavior: contain; }
+.iv-canvas { position: relative; flex: none; margin: auto; border-radius: 4px; background: repeating-conic-gradient(var(--s2) 0% 25%, transparent 0% 50%) 50% / 16px 16px; box-shadow: 0 0 0 1px rgba(0, 0, 0, .1), 0 8px 30px var(--shadow-soft); touch-action: none; }
+:root[data-theme="dark"] .iv-canvas { box-shadow: 0 0 0 1px rgba(255, 255, 255, .1), 0 8px 30px var(--shadow-soft); }
+.iv-canvas[data-fit="true"] { cursor: zoom-in; }
+.iv-canvas[data-fit="false"] { cursor: zoom-out; }
+.iv-canvas[data-crop="true"] { cursor: default; }
+.iv-canvas > img, .iv-canvas > canvas { display: block; border-radius: 4px; user-select: none; -webkit-user-drag: none; }
+.iv-canvas[data-px="true"] > img, .iv-canvas[data-px="true"] > canvas { image-rendering: pixelated; }
+
+.iv-layer { position: absolute; inset: 0; cursor: crosshair; touch-action: none; }
+.iv-dim { position: absolute; inset: 0; background: rgba(0, 0, 0, .5); pointer-events: none; border-radius: 4px; }
+.iv-sel { position: absolute; cursor: move; touch-action: none; box-shadow: 0 0 0 1px #fff, 0 0 0 2px rgba(0, 0, 0, .35);
+  background-image:
+    linear-gradient(to right, transparent calc(33.333% - .5px), rgba(255, 255, 255, .5) calc(33.333% - .5px) calc(33.333% + .5px), transparent calc(33.333% + .5px) calc(66.666% - .5px), rgba(255, 255, 255, .5) calc(66.666% - .5px) calc(66.666% + .5px), transparent calc(66.666% + .5px)),
+    linear-gradient(to bottom, transparent calc(33.333% - .5px), rgba(255, 255, 255, .5) calc(33.333% - .5px) calc(33.333% + .5px), transparent calc(33.333% + .5px) calc(66.666% - .5px), rgba(255, 255, 255, .5) calc(66.666% - .5px) calc(66.666% + .5px), transparent calc(66.666% + .5px)); }
+.iv-sel i { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 3px; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .4); }
+.iv-sel i::after { content: ""; position: absolute; inset: -8px; }
+.iv-sel i[data-h="nw"] { left: 0; top: 0; cursor: nwse-resize; }
+.iv-sel i[data-h="n"] { left: 50%; top: 0; cursor: ns-resize; }
+.iv-sel i[data-h="ne"] { left: 100%; top: 0; cursor: nesw-resize; }
+.iv-sel i[data-h="e"] { left: 100%; top: 50%; cursor: ew-resize; }
+.iv-sel i[data-h="se"] { left: 100%; top: 100%; cursor: nwse-resize; }
+.iv-sel i[data-h="s"] { left: 50%; top: 100%; cursor: ns-resize; }
+.iv-sel i[data-h="sw"] { left: 0; top: 100%; cursor: nesw-resize; }
+.iv-sel i[data-h="w"] { left: 0; top: 50%; cursor: ew-resize; }
+.iv-sel-size { position: absolute; left: 6px; bottom: 6px; height: 20px; padding: 0 6px; border-radius: 5px; background: rgba(0, 0, 0, .6); color: #fff; font: 500 11px/20px var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; }
+
+.iv-panel { flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 8px 12px; min-height: 48px; box-shadow: 0 -1px 0 var(--hair); }
+.iv-acts { margin-left: auto; display: flex; gap: 8px; }
+.iv-fld { display: flex; align-items: center; gap: 8px; }
+.iv-fld span, .iv-rng span { font-size: 12px; line-height: 20px; color: var(--ink-3); }
+.iv-num { width: 88px; height: 32px; padding: 0 10px; font-variant-numeric: tabular-nums; }
+.iv-rng { display: flex; align-items: center; gap: 8px; }
+.iv-rng span { width: 72px; }
+.iv-rng input[type="range"] { width: 120px; accent-color: var(--accent); }
+.iv-rng em { width: 44px; text-align: right; font: normal 12px/20px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--ink-2); }

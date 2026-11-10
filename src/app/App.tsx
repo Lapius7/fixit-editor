@@ -16,6 +16,7 @@ import { ColGrip, RatioGrip } from "@/workbench/ColGrip";
 import { loadBase, loadGit, type GitInfo } from "@/features/git/git";
 import QuickOpen from "@/workbench/QuickOpen";
 import Viewer from "@/workbench/Viewer";
+import { IMAGE_SAVE } from "@/workbench/ImageView";
 import Terminal, { type TermApi } from "@/workbench/Terminal";
 import StatusBar from "@/workbench/StatusBar";
 import { usePresence } from "@/shared/presence";
@@ -52,7 +53,7 @@ import { listShells, type ShellOpt } from "@/platform/pty";
 import { RemoteFile, checkDir, connKey, connLabel, lastDir, normConn, showPath, pushRecent, rootHandle, sshUrl, type Conn, type RemoteDir } from "@/platform/remote";
 import { DEMO_NAME, DEMO_TREE } from "@/shared/demo";
 import { IS_TAURI } from "@/shared/chrome";
-import { createDir, createFile, moveEntry, pickFolder, pickPcFolder, readDir, removeEntry, renameFile, supportsFs, writeFile, type Node } from "@/platform/fs";
+import { createDir, createFile, moveEntry, pickFolder, pickPcFolder, readDir, removeEntry, renameFile, supportsFs, writeFile, writeBlob, freeName, type Node } from "@/platform/fs";
 import { load } from "@/platform/load";
 import { langName } from "@/editor/lang";
 import { APP_NAME } from "@/shared/config";
@@ -149,6 +150,16 @@ export default function App() {
   const pvSeen = useRef(new Set<string>()); // 一度プレビューを開いたファイル(閉じる動きの間も中身を残す)
   const [pvR, setPvR] = useState(0.5); // エディタとプレビューを並べたときの、エディタの幅の割合
   const [pv, setPv] = useState<Record<string, PvMode | undefined>>({}); // プレビュー形式のファイルの表示(パス → 表示)
+  const pvTools = (path: string) => {
+    const cur = pv[path], on = cur !== undefined, wide = cur === "preview", key = chips(K("togglePreview")).join(" ");
+    const set = (m: PvMode | undefined) => setPv((p) => ({ ...p, [path]: m }));
+    return (
+      <span className="pv-tools" data-open={on}>
+        {on && <button className="icon-btn bc-btn" aria-pressed={wide} aria-label={wide ? i18next.t("エディタも表示する") : i18next.t("プレビューだけにする")} data-tip={wide ? i18next.t("エディタも表示する") : i18next.t("プレビューだけにする")} onClick={() => set(wide ? "split" : "preview")}>{wide ? <Minimize2 /> : <Maximize2 />}</button>}
+        <button className="icon-btn bc-btn" data-on={on} aria-pressed={on} aria-label={on ? i18next.t("プレビューを閉じる") : i18next.t("プレビューを横に開く")} data-tip={`${on ? i18next.t("プレビューを閉じる") : i18next.t("プレビューを横に開く")} (${key})`} onClick={() => set(on ? undefined : "split")}><Eye /></button>
+      </span>
+    );
+  };
   const [br, setBr] = useState(false); // アプリ内ブラウザの表示
   const [ai, setAi] = useState(false); // AI パネルの表示
   const [gitOpen, setGitOpen] = useState(false); // Git パネルの表示
@@ -336,7 +347,7 @@ export default function App() {
 
   // 保存。設定に応じて、行末の空白を削り、末尾に改行を入れる
   const saveTab = useCallback(async (t: Tab, quiet = false) => {
-    if (!isText(t)) return;
+    if (!isText(t)) { if (t.view.kind === "image") window.dispatchEvent(new CustomEvent(IMAGE_SAVE, { detail: t.node.path })); return; }
     let text = t.text;
     if (st.trimOnSave) text = text.replace(/[ \t]+$/gm, "");
     if (st.finalNewline && text && !text.endsWith("\n")) text += "\n";
@@ -400,6 +411,29 @@ export default function App() {
     if (got.some((g) => g.handle) && got.every((g) => !g.handle || !g.nodes)) throw new Error(i18next.t("ファイル一覧を読み込めませんでした"));
     setRoots((p) => p.map((r) => { const g = got.find((x) => x.prefix === r.prefix && x.handle === r.handle); return g?.nodes ? { ...r, nodes: g.nodes } : r; }));
     setRev((r) => r + 1);
+  };
+  // 画像の編集結果を書く。同じ名前なら上書きして表示を差し替え、別の形式(.ico など)は空いている名前の .png で隣に作る
+  const saveImage = async (t: Tab, blob: Blob, outName: string) => {
+    const h = t.node.handle as FileSystemFileHandle | undefined;
+    if (!h) throw new Error(i18next.t("デモのファイルは、保存先がありません"));
+    if (outName === t.node.name) {
+      await writeBlob(h, blob);
+      revoke(t);
+      const url = URL.createObjectURL(blob);
+      setTabs((p) => p.map((x) => (x.node.path === t.node.path ? { ...x, view: { kind: "image", url } } : x)));
+      noteSave(); setGitTick((n) => n + 1);
+      flash(i18next.t("保存しました"));
+      return;
+    }
+    const dir = t.node.parent;
+    if (!dir) throw new Error(i18next.t("保存先のフォルダがありません"));
+    const name = await freeName(dir, outName);
+    const nh = await createFile(dir, name);
+    await writeBlob(nh, blob);
+    await reload();
+    setGitTick((n) => n + 1);
+    open({ name, path: `${dirOf(t.node.path)}/${name}`, kind: "file", handle: nh, parent: dir });
+    flash(i18next.t("{{n}} として保存しました", { n: name }));
   };
   // Git の操作でファイルが書き換わったあと、未編集のタブをディスクの中身に読み直す(古い内容を自動保存で書き戻さないため)
   const syncTabs = async () => {
@@ -1413,21 +1447,13 @@ export default function App() {
         ) : t.view.kind === "text" ? (
           <div className="ed-pv" data-pv={previewKind(t.node.name) ? pv[t.node.path] ?? "text" : "text"} style={{ "--pv-r": pvR, "--pv-a": `${pvR}fr`, "--pv-b": `${1 - pvR}fr` } as React.CSSProperties}>
           <Editor
-          crumbExtra={previewKind(t.node.name) ? (() => {
-            const cur = pv[t.node.path], on = cur !== undefined, wide = cur === "preview", key = chips(K("togglePreview")).join(" ");
-            const set = (m: PvMode | undefined) => setPv((p) => ({ ...p, [t.node.path]: m }));
-            return (
-              <span className="pv-tools" data-open={on}>
-                {on && <button className="icon-btn bc-btn" aria-pressed={wide} aria-label={wide ? i18next.t("エディタも表示する") : i18next.t("プレビューだけにする")} data-tip={wide ? i18next.t("エディタも表示する") : i18next.t("プレビューだけにする")} onClick={() => set(wide ? "split" : "preview")}>{wide ? <Minimize2 /> : <Maximize2 />}</button>}
-                <button className="icon-btn bc-btn" data-on={on} aria-pressed={on} aria-label={on ? i18next.t("プレビューを閉じる") : i18next.t("プレビューを横に開く")} data-tip={`${on ? i18next.t("プレビューを閉じる") : i18next.t("プレビューを横に開く")} (${key})`} onClick={() => set(on ? undefined : "split")}><Eye /></button>
-              </span>
-            );
-          })() : undefined}
+          crumbExtra={previewKind(t.node.name) ? pvTools(t.node.path) : undefined}
             key={`${i}:${t.node.path}`} docKey={`${i}:${t.node.path}`} path={displayPath(t.node.path)} name={t.node.name} value={t.text} jump={jump[i]}
             onChange={(v) => { setTabs((p) => p.map((x) => (x.node.path === t.node.path && x.text !== v ? { ...x, text: v } : x))); setPreview((q) => (q === t.node.path ? null : q)); }}
             onCursor={(c) => setCur((p) => ({ ...p, [i]: c }))}
             onFocus={() => setFp(i)} onReady={(v) => { views.current[i] = v; }} onContext={editorMenu} gitBase={bases[t.node.path]}
           />
+          {previewKind(t.node.name) && pv[t.node.path] === "preview" && <div className="pv-float">{pvTools(t.node.path)}</div>}
           {previewKind(t.node.name) && pv[t.node.path] === "split" && <RatioGrip ratio={pvR} onChange={setPvR} />}
           {previewKind(t.node.name) && (
             <div className="pv-pane" inert={!pv[t.node.path]}>
@@ -1436,7 +1462,7 @@ export default function App() {
           )}
           </div>
         ) : (
-          <Viewer view={t.view} name={t.node.name} />
+          <Viewer view={t.view} name={t.node.name} path={t.node.path} onSaveImage={t.node.handle ? (b, n) => saveImage(t, b, n) : undefined} />
         )}
       </div>
     );

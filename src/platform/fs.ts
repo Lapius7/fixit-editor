@@ -30,6 +30,22 @@ export async function writeFile(h: FileSystemFileHandle, text: string) {
   await w.close();
 }
 
+// 画像などのバイナリを書く
+export async function writeBlob(h: FileSystemFileHandle, blob: Blob) {
+  const w = await (h as any).createWritable();
+  await w.write(blob);
+  await w.close();
+}
+
+// 同名のファイルがあるときは、name-2.png のように空いている名前にする(上書きしない)
+export async function freeName(dir: FileSystemDirectoryHandle, name: string): Promise<string> {
+  const dot = name.lastIndexOf("."), b = dot > 0 ? name.slice(0, dot) : name, e = dot > 0 ? name.slice(dot) : "";
+  for (let i = 1; ; i++) {
+    const n = i === 1 ? name : `${b}-${i}${e}`;
+    try { await dir.getFileHandle(n); } catch { return n; }
+  }
+}
+
 // クイックオープン用に、全ファイルを集める(上限つき)
 // WSL・SSH は、フォルダを1つずつ開かず、find 1回でまとめて取る
 export function remoteRoot(nodes: Node[], prefix = ""): RemoteDir | null {

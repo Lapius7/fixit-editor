@@ -448,8 +448,9 @@ body:has(.col-grip[data-drag="true"]) iframe, body:has(.col-grip[data-drag="true
 .git-collapse { display: grid; grid-template-rows: 0fr; transition: grid-template-rows calc(.22s * var(--sp)) var(--out); }
 .git-collapse[data-open="true"] { grid-template-rows: 1fr; }
 .git-collapse > div { min-height: 0; overflow: hidden; }
-.git-diff { margin: 2px 4px 6px 28px; max-height: 260px; overflow: auto; overscroll-behavior: contain; border-radius: 8px; background: var(--field); box-shadow: 0 0 0 1px var(--hair) inset; font: 11.5px/18px var(--font-mono); padding: 4px 0; }
-.git-dl { display: block; padding: 0 10px; white-space: pre; min-width: max-content; color: var(--ink-2); }
+.git-diff { margin: 2px 4px 6px 28px; max-height: 260px; overflow: auto; overscroll-behavior: contain; border-radius: 8px; background: var(--field); box-shadow: 0 0 0 1px var(--hair) inset; font: 11.5px/18px var(--font-mono); padding: 4px 0; white-space: pre; }
+.git-dw { display: grid; width: max-content; min-width: 100%; }
+.git-dl { display: block; padding: 0 10px; white-space: pre; color: var(--ink-2); }
 .git-dl[data-t="add"] { background: color-mix(in srgb, var(--git-c2) 16%, transparent); color: var(--ink); }
 .git-dl[data-t="del"] { background: color-mix(in srgb, var(--git-c1) 14%, transparent); color: var(--ink); }
 .git-dl[data-t="hunk"] { color: var(--git-c0); margin-top: 2px; }
@@ -480,3 +481,5 @@ body:has(.col-grip[data-drag="true"]) iframe, body:has(.col-grip[data-drag="true
 .git-pill:hover:not(:disabled) { background: var(--accent); color: #fff; }
 .git-pill:active:not(:disabled) { transform: scale(var(--ps)); }
 @media (prefers-reduced-motion: reduce) { .git-row, .git-detail { animation: none; } .git-collapse { transition: none; } .git-sync svg[data-spin="true"] { animation-duration: 2s; } }
+/* プレビューだけにしたとき、エディタ(とパンくず)は隠れるので、閉じる・戻すボタンはプレビューの右上に出す */
+.pv-float { position: absolute; top: 8px; right: 18px; z-index: 5; padding: 3px; border-radius: 10px; background: var(--field); box-shadow: 0 0 0 1px var(--hair), 0 4px 14px rgba(0, 0, 0, .12); backdrop-filter: blur(12px); }
