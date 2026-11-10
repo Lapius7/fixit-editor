@@ -9,8 +9,11 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 
 const KEY = join(homedir(), ".config", "fixit-release", "update-key.pem");
-const HOST = process.env.FIXIT_SSH ?? "contabo-vps";
-const DIR = process.env.FIXIT_RELEASES ?? "/root/project/web/fixit-editor.lapius7.com/data/releases";
+// 置き先(SSH の接続先とサーバー上のフォルダ)は、リポジトリの外の ~/.config/fixit-release/config.json か環境変数で渡す
+const CONF = join(homedir(), ".config", "fixit-release", "config.json");
+const conf = (existsSync(CONF) ? JSON.parse(readFileSync(CONF, "utf8")) : {}) as { host?: string; dir?: string };
+const HOST = process.env.FIXIT_SSH ?? conf.host ?? "";
+const DIR = process.env.FIXIT_RELEASES ?? conf.dir ?? "";
 
 const arg = (n: string) => { const i = process.argv.indexOf(n); return i < 0 ? undefined : process.argv[i + 1]; };
 const has = (n: string) => process.argv.includes(n);
@@ -39,6 +42,7 @@ const installer = existsSync(setup) ? basename(setup) : undefined;
 const manifest = { version, date: new Date().toISOString().slice(0, 10), notes: arg("--notes") ?? "", file, size, sha256, sig, ...(installer ? { installer } : {}) };
 console.log(JSON.stringify({ ...manifest, sig: sig.slice(0, 12) + "…" }, null, 2));
 if (has("--dry")) process.exit(0);
+if (!HOST || !DIR) throw new Error(`置き先が決まっていません。${CONF} に {"host":"<ssh の接続先>","dir":"<サーバー上の releases フォルダ>"} を書くか、FIXIT_SSH と FIXIT_RELEASES を渡してください`);
 
 const tmp = join(process.env.TMPDIR ?? "/tmp", "fixit-latest.json");
 writeFileSync(tmp, JSON.stringify(manifest, null, 2));
