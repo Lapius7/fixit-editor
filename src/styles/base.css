@@ -61,6 +61,8 @@
 .tab-x:hover { background: var(--press); color: var(--ink); }
 .tab-x svg { width: 12px; height: 12px; stroke-width: 2; }
 .tab-x .dot { fill: currentColor; width: 8px; height: 8px; }
+.tab-x[data-pin] { opacity: 1; color: var(--accent); }
+.tab-x[data-pin] svg { width: 11px; height: 11px; fill: currentColor; }
 
 .work { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .panes { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr; gap: var(--pane-gap, 8px); }

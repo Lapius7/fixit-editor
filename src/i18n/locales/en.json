@@ -806,5 +806,7 @@
   "パンくず": "Breadcrumbs",
   "アウトライン": "Outline",
   "名前で絞り込む": "Filter by name",
-  "シンボルへ移動(アウトライン)": "Go to symbol (outline)"
+  "シンボルへ移動(アウトライン)": "Go to symbol (outline)",
+  "ピン留めする": "Pin tab",
+  "ピン留めを外す": "Unpin tab"
 }

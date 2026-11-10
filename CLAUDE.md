@@ -40,6 +40,7 @@
 - `src/shared/Select.tsx` は OS 標準 `<select>` の代わり(ポータルで開く一覧は `.ctx` と同じ見た目)。`<select>` は使わずこれを使う。`segslide.ts` は `.seg`(切り替えボタン)の選択つまみを滑らせる(`--seg-x/--seg-w` を書き、`.seg::before` が動く)。エディタ面の濃さは `--paper-k` と `data-paper`(0 のとき `.paper` のぼかしを外す)で効く。
 - タブ切り替えの動き: 設定の左の分類は `.set-nav::before` の印が滑る(`Settings.tsx` の `useLayoutEffect` が選択中の `.set-tab` の位置を `--tab-y` / `--tab-h` に書く。最初の 1 回は `data-ready` が付くまで動かさない)。設定の中身とワークスペース/プロファイルの中身は、`key` つきの `.set-fade` で切り替えのたびにふわっと出る。
 - 通知と補助の表示: メッセージは `src/shared/notify.tsx` の `notify(文, 種類)`(ding のトースト。`App` の `flash` も同じ。ステータスバーの文字表示はやめた)。タブとファイル一覧のホバーカードは `src/shared/HoverTip.tsx`(要素に `data-tip` / `data-tip-sub` を付けるだけ)。設定の「変えた項目」の印は、行の左のバー(`.set-row::after`)と、変えたときだけ出る「初期値に戻す」ボタン。
+- エディタ補助: `src/editor/intel.ts`(括弧の色分け・開始/閉じタグ同時編集・波線・ミニマップ)、`outline.ts` + `Crumbs.tsx`(パンくずとアウトライン。`Mod+Shift+O` は `OUTLINE_EVENT`)。タブのピン留めは `App.tsx` の `pinned`(左に固定、一括で閉じる操作の対象外。`closeMany(paths, force)` の `force` で外せる)。
 - `src/shared/` 共有の定数(`config.ts`)・型・小さな道具。`src/styles/` CSS。`src/i18n/` と `locales/{ja,en,ko}.json`: UI の文字列は日本語の原文をキーにして、ここへ訳を足す。
 - `server/fsapi.ts` と `server/term.ts` と `server/claude.ts` ブラウザ版のファイル操作(`/__fs`)・ターミナル・Claude サブスク用の橋渡し(`/__claude`)。vite の dev サーバーに載っている。
 - `src-tauri/` Tauri の Rust 側(`src/main.rs`: ターミナルと、`fs_op` / `fs_write` / `claude_chat` の受け口)。

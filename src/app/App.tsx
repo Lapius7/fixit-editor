@@ -28,6 +28,7 @@ import ContextMenu, { type Item } from "@/workbench/ContextMenu";
 import Dialog from "@/workbench/Dialog";
 import Connect from "@/features/workspaces/Connect";
 import Workspaces from "@/features/workspaces/Workspaces";
+import { Pin } from "lucide-react";
 import { Sparkles, Server, HardDrive, Unplug, FolderKanban, Eye, Code2, Maximize2, Minimize2 } from "lucide-react";
 import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
 import { displayPath, setRootNames } from "@/workbench/rootpath";
@@ -139,6 +140,7 @@ export default function App() {
   const [pal, setPal] = useState(false);
   const [setts, setSetts] = useState<null | string>(null);
   const [closing, setClosing] = useState<Set<string>>(new Set());
+  const [pinned, setPinned] = useState<Set<string>>(new Set());
   const [term, setTerm] = useState(false);           // ターミナルのパネルを開いているか
   const [shown, setShown] = useState(false);          // 開く動きを始めてよいか(閉じた状態を1コマ見せるため)
   const [termKey, setTermKey] = useState(0);
@@ -204,8 +206,9 @@ export default function App() {
     setJump((j) => (fp === 0 ? [{ line, from, to, n: Date.now() }, j[1]] : [j[0], { line, from, to, n: Date.now() }]));
   };
 
-  const closeMany = (paths: string[]) => {
-    const gone = new Set(paths);
+  const closeMany = (paths: string[], force = false) => {
+    const gone = new Set(force ? paths : paths.filter((x) => !pinned.has(x)));
+    if (!gone.size) return;
     gone.forEach((x) => document.querySelectorAll<HTMLElement>(`.tabbar [data-path="${CSS.escape(x)}"]`).forEach((el) => el.style.setProperty("--tw", `${el.offsetWidth}px`)));
     setClosing((c) => new Set([...c, ...gone]));
     setTimeout(() => {
@@ -222,9 +225,10 @@ export default function App() {
     }, ms(220));
   };
   const close = (path: string) => {
+    if (pinned.has(path)) return;
     const t = tabOf(path);
     if (t && st.confirmClose && isText(t) && t.text !== t.saved && !confirm(i18next.t("{{name}} は保存されていません。閉じますか?", { name: t.node.name }))) return;
-    closeMany([path]);
+    closeMany([path], true);
   };
   // 分割中、もう一方の画面にも出しているタブは、この画面から外すだけにする
   const closeIn = (path: string, i: 0 | 1) => {
@@ -486,7 +490,7 @@ export default function App() {
     if (!r || roots.length < 2) return;
     const under = tabs.filter((t) => rootOfPath(t.node.path) === r);
     if (under.some((t) => dirtyList.includes(t)) && st.confirmClose && !confirm(i18next.t("保存していない変更があります。フォルダを外すと失われます。続けますか?"))) return;
-    closeMany(under.map((t) => t.node.path));
+    closeMany(under.map((t) => t.node.path), true);
     const next = roots.filter((x) => x !== r);
     setRoots(next);
     if (activeWs.current) setWsRoots(activeWs.current, next.map((x) => ({ ref: x.ref, prefix: x.prefix })));
@@ -543,7 +547,7 @@ export default function App() {
             const parent = (n.parent ?? rr.handle) as unknown as RemoteDir;
             await parent.rename(n.name, name);
             handle = n.kind === "file" ? new RemoteFile(rr.conn, `${parent.path === "/" ? "" : parent.path}/${name}`, name) as unknown as FileSystemHandle : undefined;
-            if (n.kind === "dir") closeMany(tabs.filter((t) => t.node.path.startsWith(n.path + "/")).map((t) => t.node.path));
+            if (n.kind === "dir") closeMany(tabs.filter((t) => t.node.path.startsWith(n.path + "/")).map((t) => t.node.path), true);
           } else if (rr.handle && n.kind === "file") handle = await renameFile((n.parent ?? rr.handle) as FileSystemDirectoryHandle, n.handle as FileSystemFileHandle, name);
           else updRoot(rr.prefix, (r) => ({ ...r, nodes: renameNode(r.nodes, n.path, name) }));
           setTabs((p) => p.map((t) => (t.node.path === n.path ? { ...t, node: { ...t.node, name, path: np, handle } } : t)));
@@ -573,7 +577,7 @@ export default function App() {
         handle = n.kind === "file" ? (new RemoteFile(rr.conn, `${d.path === "/" ? "" : d.path}/${n.name}`, n.name) as unknown as FileSystemHandle) : undefined;
       } else if (rr.handle && n.handle && to) handle = await moveEntry((n.parent ?? rr.handle) as FileSystemDirectoryHandle, n.handle, to);
       else updRoot(rr.prefix, (r) => ({ ...r, nodes: moveNode(r.nodes, n.path, base) }));
-      if (n.kind === "dir") closeMany(under.map((t) => t.node.path));
+      if (n.kind === "dir") closeMany(under.map((t) => t.node.path), true);
       else {
         setTabs((p) => p.map((t) => (t.node.path === n.path ? { ...t, node: { ...t.node, path: np, handle, parent: to } } : t)));
         setAct((a) => a.map((x) => (x === n.path ? np : x)) as Pair<string | null>);
@@ -592,7 +596,7 @@ export default function App() {
         try {
           if (rr.handle) await removeEntry((n.parent ?? rr.handle) as FileSystemDirectoryHandle, n.name);
           else updRoot(rr.prefix, (r) => ({ ...r, nodes: removeNode(r.nodes, n.path) }));
-          closeMany(tabs.filter((t) => t.node.path === n.path || t.node.path.startsWith(n.path + "/")).map((t) => t.node.path));
+          closeMany(tabs.filter((t) => t.node.path === n.path || t.node.path.startsWith(n.path + "/")).map((t) => t.node.path), true);
           if (rr.handle) await reload();
           flash(i18next.t("削除しました"));
         } catch (e) { flash("削除できませんでした: " + (e as Error).message); }
@@ -682,8 +686,20 @@ export default function App() {
     const rest = p.filter((t) => t !== m), i = rest.findIndex((t) => t.node.path === target);
     if (i < 0) return p;
     rest.splice(i + (after ? 1 : 0), 0, m);
-    return rest;
+    return [...rest.filter((t) => pinned.has(t.node.path)), ...rest.filter((t) => !pinned.has(t.node.path))];
   });
+  const togglePin = (path: string) => {
+    const on = !pinned.has(path), next = new Set(pinned);
+    if (on) next.add(path); else next.delete(path);
+    setPinned(next);
+    setTabs((p) => {
+      const m = p.find((t) => t.node.path === path);
+      if (!m) return p;
+      const rest = p.filter((t) => t !== m), k = rest.filter((t) => next.has(t.node.path)).length;
+      rest.splice(k, 0, m);
+      return rest;
+    });
+  };
   // ドラッグ中、ポインタがどの画面の上か。分割していないときは、端に寄せると「新しく分割」になる
   const zoneOf = (e: React.DragEvent): Dz => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -999,7 +1015,8 @@ export default function App() {
     setMenu({
       x: e.clientX, y: e.clientY, path: p,
       items: [
-        { label: i18next.t("閉じる"), icon: ic(X), keys: K("closeTab"), run: () => close(p) },
+        { label: pinned.has(p) ? i18next.t("ピン留めを外す") : i18next.t("ピン留めする"), icon: ic(Pin), run: () => togglePin(p) },
+        { label: i18next.t("閉じる"), icon: ic(X), keys: K("closeTab"), run: () => close(p), disabled: pinned.has(p) },
         { label: i18next.t("他を閉じる"), run: () => closeMany(tabs.filter((x) => x !== t).map((x) => x.node.path)), disabled: tabs.length < 2 },
         { label: i18next.t("右を閉じる"), run: () => closeMany(tabs.slice(i + 1).map((x) => x.node.path)), disabled: i >= tabs.length - 1 },
         { label: i18next.t("左を閉じる"), run: () => closeMany(tabs.slice(0, i).map((x) => x.node.path)), disabled: i < 1 },
@@ -1097,7 +1114,7 @@ export default function App() {
         {list.map((t) => {
           const path = t.node.path;
           return (
-            <div key={path} className="tab" role="tab" data-path={path} data-tip={t.node.name} data-tip-sub={displayPath(path)} ref={measureTab} data-fresh={fresh.has(path)} data-drop={tabDrop?.pane === i && tabDrop.path === path ? (tabDrop.after ? "after" : "before") : undefined} draggable
+            <div key={path} className="tab" role="tab" data-path={path} data-pinned={pinned.has(path) || undefined} data-tip={t.node.name} data-tip-sub={displayPath(path)} ref={measureTab} data-fresh={fresh.has(path)} data-drop={tabDrop?.pane === i && tabDrop.path === path ? (tabDrop.after ? "after" : "before") : undefined} draggable
               onDragStart={(e) => { drag.tab = path; drag.from = i; setPreview((v) => (v === path ? null : v)); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", displayPath(path)); }}
               onDragEnd={() => { dragEnd(); setDz(null); setTabDrop(null); }}
               onDragOver={(e) => { if (!drag.tab) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; const r = e.currentTarget.getBoundingClientRect(), after = e.clientX > r.left + r.width / 2; setTabDrop((d) => (d?.pane === i && d.path === path && d.after === after ? d : { path, after, pane: i })); }}
@@ -1106,8 +1123,8 @@ export default function App() {
               onDoubleClick={() => setPreview((v) => (v === path ? null : v))}
               onClick={(e) => { if (e.altKey && split) sendTo(t.node, i === 0 ? 1 : 0); else open(t.node, i, false); }} onAuxClick={(e) => { if (e.button === 1) closeIn(path, i); }} onContextMenu={(e) => tabMenu(e, t)}>
               <span className="tab-name">{t.node.name}</span>
-              <button className="tab-x" aria-label={i18next.t("{{name}} を閉じる", { name: t.node.name })} onClick={(e) => { e.stopPropagation(); closeIn(path, i); }}>
-                {dirty.has(path) ? <svg className="dot" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" /></svg> : <X />}
+              <button className="tab-x" data-pin={pinned.has(path) || undefined} aria-label={pinned.has(path) ? i18next.t("ピン留めを外す") : i18next.t("{{name}} を閉じる", { name: t.node.name })} onClick={(e) => { e.stopPropagation(); if (pinned.has(path)) togglePin(path); else closeIn(path, i); }}>
+                {pinned.has(path) ? <Pin /> : dirty.has(path) ? <svg className="dot" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" /></svg> : <X />}
               </button>
             </div>
           );
