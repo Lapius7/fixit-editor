@@ -22,7 +22,8 @@ export default function Crumbs({ view, path, ver }: { view: EditorView | null; p
   const syms = useMemo(() => (view ? outline(view.state) : []), [view, doc, tlen]); // eslint-disable-line react-hooks/exhaustive-deps
   void ver;
   const pos = view?.state.selection.main.head ?? 0;
-  const tr = useMemo(() => trail(syms, pos), [syms, pos]);
+  const all = useMemo(() => (view ? outline(view.state, true) : []), [view, doc, tlen]); // eslint-disable-line react-hooks/exhaustive-deps
+  const tr = useMemo(() => trail(all, pos), [all, pos]);
   const parts = path.split("/").filter(Boolean);
 
   const open = (el: HTMLElement, items: Sym[], filter = false) => {
@@ -64,7 +65,7 @@ export default function Crumbs({ view, path, ver }: { view: EditorView | null; p
       <div className="bc-trail">
         {parts.map((p, i) => <span key={i} className="bc-seg" data-last={i === parts.length - 1 && !tr.length}>{i > 0 && <ChevronRight aria-hidden />}<span className="bc-name">{p}</span></span>)}
         {tr.map((s, i) => {
-          const sibs = i === 0 ? syms : tr[i - 1].children;
+          const sibs = i === 0 ? all : tr[i - 1].children;
           return (
             <span key={i} className="bc-seg" data-last={i === tr.length - 1}>
               <ChevronRight aria-hidden />
