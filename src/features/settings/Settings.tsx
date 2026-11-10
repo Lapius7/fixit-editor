@@ -112,7 +112,7 @@ export default function Settings({ onClose, first, out, onTheme, onCheckUpdate }
             </div>
             <button className="chipbtn" aria-pressed={only} onClick={() => setOnly(!only)}><Trans i18nKey="変えたものだけ" />{changed ? ` ${changed}` : ""}</button>
             <button className="chipbtn" disabled={!changed} onClick={() => { resetAll(); notify(i18next.t("設定を初期値に戻しました"), "success"); }}><RotateCcw size={13} /><Trans i18nKey="すべて戻す" /></button>
-            <button className="icon-btn" aria-label={i18next.t("閉じる")} title={i18next.t("閉じる")} onClick={close}><X /></button>
+            <button className="btn close-btn" onClick={close}>{i18next.t("閉じる")}<kbd>Esc</kbd></button>
           </div>
           <div className="set-body scroll" ref={body}>
             <div key={searching ? "search" : cat} className="set-fade">

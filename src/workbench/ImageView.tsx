@@ -100,7 +100,7 @@ export default function ImageView(p: Props) {
             onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } }}>
             <div className="ie-head">
               <h2>{i18next.t("画像を編集")}<span className="ie-name">{p.name}</span></h2>
-              <button className="icon-btn" aria-label={i18next.t("閉じる")} title={i18next.t("閉じる")} onClick={() => close()}><X /></button>
+              <button className="btn close-btn" onClick={() => close()}>{i18next.t("閉じる")}<kbd>Esc</kbd></button>
             </div>
             <Pane {...p} edit onDirty={setDirty} onSave={async (b, n) => { await p.onSave!(b, n); close(true); }} />
           </div>
@@ -130,6 +130,7 @@ function Pane({ id, url, name, onSave, edit, onEdit, onDirty }: PaneProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const dispRef = useRef<HTMLCanvasElement>(null);
   const anchor = useRef<{ fx: number; fy: number; px: number; py: number } | null>(null);
+  const [grab, setGrab] = useState(false);
   const pan = useRef<{ x: number; y: number; l: number; t: number; moved: boolean } | null>(null);
 
   const cur = st ? st.items[st.i] : null;
@@ -204,12 +205,6 @@ function Pane({ id, url, name, onSave, edit, onEdit, onDirty }: PaneProps) {
     sg.scrollTop = wr.offsetTop + a.fy * wr.offsetHeight - a.py;
   }, [zoom, fit]);
 
-  // 画面に合わせた表示と、拡大表示を行き来する。小さい画像は整数倍まで拡大する
-  const toggle = (cx?: number, cy?: number) => {
-    if (!fit) { setFit(true); return; }
-    zoomTo(fitS < 1 ? 1 : Math.max(2, Math.min(32, Math.floor(ratio))), cx, cy);
-  };
-
   // Ctrl(または ⌘)+ホイールで拡大・縮小
   useEffect(() => {
     const el = stageRef.current;
@@ -227,6 +222,7 @@ function Pane({ id, url, name, onSave, edit, onEdit, onDirty }: PaneProps) {
     if (mode === "crop" || e.button !== 0) return;
     const sg = stageRef.current!;
     pan.current = { x: e.clientX, y: e.clientY, l: sg.scrollLeft, t: sg.scrollTop, moved: false };
+    setGrab(true);
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
   const move = (e: React.PointerEvent) => {
@@ -236,11 +232,7 @@ function Pane({ id, url, name, onSave, edit, onEdit, onDirty }: PaneProps) {
     if (!p.moved && Math.hypot(dx, dy) > 4) p.moved = true;
     if (p.moved) { stageRef.current!.scrollLeft = p.l - dx; stageRef.current!.scrollTop = p.t - dy; }
   };
-  const up = (e: React.PointerEvent) => {
-    const p = pan.current;
-    pan.current = null;
-    if (p && !p.moved) toggle(e.clientX, e.clientY);
-  };
+  const up = () => { pan.current = null; setGrab(false); };
 
   // 履歴
   const commit = (c: HTMLCanvasElement) => {
@@ -419,7 +411,7 @@ function Pane({ id, url, name, onSave, edit, onEdit, onDirty }: PaneProps) {
 
       <div className="iv-stage scroll" ref={stageRef}>
         {cur && (
-          <div className="iv-canvas" ref={wrapRef} data-fit={fit} data-px={s >= 2} data-crop={mode === "crop"} style={{ width: dw, height: dh }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { pan.current = null; }}>
+          <div className="iv-canvas" ref={wrapRef} data-grab={grab} data-pan={dw + PAD * 2 > box.w || dh + PAD * 2 > box.h} data-px={s >= 2} data-crop={mode === "crop"} style={{ width: dw, height: dh }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
             {showImg
               ? <img src={url} alt={name} draggable={false} style={style} />
               : <canvas ref={dispRef} style={style} />}

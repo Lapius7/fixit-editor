@@ -141,6 +141,7 @@ button.sb:active { transform: scale(var(--ps)); }
 .qo-list li .ico { opacity: .75; }
 .qo-path { margin-left: auto; font-size: 12px; opacity: .55; max-width: 55%; direction: rtl; text-align: left; }
 .qo-keys { margin-left: auto; display: flex; gap: 3px; flex: none; }
+.close-btn { display: inline-flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; flex: none; }
 .qo-list li[data-sel="true"] kbd { background: rgba(255,255,255,.22); color: #fff; box-shadow: none; }
 .qo-none { color: var(--ink-3); justify-content: center; }
 

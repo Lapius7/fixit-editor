@@ -16,8 +16,8 @@
 .iv-stage { position: relative; flex: 1; min-height: 0; display: flex; overflow: auto; padding: 24px; overscroll-behavior: contain; }
 .iv-canvas { position: relative; flex: none; margin: auto; border-radius: 4px; background: repeating-conic-gradient(var(--s2) 0% 25%, transparent 0% 50%) 50% / 16px 16px; box-shadow: 0 0 0 1px rgba(0, 0, 0, .1), 0 8px 30px var(--shadow-soft); touch-action: none; }
 :root[data-theme="dark"] .iv-canvas { box-shadow: 0 0 0 1px rgba(255, 255, 255, .1), 0 8px 30px var(--shadow-soft); }
-.iv-canvas[data-fit="true"] { cursor: zoom-in; }
-.iv-canvas[data-fit="false"] { cursor: zoom-out; }
+.iv-canvas[data-pan="true"] { cursor: grab; }
+.iv-canvas[data-pan="true"][data-grab="true"] { cursor: grabbing; }
 .iv-canvas[data-crop="true"] { cursor: default; }
 .iv-canvas > img, .iv-canvas > canvas { display: block; border-radius: 4px; user-select: none; -webkit-user-drag: none; }
 .iv-canvas[data-px="true"] > img, .iv-canvas[data-px="true"] > canvas { image-rendering: pixelated; }

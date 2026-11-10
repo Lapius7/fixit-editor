@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Flame, Keyboard, Timer, Type, X } from "lucide-react";
+import { Flame, Keyboard, Timer, Type } from "lucide-react";
 import { ms, update, useSettings } from "@/features/settings/settings";
 import { clearStats, dur, lastDays, summary, useStats } from "@/features/stats/stats";
 import i18next from 'i18next'
@@ -41,7 +41,7 @@ export default function StatsView({ onClose, out }: { onClose: () => void; out?:
       <div className="qo dlg stats" role="dialog" aria-label={i18next.t("統計")} onMouseDown={(e) => e.stopPropagation()}>
         <header className="st-head">
           <h2><Trans i18nKey="統計" /></h2>
-          <button className="icon-btn" aria-label={i18next.t("閉じる")} onClick={close}><X /></button>
+          <button className="btn close-btn" onClick={close}>{i18next.t("閉じる")}<kbd>Esc</kbd></button>
         </header>
         {!s.statsOn && <p className="st-off"><Trans i18nKey="記録は止めています。「設定 › 統計とプライバシー」でオンにできます。" /></p>}
         <div className="st-tiles">

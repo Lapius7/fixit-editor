@@ -67,7 +67,7 @@ export default function FeedbackView({ onClose, out }: { onClose: () => void; ou
       <div className="qo dlg fb" role="dialog" aria-label={i18next.t("フィードバックを送る")} onMouseDown={(e) => e.stopPropagation()}>
         <header className="st-head">
           <h2><Trans i18nKey="フィードバックを送る" /></h2>
-          <button className="icon-btn" aria-label={i18next.t("閉じる")} onClick={close}><X /></button>
+          <button className="btn close-btn" onClick={close}>{i18next.t("閉じる")}<kbd>Esc</kbd></button>
         </header>
         {user && (
           <div className="seg" role="group" aria-label={i18next.t("表示")}>

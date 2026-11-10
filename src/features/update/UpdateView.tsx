@@ -28,7 +28,7 @@ export default function UpdateView({ m, onClose, out }: { m: Manifest; onClose: 
       <div className="qo dlg fb" role="dialog" aria-label={i18next.t("新しい版があります")} onMouseDown={(e) => e.stopPropagation()}>
         <header className="st-head">
           <h2><Trans i18nKey="新しい版があります" /></h2>
-          <button className="icon-btn" aria-label={i18next.t("閉じる")} onClick={close}><X /></button>
+          <button className="btn close-btn" onClick={close}>{i18next.t("閉じる")}<kbd>Esc</kbd></button>
         </header>
         <p className="up-ver"><span className="tnum">v{__APP_VERSION__}</span> → <b className="tnum">v{m.version}</b></p>
         {m.notes && <pre className="up-notes">{m.notes}</pre>}
