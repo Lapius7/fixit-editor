@@ -164,6 +164,19 @@ pub fn dispatch(op: &str, q: &Q, body: Option<Vec<u8>>) -> Result<Reply, FsError
             fs::rename(&from, &to).map_err(io_err)?;
             Ok(Reply::Json(json!({ "ok": true })))
         }
+        "git" => {
+            // 履歴・書き込み。引数は git.rs が固定名の操作から組み立てる
+            let dir = abs(q, "path")?;
+            let p = crate::git::plan(&body.ok_or_else(|| FsError::new("本文がありません", 400, "EARG"))?)?;
+            let mut c = std::process::Command::new("git");
+            c.args(&p.args).current_dir(&dir).env("GIT_TERMINAL_PROMPT", "0").env("GIT_OPTIONAL_LOCKS", "0").env("GIT_EDITOR", "true").env("GCM_INTERACTIVE", "never");
+            let r = crate::run::run(c, None, std::time::Duration::from_millis(p.ms), 64 * 1024 * 1024)?;
+            let mut out = r.out;
+            if p.merge {
+                out.extend_from_slice(r.err.as_bytes());
+            }
+            Ok(Reply::Json(json!({ "code": r.code, "out": String::from_utf8_lossy(&out) })))
+        }
         "gitstatus" => {
             // 状態は porcelain(-z)の生のまま返す。リポジトリでなければ repo: false
             let dir = abs(q, "path")?;

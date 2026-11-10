@@ -295,7 +295,7 @@ fn runner_for(q: &Q) -> Result<Runner, FsError> {
 }
 
 const READ: [&str; 9] = ["hosts", "home", "list", "read", "stat", "find", "grep", "gitstatus", "githead"];
-const WRITE: [&str; 4] = ["write", "mkdir", "rm", "mv"];
+const WRITE: [&str; 5] = ["write", "mkdir", "rm", "mv", "git"];
 
 // body は write のときだけ使う
 pub fn dispatch(op: &str, q: &Q, body: Option<Vec<u8>>) -> Result<Reply, FsError> {
@@ -366,6 +366,17 @@ pub fn dispatch(op: &str, q: &Q, body: Option<Vec<u8>>) -> Result<Reply, FsError
                 return Err(FsError::new("同じ名前があります", 409, "EEXIST"));
             }
             Ok(Reply::Json(json!({ "ok": true })))
+        }
+        "git" => {
+            // 履歴・書き込み。引数は git.rs が固定名の操作から組み立てる
+            let dir = abs_path(q, "path")?;
+            let p = crate::git::plan(&body.ok_or_else(|| FsError::new("本文がありません", 400, "EARG"))?)?;
+            let argv = p.args.iter().map(|a| sq(a)).collect::<Vec<_>>().join(" ");
+            let redir = if p.merge { "2>&1" } else { "2>/dev/null" };
+            let script = format!("cd -- {} 2>/dev/null || {{ echo 'フォルダを開けません'; exit 128; }}; GIT_TERMINAL_PROMPT=0 GIT_OPTIONAL_LOCKS=0 GIT_EDITOR=true git {argv} {redir}", sq(&dir));
+            let codes: Vec<i32> = (0..=255).collect();
+            let (out, code) = r.sh_code(&script, None, p.ms, BIG, &codes)?;
+            Ok(Reply::Json(json!({ "code": code, "out": String::from_utf8_lossy(&out) })))
         }
         "gitstatus" => {
             // 状態は porcelain(-z)の生のまま返す。リポジトリでなければ repo: false

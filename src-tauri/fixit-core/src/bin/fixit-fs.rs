@@ -30,7 +30,7 @@ fn main() {
         });
         return;
     }
-    let body = if op == "write" {
+    let body = if op == "write" || op == "git" {
         let mut b = vec![];
         let _ = std::io::stdin().read_to_end(&mut b);
         Some(b)

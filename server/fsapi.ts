@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Plugin } from "vite";
+import { gitPlan, gitResult, gitScript } from "./gitops";
 
 // WSL(このPC)と SSH 先のファイルを、ブラウザから読み書きするための開発サーバー用 API。
 // 呼び出せるのは、ループバックから来た localhost 系の同一オリジンのページだけ。
@@ -13,7 +14,7 @@ const LOOPBACK = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 export const SSH_HOST = /^[A-Za-z0-9._@-]+$/;
 
 export type Entry = { name: string; kind: "dir" | "file"; size: number; mtime: number };
-class FsError extends Error {
+export class FsError extends Error {
   constructor(message: string, public status = 500, public code = "EIO") { super(message); }
 }
 
@@ -65,7 +66,7 @@ export interface Backend {
   rm(p: string): Promise<void>;
   mv(from: string, to: string): Promise<void>;
   stat(p: string): Promise<{ kind: "dir" | "file"; size: number; mtime: number } | null>;
-  exec(script: string): Promise<Buffer>;
+  exec(script: string, ms?: number): Promise<Buffer>;
   find(root: string, skip: string[], limit: number): Promise<string[]>;
   grep(root: string, q: string, o: { re: boolean; cs: boolean; word: boolean }, skip: string[], limit: number): Promise<{ path: string; line: number; text: string }[]>;
 }
@@ -113,7 +114,7 @@ class LocalBackend implements Backend {
   async stat(p: string) {
     try { const s = await fs.stat(p); return { kind: s.isDirectory() ? "dir" as const : "file" as const, size: s.size, mtime: s.mtimeMs }; } catch { return null; }
   }
-  async exec(script: string) { return (await run("sh", ["-c", script], undefined, 30000)).out; }
+  async exec(script: string, ms = 30000) { return (await run("sh", ["-c", script], undefined, ms)).out; }
   async find(root: string, skip: string[], limit: number) {
     const r = await run("sh", ["-c", findScript(root, skip, limit)], undefined, 30000);
     return parseFind(root, r.out);
@@ -174,7 +175,7 @@ class SshBackend implements Backend {
     if (r === "n") return null;
     return { kind: r === "d" ? "dir" as const : "file" as const, size: 0, mtime: 0 };
   }
-  async exec(script: string) { return this.sh(script, undefined, 30000); }
+  async exec(script: string, ms = 30000) { return this.sh(script, undefined, ms); }
   async find(root: string, skip: string[], limit: number) {
     return parseFind(root, await this.sh(findScript(root, skip, limit), undefined, 60000, 64 * 1024 * 1024));
   }
@@ -245,7 +246,7 @@ function backendFor(q: URLSearchParams): Backend {
 const gitStatusScript = (dir: string) => `cd -- ${sq(dir)} 2>/dev/null || { printf NOREPO; exit 0; }; top=$(git rev-parse --show-toplevel 2>/dev/null) || { printf NOREPO; exit 0; }; br=$(git symbolic-ref --short -q HEAD || git rev-parse --short HEAD 2>/dev/null); printf '%s\\0%s\\0' "$top" "$br"; git -c core.quotepath=off status --porcelain=v1 -z -uall 2>/dev/null`;
 const gitHeadScript = (file: string) => { const dir = path.posix.dirname(file), name = path.posix.basename(file); return `cd -- ${sq(dir)} 2>/dev/null && s=$(git cat-file -s ${sq("HEAD:./" + name)} 2>/dev/null) && [ "$s" -lt 2000000 ] && { printf Y; git show ${sq("HEAD:./" + name)}; } || printf N`; };
 const READ = new Set(["hosts", "home", "list", "read", "stat", "find", "grep", "gitstatus", "githead"]);
-const WRITE = new Set(["write", "mkdir", "rm", "mv"]);
+const WRITE = new Set(["write", "mkdir", "rm", "mv", "git"]);
 
 export function fsApi(): Plugin {
   return {
@@ -267,6 +268,10 @@ export function fsApi(): Plugin {
           switch (op) {
             case "gitstatus": { const o = (await be.exec(gitStatusScript(absPath(q.get("path"))))).toString("utf8"); return json(res, 200, o === "NOREPO" ? { repo: false } : { repo: true, raw: o }); }
             case "githead": { const o = await be.exec(gitHeadScript(absPath(q.get("path")))); return json(res, 200, { text: o[0] === 0x59 ? o.subarray(1).toString("utf8") : null }); }
+            case "git": {
+              const plan = gitPlan(await body(req, 1024 * 1024));
+              return json(res, 200, gitResult(await be.exec(gitScript(absPath(q.get("path")), plan, sq), plan.ms)));
+            }
             case "home": return json(res, 200, { path: await be.home() });
             case "list": return json(res, 200, { entries: await be.list(absPath(q.get("path"))) });
             case "stat": return json(res, 200, { stat: await be.stat(absPath(q.get("path"))) });
