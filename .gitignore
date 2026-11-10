@@ -1,2 +1,4 @@
 node_modules
 dist
+dist-win
+src-tauri/launcher/target

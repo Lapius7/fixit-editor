@@ -1,0 +1,68 @@
+:root {
+  --font-sans: "Inter Variable", "Noto Sans JP Variable", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "Noto Sans JP Variable", ui-monospace, monospace;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --accent: #3b6fd9;
+  --fs: 13.5px;
+  --r-sm: 6px; --r-md: 9px; --r-lg: 14px;   /* 役割ごとの角丸。--rk(設定)を掛けて使う */
+  --sp: 1; --ps: .96; --ab: 6px; --sk: 1; --term-a: 1; --term-pad: 12px; --row-h: 28px; --tab-h: 32px; --tab-w: 220px; --pane-gap: 8px; --sb-h: 28px;
+  color-scheme: light;
+
+  --ink: #1f2430; --ink-2: #5d6676; --ink-3: #8b93a1;
+  --glass: rgba(236, 243, 253, 0.6);
+  --hair: rgba(20, 30, 60, 0.09);
+  --edge: rgba(20, 30, 60, 0.12);
+  --shadow: rgba(20, 30, 60, 0.35);
+  --shadow-soft: rgba(20, 30, 60, 0.18);
+  --hl: rgba(255, 255, 255, 0.6);          /* 縁に入れるハイライト */
+  --s1: rgba(255, 255, 255, 0.78);         /* 選択中の面 */
+  --s2: rgba(255, 255, 255, 0.45);         /* ホバー */
+  --s3: rgba(255, 255, 255, 0.92);         /* ボタンの面 */
+  --press: rgba(20, 30, 60, 0.08);
+  --pop: rgba(250, 252, 255, 0.72);
+  --veil: rgba(20, 30, 60, 0.18);
+  --paper: linear-gradient(160deg, rgba(240, 246, 255, calc(0.78 * var(--paper-k, 1))) 0%, rgba(247, 245, 244, calc(0.72 * var(--paper-k, 1))) 55%, rgba(252, 244, 236, calc(0.7 * var(--paper-k, 1))) 100%);
+  --term-bg: rgba(252, 252, 254, 0.8); --term-ink: #26292e;
+  --bar: rgba(255, 255, 255, 0.35);
+
+  --editor-ink: #26292e; --gutter: #a0a7b2; --gutter-active: #4a5160;
+  --active-line: rgba(59, 111, 217, 0.07); --sel: rgba(59, 111, 217, 0.22);
+  --match: rgba(255, 200, 60, 0.4); --match-now: rgba(255, 150, 40, 0.5);
+  --indent: rgba(30, 40, 70, 0.1); --indent-on: rgba(59, 111, 217, 0.45);
+  --c-kw: #9b2393; --c-type: #8a5a00; --c-fn: #3b6fd9; --c-str: #c41a16; --c-num: #1c00cf; --c-com: #6c7986; --c-prop: #326d74; --c-meta: #643820;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #e8ebf2; --ink-2: #a3acbc; --ink-3: #6f7889;
+  --glass: rgba(30, 33, 43, 0.62);
+  --hair: rgba(255, 255, 255, 0.09);
+  --edge: rgba(255, 255, 255, 0.12);
+  --shadow: rgba(0, 0, 0, 0.6);
+  --shadow-soft: rgba(0, 0, 0, 0.45);
+  --hl: rgba(255, 255, 255, 0.1);
+  --s1: rgba(255, 255, 255, 0.13);
+  --s2: rgba(255, 255, 255, 0.07);
+  --s3: rgba(255, 255, 255, 0.18);
+  --press: rgba(255, 255, 255, 0.1);
+  --pop: rgba(36, 39, 51, 0.74);
+  --veil: rgba(0, 0, 0, 0.4);
+  --paper: linear-gradient(160deg, rgba(26, 29, 38, calc(0.76 * var(--paper-k, 1))) 0%, rgba(22, 24, 32, calc(0.7 * var(--paper-k, 1))) 100%);
+  --term-bg: rgba(16, 18, 25, 0.78); --term-ink: #e6e9f0;
+  --bar: rgba(0, 0, 0, 0.22);
+
+  --editor-ink: #dfe3ec; --gutter: #5f6778; --gutter-active: #b4bccb;
+  --active-line: rgba(255, 255, 255, 0.045); --sel: rgba(90, 140, 255, 0.3);
+  --match: rgba(255, 200, 60, 0.28); --match-now: rgba(255, 150, 40, 0.42);
+  --indent: rgba(255, 255, 255, 0.08); --indent-on: rgba(120, 160, 255, 0.55);
+  --c-kw: #fc5fa3; --c-type: #5dd8ff; --c-fn: #67b7a4; --c-str: #fc6a5d; --c-num: #d0bf69; --c-com: #7f8c98; --c-prop: #a8d5ff; --c-meta: #fd8f3f;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { font-family: var(--font-sans); color: var(--ink); font-size: 13px; line-height: 20px; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; overflow: hidden; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+input { font: inherit; color: inherit; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-0 { margin: 0; } .p-0 { padding: 0; } .list-none { list-style: none; }
+.scroll { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--press) transparent; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

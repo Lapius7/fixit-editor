@@ -1,0 +1,79 @@
+/* ---- アプリ版の窓(OS の枠なし) ---- */
+.wc { flex: none; display: flex; align-items: center; gap: 8px; margin-right: 14px; }
+.wc-b { position: relative; width: 12px; height: 12px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: transparent; box-shadow: 0 0 0 .5px rgba(0, 0, 0, .18) inset; transition: filter calc(.12s * var(--sp)) var(--ease), transform calc(.12s * var(--sp)) var(--ease); }
+.wc-b::after { content: ""; position: absolute; inset: -4px; }
+.wc-b[data-k="close"] { background: #ff5f57; }
+.wc-b[data-k="min"] { background: #febc2e; }
+.wc-b[data-k="max"] { background: #28c840; }
+.wc-b svg { width: 8px; height: 8px; stroke-width: 3.2; flex: none; }
+.wc:hover .wc-b { color: rgba(0, 0, 0, .55); }
+.wc-b:active { filter: brightness(.88); transform: scale(var(--ps)); }
+:root[data-theme="dark"] .wc-b { box-shadow: 0 0 0 .5px rgba(255, 255, 255, .12) inset; }
+
+html.chrome .stage { padding: 0; }
+html.chrome .window { border-radius: 0; box-shadow: none; }
+html.chrome .side-head { padding: 0 8px 0 18px; }
+html.chrome .tabbar .wc { margin: 0 10px 0 12px; }
+html.chrome .paper { background: color-mix(in srgb, var(--paper-solid, #fbfaf9) calc(94% * var(--paper-k, 1)), transparent); }
+:root[data-theme="dark"].chrome .paper { --paper-solid: #181b23; }
+
+html.chrome .tabbar > .wc { align-self: center; }
+
+/* ---- 起動画面 ---- */
+html[data-boot="wait"] .window { animation-play-state: paused; }
+.splash { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; background: #f4f3f1; overscroll-behavior: contain;
+  transition: opacity .55s var(--out), filter .55s var(--out), transform .7s var(--out); }
+.splash[data-dark="true"] { background: #0e1016; }
+.splash[data-out="true"] { opacity: 0; filter: blur(8px); transform: scale(1.04); pointer-events: none; }
+.splash-in { display: grid; justify-items: center; gap: 18px; animation: splash-in .6s var(--out) both; }
+.splash-in canvas { display: block; }
+.splash-sub { font-size: 12px; line-height: 16px; letter-spacing: .32em; text-indent: .32em; color: var(--ink-3, #8a8f9a); opacity: 0; animation: splash-sub .8s .9s var(--out) forwards; }
+@keyframes splash-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+@keyframes splash-sub { from { opacity: 0; transform: translateY(6px); } to { opacity: .8; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .splash, .splash-in, .splash-sub { animation-duration: .01s !important; transition-duration: .01s !important; } }
+
+/* ---- 入力欄は枠に色をつけない ---- */
+.field:focus, .sp-box:focus-within { box-shadow: 0 0 0 1px var(--hair) inset; animation: none; }
+input:focus-visible, textarea:focus-visible, select:focus-visible, .field:focus-visible { outline: none; }
+.field:focus, .sp-box:focus-within { background: var(--s1); }
+
+/* ---- アプリなので、文字は基本選択できない(入力欄・エディタ・ターミナル・ビューアは除く) ---- */
+body { -webkit-user-select: none; user-select: none; cursor: default; }
+input, textarea, [contenteditable="true"], .cm-content, .cm-line, .xterm, .xterm *, .viewer, .viewer *, .selectable, .selectable * { -webkit-user-select: text; user-select: text; }
+/* テキストの編集・選択ができる場所は、文字用のカーソル(I ビーム)にする */
+.cm-content, .cm-content *, .cm-scroller, .viewer, .viewer *, .selectable, .selectable * { cursor: text; }
+.cm-gutters, .cm-gutters *, .cm-foldPlaceholder { cursor: default; }
+img, svg { -webkit-user-drag: none; user-drag: none; }
+
+/* ---- 分割: 水がにじんで広がるような、ガラスの動き ----
+   開くときはバネ(ほんの少し行き過ぎて落ち着く)で広がり、新しい画面はぼかしの中から像を結ぶ。縁にはガラスの光が走る。
+   閉じるときは、すっと溶けて元の画面が広がる */
+:root {
+  --split-spring: linear(0, .062, .202, .367, .526, .665, .777, .862, .923, .964, .99, 1.005, 1.013, 1.015, 1.015, 1.013, 1.011, 1.008, 1.006, 1.004, 1.003, 1.002, 1.001, 1, 1, 1, 1, 1, 1);
+  --split-open: cubic-bezier(.5, 0, .1, 1);
+  --split-melt: cubic-bezier(.32, .72, 0, 1);
+  --split-t: .9s;
+}
+.panes[data-split="true"] { transition: grid-template-columns calc(var(--split-t) * var(--sp)) var(--split-spring), gap calc(var(--split-t) * var(--sp)) var(--split-spring); }
+html[data-splitdir="row"] .panes[data-split="true"] { transition: grid-template-rows calc(var(--split-t) * var(--sp)) var(--split-spring), gap calc(var(--split-t) * var(--sp)) var(--split-spring); }
+.panes > .paper:nth-child(2) { opacity: 0; transform: translateX(32px) scale(.94); filter: blur(calc(var(--ab) * 2)); transform-origin: 0 50%;
+  transition: opacity calc(.38s * var(--sp)) var(--split-melt), transform calc(.6s * var(--sp)) var(--split-melt), filter calc(.5s * var(--sp)) var(--split-melt); }
+html[data-splitdir="row"] .panes > .paper:nth-child(2) { transform: translateY(32px) scale(.94); transform-origin: 50% 0; }
+.panes[data-split="true"] > .paper:nth-child(2) { opacity: 1; transform: none; filter: none;
+  transition: opacity calc(.55s * var(--sp)) var(--split-melt) calc(.05s * var(--sp)), transform calc(var(--split-t) * var(--sp)) var(--split-spring), filter calc(.7s * var(--sp)) var(--split-melt); }
+.panes[data-dragging="true"] { transition: none !important; }
+/* 新しい画面の縁を、光がひと撫でする(水面に光が走る感じ) */
+.panes > .paper:nth-child(2)::before { content: ""; position: absolute; inset: 0; z-index: 5; border-radius: inherit; pointer-events: none; opacity: 0;
+  background: linear-gradient(105deg, transparent 30%, color-mix(in srgb, #fff 34%, transparent) 46%, color-mix(in srgb, var(--accent) 16%, transparent) 54%, transparent 70%) no-repeat -120% 0 / 220% 100%;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #fff 55%, transparent) inset, 0 0 36px color-mix(in srgb, var(--accent) 26%, transparent) inset; }
+.panes[data-split="true"] > .paper:nth-child(2)::before { animation: split-sheen calc(1.1s * var(--sp)) var(--split-melt) calc(.08s * var(--sp)) both; }
+@keyframes split-sheen { 0% { opacity: 1; background-position: -120% 0; } 55% { opacity: 1; } 100% { opacity: 0; background-position: 120% 0; } }
+@media (prefers-reduced-motion: reduce) { .panes > .paper:nth-child(2)::before { animation: none !important; } }
+
+/* ---- ファイルツリーのドラッグ移動 ---- */
+.tree-row[data-drop="true"] { background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent) inset; }
+.tree[data-drop="true"] { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent) inset; border-radius: 10px; }
+.tree-row[draggable="true"]:active { cursor: grabbing; }
+
+/* ---- 一時表示のタブ(斜体。編集・保存・ダブルクリックで固定される) ---- */
+.tab[data-preview="true"] .tab-name { font-style: italic; }
