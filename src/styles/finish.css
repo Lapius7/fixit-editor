@@ -46,6 +46,12 @@
 .tree-row { transition: background-color calc(.2s * var(--sp)) var(--out), box-shadow calc(.25s * var(--sp)) var(--out), transform calc(.15s * var(--sp)) var(--out); }
 .tree-row:active { transform: scale(.985); }
 .tree > ul > li > .tree-row { animation: row-in calc(.5s * var(--sp)) var(--out) both; animation-delay: calc((calc(var(--i, 0) * 32ms + 150ms)) * var(--sp)); }
+/* スクロールするたびに、画面の端から入ってくる行をぼかしながら現れさせる(上へ戻るときも同じ) */
+@keyframes row-scroll { from { opacity: 0; transform: translateX(-8px); filter: blur(calc(var(--ab) * 0.50)); } }
+@supports (animation-timeline: view()) {
+  .tree .tree-row { animation: row-scroll linear backwards; animation-timeline: view(); animation-range: entry 0% entry 100%; }
+  .tree > ul > li > .tree-row { animation: row-in calc(.5s * var(--sp)) var(--out) calc((calc(var(--i, 0) * 32ms + 150ms)) * var(--sp)) both, row-scroll linear backwards; animation-timeline: auto, view(); animation-range: normal, entry 0% entry 100%; }
+}
 .collapse { transition: grid-template-rows calc(.32s * var(--sp)) var(--out), opacity calc(.26s * var(--sp)) var(--out); }
 .collapse li { transition: transform calc(.32s * var(--sp)) var(--out); transform: translateY(-4px); }
 .collapse[data-open="true"] li { transform: none; }

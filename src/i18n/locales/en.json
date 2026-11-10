@@ -1029,5 +1029,9 @@
   "自由": "Free",
   "色の調整": "Adjust colors",
   "色を反転": "Invert",
-  "適用": "Apply"
+  "適用": "Apply",
+  "画像を編集": "Edit image",
+  "編集した内容を破棄しますか?": "Discard your edits?",
+  "拡大率(数字を入力)": "Zoom level (type a number)",
+  "クリックして拡大率を入力": "Click to type a zoom level"
 }

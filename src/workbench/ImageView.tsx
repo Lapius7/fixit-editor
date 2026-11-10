@@ -1,7 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Check, Crop, FileX2, FlipHorizontal2, FlipVertical2, Link2, Maximize, Redo2, RotateCcw, RotateCw, Save, Scaling, SlidersHorizontal, Undo2, X, ZoomIn, ZoomOut } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Check, Crop, FileX2, Pencil, FlipHorizontal2, FlipVertical2, Link2, Maximize, Redo2, RotateCcw, RotateCw, Save, Scaling, SlidersHorizontal, Undo2, X, ZoomIn, ZoomOut } from "lucide-react";
 import i18next from "i18next";
 import { notify } from "@/shared/notify";
+import { ms } from "@/features/settings/settings";
 
 // 画像ビューア。拡大・縮小・ドラッグ移動と、切り抜き・回転・反転・サイズ変更・色の調整
 export const IMAGE_SAVE = "fixit:image-save";
@@ -75,8 +77,42 @@ const roundBox = (b: Box, W: number, H: number): Box => {
   return { x: cl(Math.round(b.x), 0, W - w), y: cl(Math.round(b.y), 0, H - h), w, h };
 };
 
-export default function ImageView({ id, url, name, onSave }: { id: string; url: string; name: string; onSave?: (blob: Blob, outName: string) => Promise<void> }) {
-  const editable = !!onSave && EDITABLE.test(name);
+type Props = { id: string; url: string; name: string; onSave?: (blob: Blob, outName: string) => Promise<void> };
+type PaneProps = Props & { edit: boolean; onEdit?: () => void; onDirty?: (d: boolean) => void };
+
+// 開いただけのときは見るだけ。編集は「編集」ボタンのモーダルで行う(外側をクリックしても閉じない)
+export default function ImageView(p: Props) {
+  const [open, setOpen] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const can = !!p.onSave && EDITABLE.test(p.name);
+  const close = (force?: boolean) => {
+    if (!force && dirty && !confirm(i18next.t("編集した内容を破棄しますか?"))) return;
+    setClosing(true);
+    setTimeout(() => { setOpen(false); setClosing(false); setDirty(false); }, ms(180));
+  };
+  return (
+    <>
+      <Pane {...p} edit={false} onEdit={can ? () => setOpen(true) : undefined} />
+      {open && createPortal(
+        <div className="qo-backdrop" data-mid data-closing={closing}>
+          <div className="qo dlg ie" role="dialog" aria-modal="true" aria-label={i18next.t("画像を編集")}
+            onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } }}>
+            <div className="ie-head">
+              <h2>{i18next.t("画像を編集")}<span className="ie-name">{p.name}</span></h2>
+              <button className="icon-btn" aria-label={i18next.t("閉じる")} title={i18next.t("閉じる")} onClick={() => close()}><X /></button>
+            </div>
+            <Pane {...p} edit onDirty={setDirty} onSave={async (b, n) => { await p.onSave!(b, n); close(true); }} />
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
+function Pane({ id, url, name, onSave, edit, onEdit, onDirty }: PaneProps) {
+  const editable = edit && !!onSave && EDITABLE.test(name);
   const [st, setSt] = useState<{ items: HTMLCanvasElement[]; i: number } | null>(null);
   const [bad, setBad] = useState(false);
   const orig = useRef<HTMLCanvasElement | null>(null);
@@ -101,6 +137,11 @@ export default function ImageView({ id, url, name, onSave }: { id: string; url: 
   const dirty = !!cur && cur !== saved.current;
   const showImg = !cur || cur === orig.current; // 手を加えるまでは元の画像をそのまま出す(GIF の動きと SVG の鮮明さを保つ)
   const out = outFor(name);
+  useEffect(() => { onDirty?.(dirty); }, [dirty]); // eslint-disable-line react-hooks/exhaustive-deps
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (edit) root.current?.focus(); }, [edit]);
+  const [zin, setZin] = useState<string | null>(null);
+  const fresh = useRef(false); // 入力欄を押した直後は、全選択を保つ
 
   // 読み込み(保存して URL が変わったときも、ここでやり直す)
   useEffect(() => {
@@ -297,10 +338,11 @@ export default function ImageView({ id, url, name, onSave }: { id: string; url: 
   saveRef.current = save;
   // Ctrl+S(アプリ全体の保存)から呼ばれる
   useEffect(() => {
+    if (!edit) return;
     const on = (e: Event) => { if ((e as CustomEvent<string>).detail === id) void saveRef.current(); };
     addEventListener(IMAGE_SAVE, on);
     return () => removeEventListener(IMAGE_SAVE, on);
-  }, [id]);
+  }, [id, edit]);
 
   const key = (e: React.KeyboardEvent) => {
     const t = e.target as HTMLElement, mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
@@ -336,15 +378,26 @@ export default function ImageView({ id, url, name, onSave }: { id: string; url: 
   );
 
   return (
-    <div className="iv" tabIndex={-1} onKeyDown={key}>
+    <div className="iv" tabIndex={-1} ref={root} data-edit={edit} onKeyDown={key}>
       <div className="iv-bar">
         <div className="iv-grp">
           {act(i18next.t("縮小"), ZoomOut, () => zoomTo(s / 1.25))}
-          <button className="iv-zoom" title={i18next.t("クリックで拡大・縮小")} disabled={!cur} onClick={() => toggle()}>{Math.round(s * 100)}%</button>
+          <input className="iv-zoom" inputMode="numeric" aria-label={i18next.t("拡大率(数字を入力)")} title={i18next.t("クリックして拡大率を入力")} disabled={!cur}
+            value={zin ?? `${Math.round(s * 100)}%`}
+            onFocus={(e) => { const el = e.currentTarget; setZin(String(Math.round(s * 100))); fresh.current = true; requestAnimationFrame(() => el.select()); }}
+            onMouseUp={(e) => { if (fresh.current) e.preventDefault(); fresh.current = false; }}
+            onChange={(e) => setZin(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
+            onBlur={() => { const n = Number(zin); if (zin && n > 0) zoomTo(n / 100); setZin(null); }}
+            onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); else if (e.key === "Escape") { e.stopPropagation(); setZin(""); e.currentTarget.blur(); } }} />
           {act(i18next.t("拡大"), ZoomIn, () => zoomTo(s * 1.25))}
           {act(i18next.t("画面に合わせる"), Maximize, () => setFit(true), fit)}
         </div>
         <span className="iv-info">{cur ? `${W} × ${H} px` : ""}{dirty ? ` · ${i18next.t("編集済み")}` : ""}</span>
+        {!edit && onEdit && (
+          <div className="iv-grp iv-tools">
+            <button className="btn" onClick={onEdit} disabled={!cur}><Pencil />{i18next.t("編集")}</button>
+          </div>
+        )}
         {editable && (
           <div className="iv-grp iv-tools">
             {tool("crop", i18next.t("切り抜き"), Crop)}

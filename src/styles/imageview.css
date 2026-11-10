@@ -4,8 +4,9 @@
 .iv-grp { display: flex; align-items: center; gap: 2px; }
 .iv-tools { margin-left: auto; }
 .iv-sep { width: 1px; height: 16px; background: var(--hair); margin: 0 6px; flex: none; }
-.iv-zoom { min-width: 56px; height: 28px; padding: 0 8px; border-radius: 8px; font: 500 12px/20px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; transition: background-color calc(.12s * var(--sp)) var(--ease), color calc(.12s * var(--sp)) var(--ease); }
-.iv-zoom:hover { background: var(--s2); color: var(--ink); }
+.iv-zoom { width: 64px; height: 28px; padding: 0 8px; text-align: center; background: transparent; border: 0; outline: 0; border-radius: 8px; font: 500 12px/20px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; transition: background-color calc(.12s * var(--sp)) var(--ease), color calc(.12s * var(--sp)) var(--ease); }
+.iv-zoom:hover, .iv-zoom:focus { background: var(--s2); color: var(--ink); }
+.iv-zoom:focus { box-shadow: 0 0 0 1px var(--accent) inset; }
 .iv-info { font-size: 12px; line-height: 20px; color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .iv .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; }
 .iv .btn svg { width: 14px; height: 14px; stroke-width: 1.8; flex: none; }
@@ -48,3 +49,11 @@
 .iv-rng span { width: 72px; }
 .iv-rng input[type="range"] { width: 120px; accent-color: var(--accent); }
 .iv-rng em { width: 44px; text-align: right; font: normal 12px/20px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--ink-2); }
+
+/* 編集モーダル(外側をクリックしても閉じない) */
+.dlg.ie { width: min(1080px, calc(100vw - 48px)); height: min(780px, calc(100vh - 48px)); padding: 0; display: flex; flex-direction: column; }
+.dlg.ie .iv { flex: 1; min-height: 0; }
+.ie-head { flex: none; display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 20px; box-shadow: 0 1px 0 var(--hair); }
+.ie-head h2 { margin: 0; display: flex; align-items: baseline; gap: 10px; min-width: 0; flex: 1; }
+.ie-name { font: 400 12px/20px var(--font-sans); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dlg.ie .iv-bar { box-shadow: 0 1px 0 var(--hair); }
