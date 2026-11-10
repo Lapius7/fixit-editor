@@ -7,6 +7,7 @@ import type { EditorView } from "@codemirror/view";
 import WinControls from "@/app/WinControls";
 import { CHROME } from "@/shared/chrome";
 import { notify, type NoticeKind } from "@/shared/notify";
+import { OUTLINE_EVENT } from "@/editor/Crumbs";
 import Editor, { dropStates, type Cursor, type Jump } from "@/editor/Editor";
 import FileTree, { canDrop } from "@/workbench/FileTree";
 import QuickOpen from "@/workbench/QuickOpen";
@@ -804,6 +805,7 @@ export default function App() {
         flash(i18next.t("画像を作っています…"));
         codeToPng(v, n.split("/").pop() || "code").then((b) => shareShot(b, n.split("/").pop() || "code")).then((r) => flash(r === "copied" ? i18next.t("画像をクリップボードにコピーしました") : i18next.t("画像を保存しました"))).catch(() => flash(i18next.t("画像を作れませんでした")));
       },
+      goSymbol: () => { dispatchEvent(new Event(OUTLINE_EVENT)); },
       searchAll: () => {
         const v = ev(), s = v ? v.state.sliceDoc(v.state.selection.main.from, v.state.selection.main.to) : "";
         setSeed(s && !s.includes("\n") ? s : ""); setSide(true); setPanel("search");
@@ -926,6 +928,7 @@ export default function App() {
         { label: i18next.t("検索 / 置換"), icon: ic(SearchIcon), keys: K("find"), run: r("find") },
         { label: word ? i18next.t("「{{arg0}}」を全体から探す", { arg0: word.length > 14 ? word.slice(0, 14) + "…" : word }) : i18next.t("全文検索"), icon: ic(SearchIcon), keys: K("searchAll"), run: () => { setSeed(word && !word.includes("\n") ? word : ""); setSide(true); setPanel("search"); } },
         { label: i18next.t("行へ移動"), keys: K("gotoLine"), run: r("gotoLine") },
+        { label: i18next.t("シンボルへ移動(アウトライン)"), keys: K("goSymbol"), run: () => run("goSymbol") },
         { type: "sep" },
         ...(split ? [
         { label: i18next.t("もう一方の画面へ送る"), icon: ic(ArrowLeftRight), keys: K("moveTab"), run: () => tab && sendTo(tab.node, fp === 0 ? 1 : 0, true), disabled: !tab },
@@ -1156,7 +1159,7 @@ export default function App() {
         ) : t.view.kind === "text" ? (
           <div className="ed-pv" data-pv={previewKind(t.node.name) ? pv[t.node.path] ?? "text" : "text"}>
           <Editor
-            key={`${i}:${t.node.path}`} docKey={`${i}:${t.node.path}`} name={t.node.name} value={t.text} jump={jump[i]}
+            key={`${i}:${t.node.path}`} docKey={`${i}:${t.node.path}`} path={displayPath(t.node.path)} name={t.node.name} value={t.text} jump={jump[i]}
             onChange={(v) => { setTabs((p) => p.map((x) => (x.node.path === t.node.path && x.text !== v ? { ...x, text: v } : x))); setPreview((q) => (q === t.node.path ? null : q)); }}
             onCursor={(c) => setCur((p) => (i === 0 ? [c, p[1]] : [p[0], c]))}
             onFocus={() => setFp(i)} onReady={(v) => { views.current[i] = v; }} onContext={editorMenu}

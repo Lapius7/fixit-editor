@@ -28,6 +28,7 @@
     "@fontsource-variable/inter": "*",
     "@fontsource-variable/jetbrains-mono": "*",
     "@fontsource-variable/noto-sans-jp": "*",
+    "@lezer/common": "^1.5.5",
     "@lezer/highlight": "^1",
     "@replit/codemirror-indentation-markers": "^6.5.3",
     "@replit/codemirror-minimap": "^0.5.2",

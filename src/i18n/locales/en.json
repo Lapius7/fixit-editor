@@ -802,5 +802,9 @@
   "エラーに波線を引く": "Underline errors with a wavy line",
   "ミニマップ(右端に全体の縮図)": "Minimap (overview on the right edge)",
   "パンくず(いまの位置の階層)": "Breadcrumbs (where the cursor is)",
-  "全体表示": "Overview"
+  "全体表示": "Overview",
+  "パンくず": "Breadcrumbs",
+  "アウトライン": "Outline",
+  "名前で絞り込む": "Filter by name",
+  "シンボルへ移動(アウトライン)": "Go to symbol (outline)"
 }
