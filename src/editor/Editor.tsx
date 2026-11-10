@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import Crumbs, { lastFocus } from "@/editor/Crumbs";
 import { EditorState, Compartment } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
@@ -16,7 +17,7 @@ import { MANAGED } from "@/editor/edit-cmds";
 
 export type Cursor = { l: number; c: number; sel: number; lines: number };
 export type Jump = { line: number; from: number; to: number; n: number };
-type Props = {
+type Props = { path?: string;
   docKey: string; name: string; value: string;
   onChange: (v: string) => void; onCursor: (c: Cursor) => void; onFocus: () => void; onReady: (v: EditorView | null) => void;
   onContext: (e: MouseEvent, v: EditorView) => void; jump?: Jump;
@@ -33,11 +34,13 @@ const EMMET_SYNTAX: Record<string, EmmetSyntax> = { html: "html", htm: "html", x
 const emmetSyntax = (name: string): EmmetSyntax | null => EMMET_SYNTAX[name.split(".").pop()?.toLowerCase() ?? ""] ?? null;
 const keys = [indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap].filter((b) => !MANAGED.has(b.run));
 
-export default function Editor({ docKey, name, value, onChange, onCursor, onFocus, onReady, onContext, jump }: Props) {
+export default function Editor({ path, docKey, name, value, onChange, onCursor, onFocus, onReady, onContext, jump }: Props) {
   const st = useSettings();
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const emitted = useRef(value);
+  const [ver, setVer] = useState(0), [vw, setVw] = useState<EditorView | null>(null);
+  const verT = useRef<ReturnType<typeof setTimeout>>(undefined);
   const cb = useRef({ onChange, onCursor, onFocus, onReady, onContext });
   cb.current = { onChange, onCursor, onFocus, onReady, onContext };
 
@@ -49,7 +52,7 @@ export default function Editor({ docKey, name, value, onChange, onCursor, onFocu
         history(), fileName.of(name), DYN.of(dynamic(st)), LANG.of([]), EMMET.of([]), fixitTheme, fixitSearch, power,
         keymap.of(keys),
         EditorView.domEventHandlers({
-          focus: () => { cb.current.onFocus(); },
+          focus: (_e, v) => { lastFocus.v = v; cb.current.onFocus(); },
           // 最終行より下の空き地をクリックしたら、最後の行の末尾にカーソルを置く
           mousedown: (e, v) => {
             if (e.button !== 0 || (e.target as HTMLElement).closest(".cm-content, .cm-gutters, .cm-panels, .cm-tooltip")) return false;
@@ -73,6 +76,7 @@ export default function Editor({ docKey, name, value, onChange, onCursor, onFocu
             }
             noteEdit(typed, del, langName(name));
           }
+          if (u.selectionSet || u.docChanged) { clearTimeout(verT.current); verT.current = setTimeout(() => setVer((n) => n + 1), 160); }
           if (u.selectionSet || u.docChanged || u.startState === u.state) {
             const m = u.state.selection.main, l = u.state.doc.lineAt(m.head);
             cb.current.onCursor({ l: l.number, c: m.head - l.from + 1, sel: u.state.selection.ranges.reduce((a, r) => a + r.to - r.from, 0), lines: u.state.doc.lines });
@@ -82,12 +86,12 @@ export default function Editor({ docKey, name, value, onChange, onCursor, onFocu
     });
     emitted.current = value;
     const v = new EditorView({ parent: host.current!, state });
-    view.current = v;
+    view.current = v; setVw(v);
     cb.current.onReady(v);
     // 切り替え直後のカーソル情報を状態バーへ
     const m = v.state.selection.main, l = v.state.doc.lineAt(m.head);
     cb.current.onCursor({ l: l.number, c: m.head - l.from + 1, sel: 0, lines: v.state.doc.lines });
-    return () => { cache.set(docKey, v.state); cb.current.onReady(null); v.destroy(); };
+    return () => { clearTimeout(verT.current); setVw(null); cache.set(docKey, v.state); cb.current.onReady(null); v.destroy(); };
   }, [docKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 設定の反映(開いた直後にも一度流す)
@@ -126,5 +130,10 @@ export default function Editor({ docKey, name, value, onChange, onCursor, onFocu
     v.focus();
   }, [jump?.n]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <div ref={host} className="h-full" />;
+  return (
+    <div className="ed-host">
+      {st.breadcrumbs && path && <Crumbs view={vw} path={path} ver={ver} />}
+      <div ref={host} className="ed-cm" />
+    </div>
+  );
 }
