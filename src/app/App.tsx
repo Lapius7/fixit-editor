@@ -8,6 +8,8 @@ import WinControls from "@/app/WinControls";
 import { CHROME } from "@/shared/chrome";
 import { notify, type NoticeKind } from "@/shared/notify";
 import { OUTLINE_EVENT } from "@/editor/Crumbs";
+import LangUI from "@/editor/LangUI";
+import { openFiles, isScript, type Edit, type Loc } from "@/editor/ts/client";
 import Editor, { dropStates, type Cursor, type Jump } from "@/editor/Editor";
 import FileTree, { canDrop } from "@/workbench/FileTree";
 import QuickOpen from "@/workbench/QuickOpen";
@@ -206,6 +208,31 @@ export default function App() {
     setJump((j) => (fp === 0 ? [{ line, from, to, n: Date.now() }, j[1]] : [j[0], { line, from, to, n: Date.now() }]));
   };
 
+  // JS/TS の言語機能: 言語サービスには、開いているタブの中身を渡す
+  useEffect(() => { openFiles.v = Object.fromEntries(tabs.filter((t) => isText(t) && isScript(t.node.name)).map((t) => [t.node.path, t.text])); }, [tabs]);
+  const gotoLoc = (l: Loc) => {
+    const t = tabOf(l.file);
+    if (!t) return;
+    const start = l.line > 1 ? t.text.split("\n").slice(0, l.line - 1).join("\n").length + 1 : 0;
+    void goto(t.node, l.line, l.from - start, l.to - start);
+  };
+  const applyRename = (edits: Edit[], name: string, view: EditorView, file: string) => {
+    const by = new Map<string, Edit[]>();
+    for (const e of edits) by.set(e.file, [...(by.get(e.file) ?? []), e]);
+    const sort = (a: Edit[]) => [...a].sort((x, y) => y.from - x.from);
+    let n = 0;
+    for (const [f, list] of by) {
+      n += list.length;
+      if (f === file) { view.dispatch({ changes: sort(list).map((e) => ({ from: e.from, to: e.to, insert: e.pre + name + e.suf })), userEvent: "input.rename" }); continue; }
+      setTabs((p) => p.map((t) => {
+        if (t.node.path !== f || !isText(t)) return t;
+        let x = t.text;
+        for (const e of sort(list)) x = x.slice(0, e.from) + e.pre + name + e.suf + x.slice(e.to);
+        return { ...t, text: x };
+      }));
+    }
+    flash(i18next.t("{{n}} か所の名前を変えました", { n }));
+  };
   const closeMany = (paths: string[], force = false) => {
     const gone = new Set(force ? paths : paths.filter((x) => !pinned.has(x)));
     if (!gone.size) return;
@@ -1329,6 +1356,7 @@ export default function App() {
       {pStats.v && <StatsView key={pStats.key} out={pStats.out} onClose={() => setStatsOpen(false)} />}
       {pCn.v && <Connect key={pCn.key} out={pCn.out} current={cnAdd ? null : root.conn ?? null} adding={cnAdd} onConnect={cnAdd ? addConn : connect} onClose={() => setCn(false)} />}
       {pPop.v && <StatusPop key={pPop.key} out={pPop.out} kind={pPop.v} view={ev() ?? null} eol={tab?.eol ?? "lf"} lang={tab ? langName(tab.node.name) : ""} onEol={toggleEol} onClose={() => setPop(null)} />}
+      <LangUI onGoto={gotoLoc} onRename={applyRename} />
       {pMenu.v && <ContextMenu key={pMenu.key} out={pMenu.out} x={pMenu.v.x} y={pMenu.v.y} items={pMenu.v.items} onClose={() => setMenu(null)} />}
     </div>
   );

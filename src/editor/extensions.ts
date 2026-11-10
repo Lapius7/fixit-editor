@@ -1,3 +1,4 @@
+import { langService } from "@/editor/langsvc";
 import { rainbowBrackets, tagSync, diagnostics, minimap } from "@/editor/intel";
 import { EditorSelection, EditorState, countColumn, type Extension } from "@codemirror/state";
 import { EditorView, RectangleMarker, layer, crosshairCursor, drawSelection, dropCursor, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, highlightTrailingWhitespace, highlightWhitespace, lineNumbers, rectangularSelection, scrollPastEnd } from "@codemirror/view";
@@ -99,7 +100,7 @@ const trimmedSelection = layer({
 
 const BLINK: Record<string, number> = { off: 0, slow: 1600, normal: 1200, fast: 600 };
 export type EditorOpts = Pick<Settings,
-  "tabSize" | "insertSpaces" | "wrap" | "lineNumbers" | "activeLine" | "foldGutter" | "indentGuides" | "bracketMatching" | "matchHighlight" | "rainbowBrackets" | "tagSync" | "diagnostics" | "minimap" | "whitespace" | "cursorBlink" |
+  "tabSize" | "insertSpaces" | "wrap" | "lineNumbers" | "activeLine" | "foldGutter" | "indentGuides" | "bracketMatching" | "matchHighlight" | "rainbowBrackets" | "tagSync" | "diagnostics" | "langService" | "minimap" | "whitespace" | "cursorBlink" |
   "autocomplete" | "autocompleteDelay" | "completeMax" | "completeIcons" | "wordComplete" | "closeBrackets" | "indentOnInput" | "scrollPastEnd" | "spellcheck" | "readOnly">;
 
 // 設定で入り切りする部分。ひとつの Compartment にまとめて、設定が変わるたびに組み直す
@@ -116,7 +117,7 @@ export const dynamic = (o: EditorOpts): Extension => [
   }) : [],
   o.bracketMatching ? bracketMatching() : [],
   o.matchHighlight ? highlightSelectionMatches() : [],
-  o.rainbowBrackets ? rainbowBrackets : [], o.tagSync ? tagSync : [], o.diagnostics ? diagnostics : [], o.minimap ? minimap : [],
+  o.rainbowBrackets ? rainbowBrackets : [], o.tagSync ? tagSync : [], o.diagnostics ? diagnostics : [], o.langService ? langService() : [], o.minimap ? minimap : [],
   o.whitespace === "all" ? highlightWhitespace() : o.whitespace === "trailing" ? highlightTrailingWhitespace() : [],
   o.closeBrackets ? closeBrackets() : [],
   o.indentOnInput ? indentOnInput() : [],

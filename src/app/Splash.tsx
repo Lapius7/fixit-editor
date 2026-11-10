@@ -20,7 +20,9 @@ export default function Splash() {
     let dead = false, t: ReturnType<typeof setTimeout>;
     const done = () => { if (dead) return; dead = true; clearTimeout(t); delete root.dataset.boot; setOut(true); setTimeout(() => setGone(true), ms(700)); };
     const c = cv.current!, cell = 4, accent = getComputedStyle(root).getPropertyValue("--accent").trim() || "#3b6fd9";
-    const sh = textShape("Fixit", "800 120px \"Inter Variable\", \"Noto Sans JP Variable\", sans-serif", cell, () => undefined);
+    const stops = dark ? [[143, 180, 255], [183, 156, 255], [255, 159, 176], [255, 196, 138]] : [[59, 111, 217], [122, 92, 240], [232, 131, 143], [240, 163, 92]];
+    const grad = (u: number) => { const k = Math.min(stops.length - 1.001, u * (stops.length - 1)), i = Math.floor(k), t = k - i, a = stops[i], b = stops[i + 1]; return `rgb(${a.map((v, j) => Math.round(v + (b[j] - v) * t)).join(",")})`; };
+    const sh = textShape("Fixit", "800 120px \"Inter Variable\", \"Noto Sans JP Variable\", sans-serif", cell, (_i, u, v) => grad(Math.min(1, Math.max(0, u * .85 + v * .15))));
     const f = new PixelField(c, cell, sh.w + 10, sh.h + 10, .82);
     f.morph(sh, dark ? "#f2f3f7" : accent, ms(1300)).then(() => { if (!dead) t = setTimeout(done, ms(450)); });
     return () => { dead = true; clearTimeout(t); f.stop(); delete root.dataset.boot; };

@@ -26,12 +26,14 @@ html[data-boot="wait"] .window { animation-play-state: paused; }
 .splash[data-dark="true"] { background: #0e1016; }
 .splash[data-out="true"] { opacity: 0; filter: blur(8px); transform: scale(1.04); pointer-events: none; }
 .splash-in { display: grid; justify-items: center; gap: 18px; animation: splash-in .6s var(--out) both; }
+.splash { background: radial-gradient(60% 70% at 18% 12%, #a9ccff 0%, transparent 70%), radial-gradient(55% 65% at 88% 90%, #ffd9b3 0%, transparent 70%), radial-gradient(45% 55% at 80% 15%, #d9c8ff 0%, transparent 70%), #f4f3f1; background-size: 140% 140%; animation: splash-bg 6s ease-in-out infinite alternate; }
+.splash[data-dark="true"] { background: radial-gradient(60% 70% at 18% 12%, #27407a 0%, transparent 70%), radial-gradient(55% 65% at 88% 90%, #5a3a2c 0%, transparent 70%), radial-gradient(45% 55% at 80% 15%, #3d2d6b 0%, transparent 70%), #0e1016; background-size: 140% 140%; }
+@keyframes splash-bg { from { background-position: 0% 0%; } to { background-position: 100% 100%; } }
 .splash-in canvas { display: block; }
 .splash-sub { font-size: 12px; line-height: 16px; letter-spacing: .32em; text-indent: .32em; color: var(--ink-3, #8a8f9a); opacity: 0; animation: splash-sub .8s .9s var(--out) forwards; }
 @keyframes splash-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
 @keyframes splash-sub { from { opacity: 0; transform: translateY(6px); } to { opacity: .8; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .splash, .splash-in, .splash-sub { animation-duration: .01s !important; transition-duration: .01s !important; } }
-
 /* ---- 入力欄は枠に色をつけない ---- */
 .field:focus, .sp-box:focus-within { box-shadow: 0 0 0 1px var(--hair) inset; animation: none; }
 input:focus-visible, textarea:focus-visible, select:focus-visible, .field:focus-visible { outline: none; }

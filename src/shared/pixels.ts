@@ -9,7 +9,7 @@ const eio = (t: number) => (t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3)
 const eo = (t: number) => 1 - Math.pow(1 - t, 3);
 const ss = (a: number, b: number, t: number) => { const x = cl((t - a) / (b - a)); return x * x * (3 - 2 * x); };
 
-export function textShape(text: string, font: string, cell: number, colors: (i: number) => string | undefined): Shape {
+export function textShape(text: string, font: string, cell: number, colors: (i: number, u: number, v: number) => string | undefined): Shape {
   const c = document.createElement("canvas"), x = c.getContext("2d")!;
   x.font = font; const m = x.measureText(text), pw = Math.ceil(m.width) + 8, ph = Math.ceil((m.actualBoundingBoxAscent + m.actualBoundingBoxDescent) + 8);
   c.width = pw; c.height = ph; x.font = font; x.textBaseline = "alphabetic"; x.fillStyle = "#000"; x.fillText(text, 4, m.actualBoundingBoxAscent + 4);
@@ -17,7 +17,7 @@ export function textShape(text: string, font: string, cell: number, colors: (i: 
   for (let gy = 0; gy < h; gy++) for (let gx = 0; gx < w; gx++) {
     let s = 0, n = 0;
     for (let yy = 0; yy < cell; yy++) for (let xx = 0; xx < cell; xx++) { const px = gx * cell + xx, py = gy * cell + yy; if (px < pw && py < ph) { s += d[(py * pw + px) * 4 + 3]; n++; } }
-    if (s / n > 110) cells.push({ x: gx, y: gy, a: 1, c: colors(cells.length) });
+    if (s / n > 110) cells.push({ x: gx, y: gy, a: 1, c: colors(cells.length, gx / Math.max(1, w - 1), gy / Math.max(1, h - 1)) });
   }
   return { w, h, cells };
 }

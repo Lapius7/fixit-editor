@@ -808,5 +808,14 @@
   "名前で絞り込む": "Filter by name",
   "シンボルへ移動(アウトライン)": "Go to symbol (outline)",
   "ピン留めする": "Pin tab",
-  "ピン留めを外す": "Unpin tab"
+  "ピン留めを外す": "Unpin tab",
+  "定義が見つかりません": "Definition not found",
+  "参照が見つかりません": "No references found",
+  "参照 ({{n}} 件)": "References ({{n}})",
+  "定義": "Definitions",
+  "この位置の名前は変えられません": "This name can't be renamed here",
+  "名前に使えない文字があります": "The name contains invalid characters",
+  "名前を変えられませんでした": "Couldn't rename",
+  "{{n}} か所の名前を変えました": "Renamed {{n}} places",
+  "型情報・定義へ移動・参照検索・リネーム(JS・TS)": "Type info, go to definition, find references, rename (JS/TS)"
 }
