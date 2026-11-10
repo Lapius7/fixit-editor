@@ -14,7 +14,7 @@ const BADGE: Record<string, string> = { function: "ƒ", method: "ƒ", class: "C"
 
 type Pop = { x: number; y: number; items: Sym[]; filter: boolean; sel: number } | null;
 
-export default function Crumbs({ view, path, ver }: { view: EditorView | null; path: string; ver: number }) {
+export default function Crumbs({ view, path, ver, extra, trailOn = true }: { view: EditorView | null; path: string; ver: number; extra?: React.ReactNode; trailOn?: boolean }) {
   const [pop, setPop] = useState<Pop>(null);
   const [q, setQ] = useState("");
   const box = useRef<HTMLDivElement>(null);
@@ -25,6 +25,10 @@ export default function Crumbs({ view, path, ver }: { view: EditorView | null; p
   const all = useMemo(() => (view ? outline(view.state, true) : []), [view, doc, tlen]); // eslint-disable-line react-hooks/exhaustive-deps
   const tr = useMemo(() => trail(all, pos), [all, pos]);
   const parts = path.split("/").filter(Boolean);
+  // 先頭のほうはまとめて「…」にし、ホバーで全体を見せる。末尾の 2 つ(フォルダ › ファイル)は全文を出す
+  const KEEP = 2, head = parts.length > KEEP + 1 ? parts.slice(0, parts.length - KEEP) : [], tail = parts.slice(head.length);
+  const [more, setMore] = useState<{ x: number; y: number } | null>(null);
+  const showMore = (el: HTMLElement) => { const r = el.getBoundingClientRect(); setMore({ x: Math.max(8, Math.min(r.left, innerWidth - 320)), y: r.bottom + 4 }); };
 
   const open = (el: HTMLElement, items: Sym[], filter = false) => {
     const r = el.getBoundingClientRect();
@@ -61,9 +65,16 @@ export default function Crumbs({ view, path, ver }: { view: EditorView | null; p
   useEffect(() => { document.querySelector<HTMLElement>(".bc-pop [data-on=true]")?.scrollIntoView({ block: "nearest" }); }, [sel, pop]);
 
   return (
-    <div ref={box} className="bc" role="navigation" aria-label={i18next.t("パンくず")}>
+    <div ref={box} className="bc" data-off={!trailOn || undefined} role="navigation" aria-label={i18next.t("パンくず")}>
       <div className="bc-trail">
-        {parts.map((p, i) => <span key={i} className="bc-seg" data-last={i === parts.length - 1 && !tr.length}>{i > 0 && <ChevronRight aria-hidden />}<span className="bc-name">{p}</span></span>)}
+        {head.length > 0 && (
+          <span className="bc-seg bc-more" tabIndex={0} aria-label={head.join("/")}
+            onMouseEnter={(e) => showMore(e.currentTarget)} onFocus={(e) => showMore(e.currentTarget)}
+            onMouseLeave={() => setMore(null)} onBlur={() => setMore(null)}>
+            <span className="bc-dots">…</span>
+          </span>
+        )}
+        {tail.map((p, i) => <span key={head.length + i} className="bc-seg" data-last={i === tail.length - 1 && !tr.length}>{(i > 0 || head.length > 0) && <ChevronRight aria-hidden />}<span className="bc-name">{p}</span></span>)}
         {tr.map((s, i) => {
           const sibs = i === 0 ? all : tr[i - 1].children;
           return (
@@ -75,6 +86,8 @@ export default function Crumbs({ view, path, ver }: { view: EditorView | null; p
         })}
       </div>
       {syms.length > 0 && <button className="bc-outline icon-btn" aria-label={i18next.t("アウトライン")} data-tip={i18next.t("アウトライン")} onClick={(e) => open(e.currentTarget, flat(syms), true)}><ListTree /></button>}
+      {extra}
+      {more && createPortal(<div className="bc-tip ctx" style={{ left: more.x, top: more.y }} role="tooltip">{head.map((h, i) => <span key={i}>{i > 0 && <ChevronRight aria-hidden />}{h}</span>)}</div>, document.body)}
       {pop && createPortal(
         <div className="bc-pop ctx" style={{ left: pop.x, top: pop.y }} onKeyDown={onKey}>
           {pop.filter && <input className="bc-q" autoFocus value={q} placeholder={i18next.t("名前で絞り込む")} onChange={(e) => setQ(e.target.value)} />}

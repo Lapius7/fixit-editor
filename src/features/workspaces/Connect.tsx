@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Clock, File as FileIcon, Folder, HardDrive, Home, Server, X } from "lucide-react";
 import { checkDir, connLabel, dropRecent, getRecent, homeOf, listHosts, parseTarget, pushRecent, resolvePath, RemoteDir, type Conn } from "@/platform/remote";
 import { ms } from "@/features/settings/settings";
@@ -47,6 +47,18 @@ export default function Connect({ current, adding, onConnect, onClose, out }: Pr
     return () => { live = false; clearTimeout(t); };
   }, [kind, sshHost, path]);
   const enter = (p: string) => { setPath(p); setErr(""); };
+  // 初期値の "~" は、ホームの絶対パスに置き換える(階層を移動したときの表示とそろえる)。接続先を変えたら、また "~" から解決し直す
+  const autoHome = useRef<string | null>(null);
+  useEffect(() => {
+    if (path !== "~" && path !== autoHome.current) return;
+    let live = true;
+    homeOf({ kind, host: kind === "ssh" ? sshHost : undefined }).then((h) => {
+      if (!live || !h) return;
+      autoHome.current = h;
+      setPath((cur) => (cur === "~" || cur === autoHome.current || cur === path ? h : cur));
+    }, () => {});
+    return () => { live = false; };
+  }, [kind, sshHost]); // eslint-disable-line react-hooks/exhaustive-deps
   const home = async () => { try { enter(await homeOf({ kind, host: kind === "ssh" ? sshHost : undefined })); } catch { /* 接続先がまだ決まっていない */ } };
   const close = (after?: () => void) => { setClosing(true); setTimeout(() => { onClose(); after?.(); }, ms(180)); };
 

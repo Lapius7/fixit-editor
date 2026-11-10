@@ -3,7 +3,7 @@ import { ChevronRight, FileText, FileCode2, FileJson, FileType, Folder, FolderOp
 import { readDir, type Node } from "@/platform/fs";
 import { useSettings } from "@/features/settings/settings";
 import { drag, dragEnd } from "@/workbench/dnd";
-import { dirOf } from "@/workbench/treeops";
+import { dirOf } from "@/workbench/treeops"; import { isOpen, setOpenPath } from "@/workbench/treeOpen";
 
 // ドラッグ中のものを、このフォルダへ移せるか(自分の中・今いる場所へは移せない)
 export const canDrop = (dest: Node) => {
@@ -41,12 +41,26 @@ export default function FileTree({ nodes: all, activePath, ctxPath, rev, onOpen,
 function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, depth, idx }: Omit<Props, "nodes"> & { n: Node; depth: number; idx: number }) {
   const git = useContext(GitMarks)(n);
   const indent = useSettings().treeIndent;
-  const [open, setOpen] = useState(false);
+  const restored = useRef(n.kind === "dir" && isOpen(n.path)).current; // 前に開いていたフォルダは、アニメーションなしで開いた状態に戻す
+  const [open, setOpenRaw] = useState(restored);
+  const setOpen = (v: boolean) => { setOpenRaw(v); setOpenPath(n.path, v); };
   const [loaded, setLoaded] = useState<Node[] | undefined>();
   const [over, setOver] = useState(false);
   const hover = useRef<ReturnType<typeof setTimeout>>(undefined);
   const isDir = n.kind === "dir";
   const kids = n.handle ? loaded : n.children;
+  // 初めて開くフォルダは、中身を読んだ直後に「開いた状態」で現れるため、閉→開の変化が無く一瞬で開いてしまう。
+  // 閉じた状態で一度描いてから開くことで、どの状態でも同じ動きにする
+  const [armed, setArmed] = useState(!!kids || restored);
+  useEffect(() => {
+    if (!open || !kids || armed) return;
+    let r2 = 0;
+    const r1 = requestAnimationFrame(() => { r2 = requestAnimationFrame(() => setArmed(true)); });
+    return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); };
+  }, [open, kids, armed]);
+
+  // 開いた状態で戻ったフォルダは、中身を読み直す
+  useEffect(() => { if (restored && n.handle) readDir(n.handle as FileSystemDirectoryHandle, n.path).then(setLoaded).catch(() => setOpen(false)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 作成・削除のあとに、開いているフォルダの中身を読み直す
   useEffect(() => {
@@ -86,7 +100,7 @@ function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, depth, i
         {git && <span className="git-badge" data-g={git}>{git === "dir" ? "" : git === "U" ? "U" : git}</span>}
       </button>
       {isDir && kids && (
-        <div className="collapse" data-open={open}>
+        <div className="collapse" data-open={open && armed}>
           <div className="collapse-inner"><FileTree nodes={kids} activePath={activePath} ctxPath={ctxPath} rev={rev} onOpen={onOpen} onContext={onContext} onMove={onMove} depth={depth + 1} /></div>
         </div>
       )}

@@ -5,6 +5,8 @@ import i18next from "i18next";
 import { Trans } from "react-i18next";
 import { ACCENTS, get, ms, update, useSettings } from "@/features/settings/settings";
 import { LANGS } from "@/i18n";
+import { useAccount } from "@/features/account/auth";
+import { Avatar, LoginBox } from "@/features/account/AccountUI";
 
 const FLAG = "fixit:setup:v1";
 const SETTINGS_KEY = "fixit:settings:v1";
@@ -36,14 +38,29 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
 export default function Setup({ onClose, out }: { onClose: () => void; out?: boolean }) {
   const s = useSettings();
   const [closing, setClosing] = useState(false);
+  const [step, setStep] = useState<0 | 1>(0);
+  const user = useAccount();
   const done = () => { markSetupDone(); setClosing(true); setTimeout(onClose, ms(180)); };
   const modes = [["light", i18next.t("ライト"), Sun], ["dark", i18next.t("ダーク"), Moon], ["auto", i18next.t("自動"), Monitor]] as const;
-  const sw = (id: "wsRestore" | "wsAuto" | "statsOn" | "telemetry", label: string) => (
+  const sw = (id: "wsRestore" | "statsOn", label: string) => (
     <button className="switch" role="switch" aria-checked={get()[id]} aria-label={label} onClick={() => update({ [id]: !get()[id] })} />
   );
   return (
     <div className="qo-backdrop su-backdrop" data-mid data-closing={closing || !!out}>
       <div className="qo dlg setup" role="dialog" aria-modal="true" aria-label={i18next.t("はじめの設定")}>
+        {step === 1 ? (
+          <>
+            <h2><Trans i18nKey="Lapount でログイン" /></h2>
+            <p><Trans i18nKey="設定・プロファイル・ワークスペースの場所をほかの PC とそろえ、フィードバックの返信を受け取れます。ログインしなくても、すべての機能を使えます。あとで「設定」の「アカウント」からもできます。" /></p>
+            {user ? (
+              <div className="acct-card"><Avatar user={user} size={44} /><div className="acct-who"><b>{user.name}</b><small>{user.handle ? `@${user.handle}` : user.email}</small></div></div>
+            ) : <LoginBox compact />}
+            <div className="dlg-foot">
+              <button className="btn" onClick={() => setStep(0)}><Trans i18nKey="戻る" /></button>
+              {user ? <button className="btn" data-primary="true" autoFocus onClick={done}><Trans i18nKey="はじめる" /></button> : <button className="btn" onClick={done}><Trans i18nKey="スキップ" /></button>}
+            </div>
+          </>
+        ) : (<>
         <h2><Trans i18nKey="はじめの設定" /></h2>
         <p><Trans i18nKey="あとで「設定」からいつでも変えられます。" /></p>
 
@@ -65,11 +82,10 @@ export default function Setup({ onClose, out }: { onClose: () => void; out?: boo
         </Row>
         <div className="su-sep" />
         <Row label={i18next.t("起動したとき、前回の続きを開く")} hint={i18next.t("開いていたフォルダとタブを戻します")}>{sw("wsRestore", i18next.t("起動したとき、前回の続きを開く"))}</Row>
-        <Row label={i18next.t("開いている状態を、自動で保存する")} hint={i18next.t("開いたタブ・分割・ターミナルを、変わるたびに保存します")}>{sw("wsAuto", i18next.t("開いている状態を、自動で保存する"))}</Row>
         <Row label={i18next.t("作業時間と入力数を記録する")} hint={i18next.t("この PC の中だけに保存します。外部へは送りません")}>{sw("statsOn", i18next.t("作業時間と入力数を記録する"))}</Row>
-        <Row label={i18next.t("匿名の利用数を送る")} hint={i18next.t("1 日 1 回、ランダムな ID・版・OS・言語だけを送ります。ファイルの中身は送りません")}>{sw("telemetry", i18next.t("匿名の利用数を送る"))}</Row>
 
-        <div className="dlg-foot"><button className="btn" data-primary="true" autoFocus onClick={done}><Trans i18nKey="はじめる" /></button></div>
+        <div className="dlg-foot"><button className="btn" data-primary="true" autoFocus onClick={() => setStep(1)}><Trans i18nKey="次へ" /></button></div>
+        </>)}
       </div>
     </div>
   );

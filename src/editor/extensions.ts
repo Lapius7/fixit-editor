@@ -60,6 +60,20 @@ export const power: Extension = [
 
 // 選択範囲の背景。CodeMirror の標準は、改行を含む行を右端まで塗るので、
 // 「文字のない空白」まで選んだように見える。行末は改行1文字ぶんだけ塗る(VS Code と同じ)
+// 範囲を選んでいる間、エディタに cm-hasSel を付ける(テーマ側でカーソル行の帯を消すのに使う)
+// 折り返しオフで横にスクロールしたとき、sticky のガターの下を文字が通って重なって見える。
+// scrollLeft が 0 でない間だけ cm-hscroll を付け、CSS でガターをすりガラスにして隠す。
+export const hScrollClass = ViewPlugin.fromClass(class {
+  constructor(readonly view: EditorView) {
+    this.on = () => this.sync();
+    view.scrollDOM.addEventListener("scroll", this.on, { passive: true });
+    this.sync();
+  }
+  on: () => void;
+  sync() { this.view.dom.classList.toggle("cm-hscroll", this.view.scrollDOM.scrollLeft > 0.5); }
+  destroy() { this.view.scrollDOM.removeEventListener("scroll", this.on); this.view.dom.classList.remove("cm-hscroll"); }
+});
+export const hasSelClass = EditorView.editorAttributes.compute(["selection"], (st) => ({ class: st.selection.ranges.some((r) => !r.empty) ? "cm-hasSel" : "" }));
 const trimmedSelection = layer({
   above: false,
   class: "cm-selTrim",
@@ -150,7 +164,7 @@ export const dynamic = (o: EditorOpts): Extension => [
   ] : [],
   o.scrollPastEnd ? scrollPastEnd() : [],
   drawSelection({ cursorBlinkRate: BLINK[o.cursorBlink] ?? 1200 }),
-  trimmedSelection,
+  trimmedSelection, hasSelClass, hScrollClass,
   EditorView.contentAttributes.of({ spellcheck: o.spellcheck ? "true" : "false" }),
   EditorState.readOnly.of(o.readOnly),
   EditorView.editable.of(!o.readOnly),

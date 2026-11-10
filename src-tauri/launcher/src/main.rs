@@ -9,7 +9,10 @@ const EXE: &[u8] = include_bytes!(env!("FIXIT_PAYLOAD_EXE"));
 const DLL: &[u8] = include_bytes!(env!("FIXIT_PAYLOAD_DLL"));
 const ID: &str = env!("FIXIT_PAYLOAD_ID");
 
+// インストーラー用にビルドしたとき(FIXIT_PAYLOAD_SETUP)は、本体の展開先とは別の一時フォルダに展開する。
+// sweep が本体の展開先を消さないようにするため
 fn base() -> PathBuf {
+    if option_env!("FIXIT_PAYLOAD_SETUP").is_some() { return env::temp_dir().join("Fixit Editor Setup"); }
     env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(env::temp_dir).join("Fixit Editor").join("bin")
 }
 
@@ -55,7 +58,7 @@ fn main() {
         return;
     }
     sweep(&b, ID);
-    if let Err(e) = Command::new(dir.join("fixit-editor.exe")).args(env::args_os().skip(1)).current_dir(&dir).spawn() {
+    if let Err(e) = Command::new(dir.join("fixit-editor.exe")).args(env::args_os().skip(1)).current_dir(&dir).env("FIXIT_LAUNCHER", env::current_exe().unwrap_or_default()).spawn() {
         msg(&format!("Fixit Editor を起動できませんでした。\n{e}"));
     }
 }

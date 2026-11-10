@@ -10,6 +10,7 @@ fn main() {
     let out = PathBuf::from(env::var("OUT_DIR").unwrap());
     let dir = PathBuf::from(env::var("FIXIT_PAYLOAD_DIR").expect("FIXIT_PAYLOAD_DIR に fixit-editor.exe と WebView2Loader.dll のフォルダを指定してください"));
     println!("cargo:rerun-if-env-changed=FIXIT_PAYLOAD_DIR");
+    println!("cargo:rerun-if-env-changed=FIXIT_PAYLOAD_SETUP");
     let mut h = 0xcbf29ce484222325u64;
     for n in ["fixit-editor.exe", "WebView2Loader.dll"] {
         let p = dir.join(n);
@@ -22,6 +23,7 @@ fn main() {
 
     // アイコン(windres)
     let icon = fs::canonicalize("../icons/icon.ico").expect("icon.ico");
+    println!("cargo:rerun-if-changed={}", icon.display());
     let rc = out.join("launcher.rc");
     fs::write(&rc, format!("1 ICON \"{}\"\n", icon.display().to_string().replace('\\', "/"))).unwrap();
     let o = out.join("launcher-res.o");

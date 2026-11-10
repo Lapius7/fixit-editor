@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/noto-sans-jp";
 import "@fontsource-variable/jetbrains-mono";
+import "@/styles/fonts.css";
 import "@/styles/index.css";
 import "@/i18n";
 import { showWin, winThemed } from "@/shared/chrome";
@@ -13,9 +14,15 @@ import { initSegSlide } from "@/shared/segslide";
 import "@/features/settings/history"; // 設定の変更履歴の記録を始める
 import Splash from "@/app/Splash";
 import { warmJaFont } from "@/shared/fontwarm";
+import { refreshProfile } from "@/features/account/auth";
+import { startSync } from "@/features/account/sync";
+import { startReplies } from "@/features/account/replies";
 
 createRoot(document.getElementById("root")!).render(<><App /><Splash /><Notifier /><HoverTip /></>);
 startStats();
 initSegSlide();
 warmJaFont();
+void refreshProfile(); // ログイン中なら、名前とアイコンを取り直す
+startSync();
+startReplies();
 showWin(winThemed);

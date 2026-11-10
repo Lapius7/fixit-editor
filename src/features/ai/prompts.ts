@@ -8,6 +8,8 @@ export type AiScope = "selection" | "file";
 // エディタ側から AI パネルへ渡す依頼(右クリックのメニューから作られる)
 export type AiJob = { id: number; action: AiAction; lang?: string; name: string; text: string; scope: AiScope; from: number; to: number; view: EditorView };
 export type Ctx = { name: string; text: string; scope: AiScope };
+// 質問に添える資料(エディタで選んだ文・ドロップしたファイル)。from/to は、ファイルの中の行番号(引用のときだけ)
+export type Clip = Ctx & { id: number; lines?: [number, number] };
 
 const LANG: Record<string, string> = { ja: "Japanese", en: "English", ko: "Korean" };
 const uiLang = () => LANG[(i18next.language || "ja").slice(0, 2)] ?? "Japanese";
@@ -35,3 +37,15 @@ export const actionLabel = (a: AiAction, lang?: string) =>
 
 export const ctxLabel = (c: { name: string; text: string; scope: AiScope }, cut: boolean) =>
   `${c.scope === "selection" ? i18next.t("選択範囲") : i18next.t("ファイル全体")} · ${c.name} · ${i18next.t("{{n}} 行", { n: c.text.split("\n").length })}${cut ? ` · ${i18next.t("先頭 {{n}} 文字のみ", { n: AI_MAX_CONTEXT_CHARS.toLocaleString() })}` : ""}`;
+
+// 複数の資料を 1 つの質問にまとめる。上限は全体で AI_MAX_CONTEXT_CHARS(資料ごとに均等に割る)
+export function withClips(question: string, cs: Ctx[]): { content: string; cut: boolean } {
+  if (!cs.length) return { content: question, cut: false };
+  const per = Math.floor(AI_MAX_CONTEXT_CHARS / cs.length);
+  let cut = false;
+  const parts = cs.map((c) => { const t = c.text.length > per ? (cut = true, c.text.slice(0, per)) : c.text; return block(c.name, t); });
+  return { content: `${question}\n\n${parts.join("\n\n")}`, cut };
+}
+
+export const clipLabel = (c: { name: string; text: string; scope: AiScope; lines?: [number, number] }) =>
+  c.lines ? `${c.name}:${c.lines[0] === c.lines[1] ? c.lines[0] : `${c.lines[0]}-${c.lines[1]}`}` : c.name;

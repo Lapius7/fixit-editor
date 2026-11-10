@@ -1,6 +1,6 @@
 :root {
   --font-sans: "Inter Variable", "Noto Sans JP Variable", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono Variable", "Noto Sans JP Variable", ui-monospace, monospace;
+  --font-mono: "Obel Mono", "JetBrains Mono Variable", "Noto Sans JP Variable", ui-monospace, monospace;
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --accent: #3b6fd9;
   --fs: 13.5px;
@@ -10,23 +10,27 @@
 
   --ink: #1f2430; --ink-2: #5d6676; --ink-3: #8b93a1;
   --glass: rgba(236, 243, 253, 0.6);
-  --hair: rgba(20, 30, 60, 0.09);
-  --edge: rgba(20, 30, 60, 0.12);
+  --hair: rgba(20, 30, 60, calc(0.09 * var(--hair-k, 1)));
+  --edge: rgba(20, 30, 60, calc(0.12 * var(--hair-k, 1)));
   --shadow: rgba(20, 30, 60, 0.35);
-  --shadow-soft: rgba(20, 30, 60, 0.18);
+  --shadow-soft: rgba(20, 30, 60, calc(0.18 * var(--sk, 1)));
   --hl: rgba(255, 255, 255, 0.6);          /* 縁に入れるハイライト */
   --s1: rgba(255, 255, 255, 0.78);         /* 選択中の面 */
   --s2: rgba(255, 255, 255, 0.45);         /* ホバー */
   --s3: rgba(255, 255, 255, 0.92);         /* ボタンの面 */
-  --press: rgba(20, 30, 60, 0.08);
+  --field: rgba(255, 255, 255, 0.42);       /* 入力欄・選択ボタンの面(すべて同じ半透明) */
+  --field-on: rgba(255, 255, 255, 0.6);    /* 入力中・開いているとき */
+  --press: rgba(20, 30, 60, calc(0.08 * var(--press-k, 1)));
   --pop: rgba(250, 252, 255, 0.72);
+  --pop-hi: rgba(250, 252, 255, 0.9);
+  --pop-solid: rgba(248, 250, 254, 0.995);
   --veil: rgba(20, 30, 60, 0.18);
   --paper: linear-gradient(160deg, rgba(240, 246, 255, calc(0.78 * var(--paper-k, 1))) 0%, rgba(247, 245, 244, calc(0.72 * var(--paper-k, 1))) 55%, rgba(252, 244, 236, calc(0.7 * var(--paper-k, 1))) 100%);
   --term-bg: rgba(252, 252, 254, 0.8); --term-ink: #26292e;
   --bar: rgba(255, 255, 255, 0.35);
 
-  --editor-ink: #26292e; --gutter: #a0a7b2; --gutter-active: #4a5160; --git-add: #2f9e5a; --git-mod: #3b7de0; --git-del: #d8454b; --git-untracked: #2f9e5a;
-  --active-line: rgba(59, 111, 217, 0.07); --sel: rgba(59, 111, 217, 0.22);
+  --editor-ink: #26292e; --gutter-veil: rgb(244, 247, 253); --gutter: #a0a7b2; --gutter-active: #4a5160; --git-add: #2f9e5a; --git-mod: #3b7de0; --git-del: #d8454b; --git-untracked: #2f9e5a;
+  --active-line: color-mix(in srgb, var(--accent) calc(7% * var(--line-k, 1)), transparent); --sel: color-mix(in srgb, var(--accent) calc(22% * var(--sel-k, 1)), transparent);
   --match: rgba(255, 200, 60, 0.4); --match-now: rgba(255, 150, 40, 0.5);
   --indent: rgba(30, 40, 70, 0.1); --indent-on: rgba(59, 111, 217, 0.45);
   --c-kw: #9b2393; --c-type: #8a5a00; --c-fn: #3b6fd9; --c-str: #c41a16; --c-num: #1c00cf; --c-com: #6c7986; --c-prop: #326d74; --c-meta: #643820;
@@ -35,23 +39,27 @@
   color-scheme: dark;
   --ink: #e8ebf2; --ink-2: #a3acbc; --ink-3: #6f7889;
   --glass: rgba(30, 33, 43, 0.62);
-  --hair: rgba(255, 255, 255, 0.09);
-  --edge: rgba(255, 255, 255, 0.12);
+  --hair: rgba(255, 255, 255, calc(0.09 * var(--hair-k, 1)));
+  --edge: rgba(255, 255, 255, calc(0.12 * var(--hair-k, 1)));
   --shadow: rgba(0, 0, 0, 0.6);
-  --shadow-soft: rgba(0, 0, 0, 0.45);
+  --shadow-soft: rgba(0, 0, 0, calc(0.45 * var(--sk, 1)));
   --hl: rgba(255, 255, 255, 0.1);
   --s1: rgba(255, 255, 255, 0.13);
   --s2: rgba(255, 255, 255, 0.07);
   --s3: rgba(255, 255, 255, 0.18);
-  --press: rgba(255, 255, 255, 0.1);
+  --field: rgba(255, 255, 255, 0.07);
+  --field-on: rgba(255, 255, 255, 0.12);
+  --press: rgba(255, 255, 255, calc(0.1 * var(--press-k, 1)));
   --pop: rgba(36, 39, 51, 0.74);
+  --pop-hi: rgba(36, 39, 51, 0.9);
+  --pop-solid: rgba(31, 34, 45, 0.995);
   --veil: rgba(0, 0, 0, 0.4);
   --paper: linear-gradient(160deg, rgba(26, 29, 38, calc(0.76 * var(--paper-k, 1))) 0%, rgba(22, 24, 32, calc(0.7 * var(--paper-k, 1))) 100%);
   --term-bg: rgba(16, 18, 25, 0.78); --term-ink: #e6e9f0;
   --bar: rgba(0, 0, 0, 0.22);
 
-  --editor-ink: #dfe3ec; --gutter: #5f6778; --gutter-active: #b4bccb; --git-add: #4cc07a; --git-mod: #6aa3ff; --git-del: #ff6b72; --git-untracked: #4cc07a;
-  --active-line: rgba(255, 255, 255, 0.045); --sel: rgba(90, 140, 255, 0.3);
+  --editor-ink: #dfe3ec; --gutter-veil: rgb(26, 29, 38); --gutter: #5f6778; --gutter-active: #b4bccb; --git-add: #4cc07a; --git-mod: #6aa3ff; --git-del: #ff6b72; --git-untracked: #4cc07a;
+  --active-line: rgba(255, 255, 255, calc(0.045 * var(--line-k, 1))); --sel: color-mix(in srgb, var(--accent) calc(30% * var(--sel-k, 1)), transparent);
   --match: rgba(255, 200, 60, 0.28); --match-now: rgba(255, 150, 40, 0.42);
   --indent: rgba(255, 255, 255, 0.08); --indent-on: rgba(120, 160, 255, 0.55);
   --c-kw: #fc5fa3; --c-type: #5dd8ff; --c-fn: #67b7a4; --c-str: #fc6a5d; --c-num: #d0bf69; --c-com: #7f8c98; --c-prop: #a8d5ff; --c-meta: #fd8f3f;

@@ -31,7 +31,23 @@ export const AI_TRANSLATE_TO = [["ja", "日本語"], ["en", "English"], ["ko", "
 export const AI_MAX_HISTORY_CHARS = 120_000; // 会話の履歴として送る量の上限(古い発言から外す)
 
 // 匿名の利用数(インストール数・利用者数)。送り先と保存キーはここだけで決める
-export const TELEMETRY_URL = "https://fixit-editor.lapius7.com/api/ping";
+// 受信と更新配布の口。エンドポイントはここに集める
+export const API_BASE = "https://fixit-editor.lapius7.com";
+export const TELEMETRY_URL = `${API_BASE}/api/ping`;
+export const USAGE_URL = `${API_BASE}/api/usage`;
+export const ERROR_URL = `${API_BASE}/api/error`;
+export const FEEDBACK_URL = `${API_BASE}/api/feedback`;
+export const UPDATE_URL = `${API_BASE}/api/update/latest`;
+// Lapount ログイン(端末間の同期・フィードバックの紐づけ)。anon キーは公開してよい値
+export const LAPOUNT_URL = "https://supabase.lapius7.com";
+export const LAPOUNT_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzg5MTYwNDMwLCJleHAiOjE5NDY4NDA0MzB9.bk3hxt1IXRa2UlACmQ3N1MzacqGnN7Od-gQcRpHe4Qs";
+export const LAPOUNT_CLIENT_ID = "lp_fixit";
+export const SYNC_URL = `${API_BASE}/api/sync`;
+export const MY_FEEDBACK_URL = `${API_BASE}/api/me/feedback`;
+export const SYNC_POLL_MS = 60_000; // 他の端末の変更を見に行く間隔
+export const SYNC_PUSH_DELAY_MS = 4_000; // 変更が止まってから送るまでの待ち
+export const REPLY_POLL_MS = 5 * 60_000; // フィードバックの返信を見に行く間隔
+export const USAGE_STORE_KEY = "fixit:usage-sent:v1";
 export const TELEMETRY_STORE_KEY = "fixit:telemetry:v1";
 
 // ローカル履歴(保存のたびに中身を残す)。文字数で数える

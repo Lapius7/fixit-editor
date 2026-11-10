@@ -1,6 +1,8 @@
-import { useRef, useState } from "react";
-import { Moon, Sun, MonitorCog, RotateCcw, Shuffle, Trash2 } from "lucide-react";
-import { ACCENTS, CATS, MAX_DOTS, SWATCHES, isChanged, isDark, resetOne, update, useSettings, type AnyDef, type Dot, type Mode } from "@/features/settings/settings";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Check, ChevronDown, Moon, Sun, MonitorCog, RotateCcw, Search, Shuffle, Trash2 } from "lucide-react";
+import { localFonts, type LocalFont } from "@/features/settings/fonts";
+import { ACCENTS, CATS, LOCAL, MAX_DOTS, SWATCHES, isChanged, isDark, resetOne, update, useSettings, type AnyDef, type Dot, type Mode } from "@/features/settings/settings";
 import i18next from 'i18next'
 import { Select } from "@/shared/Select";
 import { Trans } from 'react-i18next'
@@ -46,7 +48,8 @@ export function Row({ d }: { d: AnyDef }) {
     ctl = o.length <= 4 && fits
       ? <div className="seg" role="group" aria-label={i18next.t(d.label)}>{o.map(([k, t]) => <button key={k} aria-pressed={v === k} onClick={() => set(k)}>{i18next.t(t)}</button>)}</div>
       : <Select value={v as string} options={o.map(([k, t]) => ({ value: k, label: i18next.t(t) }))} label={i18next.t(d.label)} onChange={set} />;
-  } else {
+  } else if (d.kind === "font") ctl = <FontSelect d={d} value={v as string} onChange={set} />;
+  else {
     const min = d.min ?? 0, max = d.max ?? 100, step = d.step ?? 1, n = v as number;
     const fill = max > min ? ((n - min) / (max - min)) * 100 : 0;
     ctl = (
@@ -64,6 +67,71 @@ export function Row({ d }: { d: AnyDef }) {
         <button className="icon-btn set-reset" aria-label={i18next.t("{{label}}を初期値に戻す", { label: i18next.t(d.label) })} title={i18next.t("初期値に戻す")} tabIndex={isChanged(d) ? 0 : -1} onClick={() => resetOne(d.id)}><RotateCcw /></button>
       </div>
     </div>
+  );
+}
+
+// 書体の選択。用意した書体のほかに、この PC に入っているフォントを検索して選べる
+function FontSelect({ d, value, onChange }: { d: AnyDef; value: string; onChange: (v: string) => void }) {
+  const btn = useRef<HTMLButtonElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const q = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [monoOnly, setMonoOnly] = useState(!!d.mono);
+  const [fonts, setFonts] = useState<LocalFont[] | null>(null);
+  const [at, setAt] = useState<{ left: number; top: number; width: number; max: number } | null>(null);
+  const id = useId();
+  const presets = d.opts ?? [];
+  const name = value.startsWith(LOCAL) ? value.slice(LOCAL.length) : i18next.t(presets.find(([k]) => k === value)?.[1] ?? value);
+
+  useEffect(() => { if (open && !fonts) localFonts().then(setFonts); }, [open, fonts]);
+  useLayoutEffect(() => {
+    if (!open) { setAt(null); return; }
+    const r = btn.current!.getBoundingClientRect(), w = Math.max(r.width, 260);
+    const down = innerHeight - r.bottom - 10, up = down < 260 && r.top > down;
+    const max = Math.min(380, Math.max(180, (up ? r.top : down) - 8));
+    setAt({ left: Math.max(8, Math.min(r.left + r.width - w, innerWidth - 8 - w)), top: up ? r.top - 4 - max : r.bottom + 4, width: w, max });
+    q.current?.focus({ preventScroll: true });
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node) && !btn.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); btn.current?.focus(); } };
+    addEventListener("pointerdown", away, true); addEventListener("keydown", esc, true);
+    return () => { removeEventListener("pointerdown", away, true); removeEventListener("keydown", esc, true); };
+  }, [open]);
+
+  const needle = text.trim().toLowerCase();
+  const shown = useMemo(() => {
+    const l = (fonts ?? []).filter((f) => (!monoOnly || f.mono) && f.name.toLowerCase().includes(needle));
+    return l.sort((a, b) => Number(b.mono) - Number(a.mono) || a.name.localeCompare(b.name));
+  }, [fonts, monoOnly, needle]);
+  const pick = (v: string) => { if (v !== value) onChange(v); setOpen(false); btn.current?.focus(); };
+  const fam = (n: string) => `"${n.replace(/["\\\n]/g, "")}"`;
+
+  return (
+    <>
+      <button ref={btn} type="button" className="sel sel-btn" aria-label={i18next.t(d.label)} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? id : undefined} data-open={open} onClick={() => setOpen(!open)}>
+        <span className="sel-v">{name}</span><ChevronDown aria-hidden />
+      </button>
+      {open && createPortal(
+        <div ref={box} id={id} role="dialog" aria-label={i18next.t(d.label)} className="ctx font-pick" style={at ? { left: at.left, top: at.top, width: at.width, maxHeight: at.max } : { left: 0, top: 0, visibility: "hidden" }}>
+          <label className="fp-q"><Search aria-hidden /><input ref={q} value={text} onChange={(e) => setText(e.target.value)} placeholder={i18next.t("フォントを検索")} spellCheck={false} /></label>
+          {d.mono && <label className="fp-mono"><input type="checkbox" checked={monoOnly} onChange={(e) => setMonoOnly(e.target.checked)} />{i18next.t("等幅だけ出す")}</label>}
+          <ul className="fp-list overscroll-contain" role="listbox">
+            {!needle && presets.map(([k, t]) => (
+              <li key={k} role="option" aria-selected={k === value} className="ctx-item" onClick={() => pick(k)}><span className="ctx-label">{i18next.t(t)}</span>{k === value && <Check aria-hidden />}</li>
+            ))}
+            {!needle && <li className="fp-sep" role="presentation">{i18next.t("この PC のフォント")}</li>}
+            {!fonts && <li className="fp-note" role="presentation">{i18next.t("読み込み中…")}</li>}
+            {fonts && !shown.length && <li className="fp-note" role="presentation">{i18next.t("見つかりません")}</li>}
+            {shown.map((f) => {
+              const v = LOCAL + f.name;
+              return <li key={f.name} role="option" aria-selected={v === value} className="ctx-item" onClick={() => pick(v)}><span className="ctx-label" style={{ fontFamily: `${fam(f.name)}, var(--font-sans)` }}>{f.name}</span>{v === value && <Check aria-hidden />}</li>;
+            })}
+          </ul>
+        </div>, document.body)}
+    </>
   );
 }
 
