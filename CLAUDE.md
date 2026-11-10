@@ -11,7 +11,7 @@
   - AI 機能: ユーザーが操作したときに、選択範囲・開いているファイル・入力した文章を、ユーザーが選んだ AI(Anthropic / OpenAI / この PC の claude コマンド経由の Anthropic)へ送る。API キーはユーザー自身のもの。
   - 匿名の利用数: 1 日 1 回、ランダムな ID・アプリの版・OS の種類・言語だけを送る。設定(`telemetry`、初期値オン)と初回セットアップで切り替えられる。
 - コーディング統計(時間・入力数)は外へ送らない。`reportErrors` 設定は送信先のない仮置きで、何も送らない。
-- git リポジトリ(未コミットの変更が多い)。コミットは頼まれたときだけ行う。
+- git リポジトリ。コミットは頼まれたときだけ行う(2026-11-10 に、それまでの変更をまとめて 1 つコミット済み)。
 - 公式サイトは別プロジェクト `~/projects/workspace/git/vpsservice/private/fixit-editor.lapius7.com`。更新履歴は `src/changelog.ts`。機能を足す・変える・消したら、同じ作業の中で更新する(初回公開版は 1.0.0 で、公開までの変更はすべてここに入れる)。
 
 ## コマンド
@@ -39,6 +39,7 @@
 - `src/platform/` ファイル操作・ターミナル・リモートへの橋渡し(ブラウザ版は `/__fs`、exe は Tauri)。
 - `src/shared/Select.tsx` は OS 標準 `<select>` の代わり(ポータルで開く一覧は `.ctx` と同じ見た目)。`<select>` は使わずこれを使う。`segslide.ts` は `.seg`(切り替えボタン)の選択つまみを滑らせる(`--seg-x/--seg-w` を書き、`.seg::before` が動く)。エディタ面の濃さは `--paper-k` と `data-paper`(0 のとき `.paper` のぼかしを外す)で効く。
 - タブ切り替えの動き: 設定の左の分類は `.set-nav::before` の印が滑る(`Settings.tsx` の `useLayoutEffect` が選択中の `.set-tab` の位置を `--tab-y` / `--tab-h` に書く。最初の 1 回は `data-ready` が付くまで動かさない)。設定の中身とワークスペース/プロファイルの中身は、`key` つきの `.set-fade` で切り替えのたびにふわっと出る。
+- 通知と補助の表示: メッセージは `src/shared/notify.tsx` の `notify(文, 種類)`(ding のトースト。`App` の `flash` も同じ。ステータスバーの文字表示はやめた)。タブとファイル一覧のホバーカードは `src/shared/HoverTip.tsx`(要素に `data-tip` / `data-tip-sub` を付けるだけ)。設定の「変えた項目」の印は、行の左のバー(`.set-row::after`)と、変えたときだけ出る「初期値に戻す」ボタン。
 - `src/shared/` 共有の定数(`config.ts`)・型・小さな道具。`src/styles/` CSS。`src/i18n/` と `locales/{ja,en,ko}.json`: UI の文字列は日本語の原文をキーにして、ここへ訳を足す。
 - `server/fsapi.ts` と `server/term.ts` と `server/claude.ts` ブラウザ版のファイル操作(`/__fs`)・ターミナル・Claude サブスク用の橋渡し(`/__claude`)。vite の dev サーバーに載っている。
 - `src-tauri/` Tauri の Rust 側(`src/main.rs`: ターミナルと、`fs_op` / `fs_write` / `claude_chat` の受け口)。

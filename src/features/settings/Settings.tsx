@@ -5,6 +5,7 @@ import { Rows, Look } from "@/features/settings/SettingsParts";
 import HistoryView from "@/features/settings/HistoryView";
 import { AiSettings } from "@/features/ai/AiSettings";
 import { KEYS, chips, comboOf, keyOf, rec, table } from "@/features/settings/keys";
+import { notify } from "@/shared/notify";
 import i18next from 'i18next'
 import { Trans } from 'react-i18next'
 
@@ -13,7 +14,6 @@ export default function Settings({ onClose, first, out, onTheme }: { onClose: ()
   const [q, setQ] = useState("");
   const [only, setOnly] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [note, setNote] = useState("");
   const s = useSettings();
   const file = useRef<HTMLInputElement>(null);
   const body = useRef<HTMLDivElement>(null); const nav = useRef<HTMLElement>(null);
@@ -48,11 +48,11 @@ export default function Settings({ onClose, first, out, onTheme }: { onClose: ()
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([exportJson()], { type: "application/json" }));
     a.download = "fixit-settings.json"; a.click(); URL.revokeObjectURL(a.href);
-    setNote(i18next.t("設定を書き出しました"));
+    notify(i18next.t("設定を書き出しました"), "success");
   };
   const doImport = async (fl?: File) => {
     if (!fl) return;
-    try { importJson(await fl.text()); setNote(i18next.t("設定を読み込みました")); } catch (e) { setNote("読み込めませんでした: " + (e as Error).message); }
+    try { importJson(await fl.text()); notify(i18next.t("設定を読み込みました"), "success"); } catch (e) { notify(i18next.t("読み込めませんでした: {{m}}", { m: (e as Error).message }), "error"); }
     if (file.current) file.current.value = "";
   };
 
@@ -81,9 +81,8 @@ export default function Settings({ onClose, first, out, onTheme }: { onClose: ()
               {q && <button className="icon-btn" aria-label={i18next.t("消す")} onClick={() => setQ("")}><X /></button>}
             </div>
             <button className="chipbtn" aria-pressed={only} onClick={() => setOnly(!only)}><Trans i18nKey="変えたものだけ" />{changed ? ` ${changed}` : ""}</button>
-            <button className="chipbtn" disabled={!changed} onClick={() => { resetAll(); setNote(i18next.t("設定を初期値に戻しました")); }}><RotateCcw size={13} /><Trans i18nKey="すべて戻す" /></button>
+            <button className="chipbtn" disabled={!changed} onClick={() => { resetAll(); notify(i18next.t("設定を初期値に戻しました"), "success"); }}><RotateCcw size={13} /><Trans i18nKey="すべて戻す" /></button>
           </div>
-          <p className="set-note" aria-live="polite">{note}</p>
           <div className="set-body scroll" ref={body}>
             <div key={searching ? "search" : cat} className="set-fade">
             {searching ? (

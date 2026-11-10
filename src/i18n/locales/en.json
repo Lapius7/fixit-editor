@@ -778,5 +778,8 @@
   "この会話を消す": "Delete this chat",
   "まだ会話の履歴はありません": "No chat history yet",
   "(空の会話)": "(Empty chat)",
-  "履歴をすべて消す": "Clear all history"
+  "履歴をすべて消す": "Clear all history",
+  "通知": "Notifications",
+  "保存できませんでした: {{m}}": "Could not save: {{m}}",
+  "読み込めませんでした: {{m}}": "Could not import: {{m}}"
 }

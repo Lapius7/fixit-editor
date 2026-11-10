@@ -181,3 +181,16 @@ html.theme-fade, html.theme-fade * { transition: background-color calc(.45s * va
 /* 内容が入れ替わる所(設定のカテゴリ、サイドバーのパネル)は、入りに動きを付ける */
 .set-fade { animation: rise calc(.26s * var(--sp)) var(--out) both; }
 .sp, nav.tree { animation: rise calc(.22s * var(--sp)) var(--out) both; }
+
+/* ---------- ホバーのカード(タブ・ファイル一覧) ---------- */
+.hovertip { position: fixed; z-index: 90; max-width: min(380px, calc(100vw - 16px)); padding: 8px 12px 9px; border-radius: calc(var(--r-lg) * var(--rk, 1) - 4px); pointer-events: none;
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--pop); -webkit-backdrop-filter: blur(30px) saturate(1.8); backdrop-filter: blur(30px) saturate(1.8);
+  box-shadow: 0 0 0 .5px color-mix(in srgb, var(--ink) 14%, transparent), 0 1px 0 color-mix(in srgb, #fff 55%, transparent) inset, 0 10px 28px -8px rgba(20, 30, 60, .28);
+  opacity: 0; transform: translateY(-4px) scale(.97); transform-origin: left top; filter: blur(calc(var(--ab) * .5));
+  transition: opacity calc(.16s * var(--sp)) var(--out), transform calc(.28s * var(--sp)) var(--split-spring, var(--out)), filter calc(.16s * var(--sp)) var(--out); }
+.hovertip[data-up="true"] { transform: translateY(4px) scale(.97); transform-origin: left bottom; }
+.hovertip[data-show="true"] { opacity: 1; transform: none; filter: none; }
+.hovertip b { font: 500 13px/20px var(--font-sans); color: var(--ink); overflow-wrap: anywhere; }
+.hovertip span { font: 400 11px/16px var(--font-sans); color: var(--ink-3); overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .hovertip { transition: none; } }
