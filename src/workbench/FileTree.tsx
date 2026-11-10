@@ -11,7 +11,7 @@ export const canDrop = (dest: Node) => {
   return !!n && dest.kind === "dir" && n.path !== dest.path && dirOf(n.path) !== dest.path && !dest.path.startsWith(n.path + "/");
 };
 
-export const iconFor = (name: string) => {
+const iconFor = (name: string) => {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
   if (["json", "jsonc"].includes(ext)) return <FileJson className="ico" style={{ color: "#d9822b" }} />;
   if (["ts", "tsx", "js", "jsx", "mjs", "py", "go", "rs", "swift", "css", "html", "sh"].includes(ext)) return <FileCode2 className="ico" style={{ color: "#4f7cf0" }} />;

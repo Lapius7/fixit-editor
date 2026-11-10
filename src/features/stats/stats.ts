@@ -37,8 +37,8 @@ function persist() {
 }
 
 // 手を動かした印。ここから「離席とみなす時間」のあいだは、作業中として数える
-export function touch(name?: string) { if (!on()) return; last = Date.now(); if (name) lang = name; }
-export function noteKey() { if (!on()) return; today().keys++; dirty = true; }
+function touch(name?: string) { if (!on()) return; last = Date.now(); if (name) lang = name; }
+function noteKey() { if (!on()) return; today().keys++; dirty = true; }
 export function noteEdit(typed: number, deleted: number, name?: string) {
   if (!on()) return;
   const d = today(); d.chars += typed; d.del += deleted; dirty = true; touch(name);

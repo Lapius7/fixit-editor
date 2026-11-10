@@ -37,12 +37,12 @@ const quote = (n: string) => `"${n.replace(/["\\\n]/g, "")}"`;
 const fontCss = (m: Record<string, string>, tail: string) => (v: string) => (v.startsWith(LOCAL) ? `${quote(v.slice(LOCAL.length))}, ${tail}` : m[v] ?? "");
 const map = (m: Record<string, string>) => (v: string) => m[v] ?? "";
 
-export const SANS: Record<string, string> = {
+const SANS: Record<string, string> = {
   inter: '"Inter Variable", "Noto Sans JP Variable", system-ui, sans-serif',
   system: 'system-ui, "Noto Sans JP Variable", sans-serif',
   serif: 'ui-serif, Georgia, "Hiragino Mincho ProN", "Yu Mincho", "Noto Sans JP Variable", serif',
 };
-export const CODE: Record<string, string> = {
+const CODE: Record<string, string> = {
   obel: '"Obel Mono", "Noto Sans JP Variable", ui-monospace, monospace',
   jb: '"JetBrains Mono Variable", "Noto Sans JP Variable", ui-monospace, monospace',
   system: 'ui-monospace, "Cascadia Code", Consolas, Menlo, "Noto Sans JP Variable", monospace',
@@ -260,7 +260,7 @@ const subs = new Set<() => void>();
 
 export const isDark = (x: Settings) => x.mode === "dark" || (x.mode === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
 
-export function wallpaper(dots: Dot[], dark: boolean, dim = 58) {
+function wallpaper(dots: Dot[], dark: boolean, dim = 58) {
   const layers = dots.map((d) => `radial-gradient(78% 78% at ${d.x}% ${d.y}%, ${d.c} 0%, transparent 72%)`);
   const a = (dim / 100).toFixed(2);
   const veil = dark && dim > 0 ? `linear-gradient(rgba(8,10,16,${a}), rgba(8,10,16,${a})), ` : "";

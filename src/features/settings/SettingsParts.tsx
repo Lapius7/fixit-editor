@@ -33,7 +33,7 @@ export function Rows({ defs, flat }: { defs: AnyDef[]; flat?: boolean }) {
   );
 }
 
-export function Row({ d }: { d: AnyDef }) {
+function Row({ d }: { d: AnyDef }) {
   const s = useSettings() as unknown as Record<string, unknown>;
   const v = s[d.id];
   const set = (x: unknown) => update({ [d.id]: x } as never);

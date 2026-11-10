@@ -18,7 +18,7 @@ const say = (m: LangMsg) => dispatchEvent(new CustomEvent<LangMsg>(LANG_EVENT, {
 const ctx = (v: EditorView) => ({ file: v.state.facet(filePath), text: v.state.doc.toString() });
 const live = (v: EditorView) => isScript(v.state.facet(filePath));
 
-export async function goDefinition(v: EditorView, pos = v.state.selection.main.head) {
+async function goDefinition(v: EditorView, pos = v.state.selection.main.head) {
   if (!live(v)) return false;
   const { file, text } = ctx(v);
   const r = await ask<Loc[]>("define", file, text, pos);
@@ -28,7 +28,7 @@ export async function goDefinition(v: EditorView, pos = v.state.selection.main.h
   return true;
 }
 
-export async function findRefs(v: EditorView) {
+async function findRefs(v: EditorView) {
   if (!live(v)) return false;
   const { file, text } = ctx(v), pos = v.state.selection.main.head;
   const r = await ask<Loc[]>("refs", file, text, pos);
@@ -37,7 +37,7 @@ export async function findRefs(v: EditorView) {
   return true;
 }
 
-export async function startRename(v: EditorView) {
+async function startRename(v: EditorView) {
   if (!live(v)) return false;
   const { file, text } = ctx(v), pos = v.state.selection.main.head;
   const r = await ask<{ name?: string; from?: number; to?: number; error?: string }>("renameInfo", file, text, pos);

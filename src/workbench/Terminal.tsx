@@ -1,14 +1,16 @@
 import { useEffect, useRef } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import { isDark, useSettings } from "@/features/settings/settings";
 import { IS_TAURI } from "@/shared/chrome";
+import { openExternal } from "@/features/account/auth";
 import { tauriPty, type Sock } from "@/platform/pty";
 import i18next from 'i18next'
 
-const LIGHT = { background: "#00000000", foreground: "#26292e", cursor: "#3b6fd9", selectionBackground: "#3b6fd940", black: "#26292e", red: "#c41a16", green: "#2a9d6c", yellow: "#8a5a00", blue: "#3b6fd9", magenta: "#9b2393", cyan: "#326d74", white: "#8b93a1" };
-const DARK = { background: "#00000000", foreground: "#e6e9f0", cursor: "#7aa2ff", selectionBackground: "#5a8cff55", black: "#3a3f4b", red: "#fc6a5d", green: "#67d4a4", yellow: "#d0bf69", blue: "#7aa2ff", magenta: "#fc5fa3", cyan: "#5dd8ff", white: "#e6e9f0" };
+const LIGHT = { background: "#00000000", foreground: "#26292e", cursor: "#3b6fd9", selectionBackground: "#bfd2f8", selectionInactiveBackground: "#d6e1f7", black: "#26292e", red: "#c41a16", green: "#2a9d6c", yellow: "#8a5a00", blue: "#3b6fd9", magenta: "#9b2393", cyan: "#326d74", white: "#8b93a1" };
+const DARK = { background: "#00000000", foreground: "#e6e9f0", cursor: "#7aa2ff", selectionBackground: "#3d5c9c", selectionInactiveBackground: "#2f4570", black: "#3a3f4b", red: "#fc6a5d", green: "#67d4a4", yellow: "#d0bf69", blue: "#7aa2ff", magenta: "#fc5fa3", cyan: "#5dd8ff", white: "#e6e9f0" };
 const FONT = (): string => getComputedStyle(document.documentElement).getPropertyValue("--font-mono").trim() || "monospace";
 
 export type TermApi = { copy: () => void; paste: () => void; clear: () => void; focus: () => void; send: (text: string) => void };
@@ -55,6 +57,7 @@ export default function TerminalSession({ id, active, open, focusKey, host: sshH
     });
     const f = new FitAddon();
     t.loadAddon(f);
+    t.loadAddon(new WebLinksAddon((_e, uri) => { void openExternal(uri); }));
     t.open(host.current!);
     term.current = t; fit.current = f;
     const q = new URLSearchParams({ ...(sshHost ? { host: sshHost } : {}), ...(cwd ? { cwd } : {}), ...(shell ? { shell } : {}) }).toString();

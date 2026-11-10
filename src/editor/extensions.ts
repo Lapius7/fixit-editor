@@ -62,7 +62,7 @@ export const power: Extension = [
 // 「文字のない空白」まで選んだように見える。行末は改行1文字ぶんだけ塗る(VS Code と同じ)
 // 範囲を選んでいる間、エディタに cm-hasSel を付ける(テーマ側でカーソル行の帯を消すのに使う)
 // 折り返しオフで横にスクロールすると、字が行番号とミニマップの下を通る。字の側をマスクで隠す(位置は CSS 変数で渡す)
-export const hScrollMask = ViewPlugin.fromClass(class {
+const hScrollMask = ViewPlugin.fromClass(class {
   constructor(readonly view: EditorView) {
     this.on = () => this.sync();
     view.scrollDOM.addEventListener("scroll", this.on, { passive: true });
@@ -90,7 +90,7 @@ export const hScrollMask = ViewPlugin.fromClass(class {
   }
   destroy() { this.view.scrollDOM.removeEventListener("scroll", this.on); this.view.dom.removeAttribute("data-hmask"); this.ro.disconnect(); }
 });
-export const hasSelClass = EditorView.editorAttributes.compute(["selection"], (st) => ({ class: st.selection.ranges.some((r) => !r.empty) ? "cm-hasSel" : "" }));
+const hasSelClass = EditorView.editorAttributes.compute(["selection"], (st) => ({ class: st.selection.ranges.some((r) => !r.empty) ? "cm-hasSel" : "" }));
 const trimmedSelection = layer({
   above: false,
   class: "cm-selTrim",

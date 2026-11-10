@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { get, isDark, ms } from "@/features/settings/settings";
 import { PixelField, textShape } from "@/shared/pixels";
-import i18next from 'i18next'
-import { Trans } from 'react-i18next'
 
 // 起動画面。ピクセルが渦を巻いて集まり「Fixit」になり、そのあと画面がせり上がる。
 // 飛ばせない(途中のクリックで消えないように)。?nosplash か設定で無効にできる。
 const root = document.documentElement;
-export const SPLASH_ON = () => !new URLSearchParams(location.search).has("nosplash") && get().splash;
+const SPLASH_ON = () => !new URLSearchParams(location.search).has("nosplash") && get().splash;
 if (SPLASH_ON()) root.dataset.boot = "wait";
 
 export default function Splash() {

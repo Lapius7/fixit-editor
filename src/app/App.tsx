@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Palette as PaletteIcon, Quote, FolderOpen, PanelLeft, PanelRight, PanelTop, PanelBottom, ListCollapse, RotateCw, X, Files, Search as SearchIcon, FilePlus, FolderPlus, Pencil, Trash2, Copy, Scissors, ClipboardPaste,
-  Columns2, Rows2, ArrowLeftRight, SquareTerminal, Settings as Cog, Plus, TextCursorInput, Terminal as TermIcon, Undo2, Redo2, MousePointerClick, CaseUpper, ArrowDownAZ, WrapText, ChevronsDownUp, ChevronsUpDown, Link, Eraser, SunMoon, Command, ChevronDown, ChevronRight, Folder, FolderMinus,
+  Palette as PaletteIcon, Quote, FolderOpen, PanelLeft, PanelRight, PanelTop, PanelBottom, RotateCw, X, Files, Search as SearchIcon, FilePlus, FolderPlus, Pencil, Trash2, Copy, Scissors, ClipboardPaste,
+  Columns2, Rows2, ArrowLeftRight, SquareTerminal, Settings as Cog, Plus, TextCursorInput, Terminal as TermIcon, Undo2, Redo2, MousePointerClick, CaseUpper, ArrowDownAZ, WrapText, ChevronsDownUp, Link, Eraser, SunMoon, Command, ChevronDown, ChevronRight, Folder, FolderMinus,
 } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 import WinControls from "@/app/WinControls";
@@ -44,7 +44,7 @@ import Workspaces from "@/features/workspaces/Workspaces";
 import { Pin, History, MessageSquareText, RefreshCw, ArrowUpCircle } from "lucide-react";
 import { Play } from "lucide-react";
 import { runnerFor, buildCommand } from "@/features/run/runners";
-import { Sparkles, Server, HardDrive, FolderKanban, Eye, Code2, Maximize2, Minimize2 } from "lucide-react";
+import { Sparkles, Server, FolderKanban, Eye, Maximize2, Minimize2 } from "lucide-react";
 import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
 import { displayPath, setRootNames, splitRoot } from "@/workbench/rootpath";
 import { getProfiles, switchProfile, useProfiles } from "@/features/settings/profiles";
@@ -64,7 +64,7 @@ import { KEYS, DEF, chips, comboOf, keyOf, rec, table } from "@/features/setting
 import { EDIT } from "@/editor/edit-cmds";
 import { codeToPng, shareShot } from "@/editor/shot";
 import { drag, dragEnd, dragging } from "@/workbench/dnd";
-import { LEAF0, boxes, flipAround, fromPair, has as inLay, isLeaf, joints, leaves, nextId, onTop, removeLeaf, renumber, setRatio, splitLeaf, swapLeaves, topLeaves, topRight, valid as validLay, type Box, type Dir, type Edge, type Joint, type Lay } from "@/workbench/layout";
+import { LEAF0, boxes, flipAround, fromPair, isLeaf, joints, leaves, nextId, onTop, removeLeaf, renumber, setRatio, splitLeaf, swapLeaves, topLeaves, topRight, valid as validLay, type Box, type Dir, type Edge, type Joint, type Lay } from "@/workbench/layout";
 import { addNode, dirOf, exists, moveNode, removeNode, renameNode } from "@/workbench/treeops";
 import { DEFS, isDark, ms, update, useSettings } from "@/features/settings/settings";
 import type { Tab } from "@/shared/types";

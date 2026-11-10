@@ -27,12 +27,11 @@ export const AI_MODEL_HINTS = {
   openai: ["gpt-5", "gpt-5-mini"],
   "claude-cli": ["opus", "sonnet", "haiku"],
 } as const;
-export const AI_TRANSLATE_TO = [["ja", "日本語"], ["en", "English"], ["ko", "한국어"]] as const;
 export const AI_MAX_HISTORY_CHARS = 120_000; // 会話の履歴として送る量の上限(古い発言から外す)
 
 // 匿名の利用数(インストール数・利用者数)。送り先と保存キーはここだけで決める
 // 受信と更新配布の口。エンドポイントはここに集める
-export const API_BASE = "https://fixit-editor.lapius7.com";
+const API_BASE = "https://fixit-editor.lapius7.com";
 export const TELEMETRY_URL = `${API_BASE}/api/ping`;
 export const USAGE_URL = `${API_BASE}/api/usage`;
 export const ERROR_URL = `${API_BASE}/api/error`;

@@ -13,7 +13,7 @@ const LOOPBACK = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 export const SSH_HOST = /^[A-Za-z0-9._@-]+$/;
 
 export type Entry = { name: string; kind: "dir" | "file"; size: number; mtime: number };
-export class FsError extends Error {
+class FsError extends Error {
   constructor(message: string, public status = 500, public code = "EIO") { super(message); }
 }
 

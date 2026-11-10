@@ -15,7 +15,7 @@ const codeOf = (x: string, y: string): Code => {
 };
 
 // porcelain v1 の -z 出力: 先頭にリポジトリの場所とブランチを足してある。名前変更は、新しい名前のあとに元の名前が続く
-export function parseStatus(raw: string): GitInfo | null {
+function parseStatus(raw: string): GitInfo | null {
   const p = raw.split("\0");
   if (p.length < 2) return null;
   const root = p[0].replace(/\/+$/, ""), branch = p[1];

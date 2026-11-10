@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { kvDel, kvGet, kvSet, mergeById } from "@/platform/appdata";
+import { kvGet, kvSet, mergeById } from "@/platform/appdata";
 import { SYNC_POLL_MS, SYNC_PUSH_DELAY_MS, SYNC_URL } from "@/shared/config";
 import { getAccount, authFetch, subscribeAccount } from "./auth";
 import { reloadFromStore as reloadSettings, syncExport } from "@/features/settings/settings";
@@ -203,4 +203,3 @@ export function startSync() {
   subscribeAccount(() => { const id = getAccount()?.id ?? ""; if (id !== lastId) { lastId = id; if (id) schedule(300); } });
   if (getAccount()) schedule(2500);
 }
-export const _forgetSync = () => { kvDel(SKEY); st = load(); };

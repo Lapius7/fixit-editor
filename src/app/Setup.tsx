@@ -23,7 +23,7 @@ export function needSetup(): boolean {
     return true;
   } catch { return false; }
 }
-export const markSetupDone = () => { try { kvSet(FLAG, "1"); } catch { /* 保存できなくても動かす */ } };
+const markSetupDone = () => { try { kvSet(FLAG, "1"); } catch { /* 保存できなくても動かす */ } };
 
 function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (

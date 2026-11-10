@@ -10,7 +10,7 @@ export type FileHits = { node: Node; hits: Hit[] };
 
 const BIN = /\.(png|jpe?g|gif|webp|bmp|ico|avif|pdf|docx?|xlsx?|pptx?|zip|7z|gz|tar|rar|exe|dll|so|bin|woff2?|ttf|otf|mp[34]|webm|mov|wav|ogg|flac|sqlite|db|psd|class|o|iso|msi)$/i;
 
-export function matcher(q: string, o: Opt): RegExp | null {
+function matcher(q: string, o: Opt): RegExp | null {
   if (!q) return null;
   try {
     let src = o.re ? q : q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -34,7 +34,7 @@ export async function searchRoots(roots: { nodes: Node[]; prefix: string }[], q:
 }
 
 // フォルダ全体を探す。開いて編集中のタブは、保存前の内容で探す
-export async function searchAll(nodes: Node[], q: string, o: Opt, live: Map<string, string>, signal: { stop: boolean }, onPart: (r: FileHits[]) => void, prefix = ""): Promise<{ files: number; total: number; capped: boolean }> {
+async function searchAll(nodes: Node[], q: string, o: Opt, live: Map<string, string>, signal: { stop: boolean }, onPart: (r: FileHits[]) => void, prefix = ""): Promise<{ files: number; total: number; capped: boolean }> {
   const re = matcher(q, o);
   if (!re) return { files: 0, total: 0, capped: false };
   const out: FileHits[] = [];

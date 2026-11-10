@@ -24,7 +24,7 @@ const markField = StateField.define<RangeSet<GutterMarker>>({
 
 // 行どうしの差。前後の同じ行を落としてから、最長共通部分列で突き合わせる(大きすぎるときは諦める)
 export type Hunk = { from: number; to: number; del: number }; // 新しい側の行(0 始まり、[from,to))と、そこで消えた行数
-export function lineDiff(a: string[], b: string[]): Hunk[] | null {
+function lineDiff(a: string[], b: string[]): Hunk[] | null {
   let s = 0;
   while (s < a.length && s < b.length && a[s] === b[s]) s++;
   let ea = a.length, eb = b.length;

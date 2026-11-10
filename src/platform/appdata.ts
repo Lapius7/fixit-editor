@@ -7,7 +7,6 @@ const WAIT_MS = 400;
 const POLL_MS = 2000;
 const mem = new Map<string, string>();
 let app = false; // フォルダから読み込めたときだけ true(読めなかったときは localStorage で動かす)
-let dir = "";
 let send: (k: string) => void = () => {};
 
 // 他のウィンドウが同じキーを書き換えたときに呼ぶ関数。
@@ -24,8 +23,6 @@ export function mergeById<T extends { id: string }>(mine: T[], theirs: T[], pick
   const out = mine.map((x) => { const y = b.get(x.id); b.delete(x.id); return y ? pick(x, y) : x; });
   return [...out, ...b.values()];
 }
-
-export const dataDir = () => dir; // データフォルダの場所(アプリ版で読み込めたあと)
 
 export const kvGet = (k: string): string | null => (app ? (mem.get(k) ?? null) : localStorage.getItem(k));
 export function kvSet(k: string, v: string): void { if (app) { mem.set(k, v); send(k); } else localStorage.setItem(k, v); }
@@ -48,7 +45,6 @@ export async function initStore(): Promise<void> {
     // 目印は読み込みより先に取る。その間に他のウィンドウが書いても、最初の確認で拾える
     for (const [k, v] of Object.entries(await invoke<Record<string, string>>("store_stamps"))) stamps.set(k, v);
     const all = await invoke<{ dir: string; files: Record<string, string> }>("store_load");
-    dir = all.dir;
     for (const [k, v] of Object.entries(all.files)) { mem.set(k, v); known.set(k, v); }
   } catch { return; }
   app = true;

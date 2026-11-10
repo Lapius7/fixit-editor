@@ -55,7 +55,6 @@ export const getAi = () => cfg;
 export const useAi = () => useSyncExternalStore((f) => (subs.add(f), () => subs.delete(f)), () => cfg);
 
 export const setProvider = (provider: Provider) => commit({ ...cfg, provider });
-export const setModel = (p: Provider, v: string) => commit({ ...cfg, models: { ...cfg.models, [p]: v.trim() || AI_DEFAULT_MODEL[p] } });
 // キーを変えたら、同意はいったん取り消す(別のアカウントや別の相手に送ることになるため)
 export const setKey = (p: Provider, v: string) => commit({ ...cfg, keys: { ...cfg.keys, [p]: v.trim() }, consent: { ...cfg.consent, [p]: false } });
 // オンにしたとき、使う相手がまだオフのものなら、これに切り替える。オフにしたとき、使う相手がこれなら、オンのほかのものへ移す

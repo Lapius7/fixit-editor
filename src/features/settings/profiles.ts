@@ -73,12 +73,6 @@ export function createProfile(name: string, from: "current" | "default" | { data
   return id;
 }
 
-export const duplicateProfile = (id: string) => {
-  flush();
-  const p = st.list.find((x) => x.id === id);
-  return p ? createProfile(i18next.t("{{name}} のコピー", { name: p.name }), { data: p.data }, false) : null;
-};
-
 export const renameProfile = (id: string, name: string) => {
   const n = name.trim();
   if (!n) return;

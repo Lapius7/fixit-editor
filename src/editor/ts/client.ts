@@ -13,7 +13,7 @@ function get() {
 }
 const call = <T,>(op: string, args: Record<string, unknown>) => new Promise<T | null>((res) => { const id = ++seq; waits.set(id, res as (v: unknown) => void); get().postMessage({ id, op, ...args }); });
 
-export const JS_RE = /\.(?:[cm]?[jt]sx?)$/i;
+const JS_RE = /\.(?:[cm]?[jt]sx?)$/i;
 export const isScript = (name: string) => JS_RE.test(name);
 
 // 開いているタブの中身(パス → 文)。App が更新する
