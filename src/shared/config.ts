@@ -33,3 +33,8 @@ export const AI_MAX_HISTORY_CHARS = 120_000; // 会話の履歴として送る�
 // 匿名の利用数(インストール数・利用者数)。送り先と保存キーはここだけで決める
 export const TELEMETRY_URL = "https://fixit-editor.lapius7.com/api/ping";
 export const TELEMETRY_STORE_KEY = "fixit:telemetry:v1";
+
+// ローカル履歴(保存のたびに中身を残す)。文字数で数える
+export const LOCAL_HISTORY_MAX_PER_FILE = 30;
+export const LOCAL_HISTORY_FILE_CHARS = 300_000; // これより大きいファイルは残さない
+export const LOCAL_HISTORY_TOTAL_CHARS = 4_000_000; // 全体の上限

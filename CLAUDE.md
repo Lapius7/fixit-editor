@@ -43,6 +43,8 @@
 - エディタ補助: `src/editor/intel.ts`(括弧の色分け・開始/閉じタグ同時編集・波線・ミニマップ)、`outline.ts` + `Crumbs.tsx`(パンくずとアウトライン。`Mod+Shift+O` は `OUTLINE_EVENT`)。タブのピン留めは `App.tsx` の `pinned`(左に固定、一括で閉じる操作の対象外。`closeMany(paths, force)` の `force` で外せる)。
 - JS/TS 言語機能: `src/editor/ts/worker.ts`(`ts5` = typescript@5 の別名。入っている `typescript` 7 は JS の言語サービス API を持たないため。Web Worker 上で、開いているタブの中身だけを仮想ファイルとして解析)、`ts/client.ts`、`langsvc.ts`(ホバーの型情報・Ctrl+クリック/F12 で定義へ・Shift+F12 で参照・F2 でリネーム)、`LangUI.tsx`(参照一覧とリネーム入力)。設定 `langService`。
 - ホバーカードは `HoverTip.tsx`(初回 1000ms・移動後 300ms)。エクスプローラーには出さず、タブだけ。起動画面はピクセルが集まってロゴになる元のアニメで、色は 4 色グラデーション(`shared/pixels.ts` の colors に `(i,u,v)`)。分割時のフォーカス枠は `panels.css` 末尾の `.paper::before`(ゆっくり揺れるグラデーション)。
+- Git 連携(読み取りだけ): `src/features/git/git.ts`(`git status` の読み取り)、`src/editor/gitgutter.ts`(HEAD との行差分をガターに。追加=緑・変更=青・削除=赤)、`FileTree.tsx` の `.git-badge`、StatusBar のブランチ。取得は `server/fsapi.ts` と `src-tauri/fixit-core/src/{fs,local}.rs` の `gitstatus`/`githead`。コミット・push・書き込みはしない。設定は `gitStatus`。
+- ローカル履歴: `src/features/history/`。保存のたびに中身を `fixit:local-history:v1`(appdata)へ残す(1 ファイル 30 版・30 万字まで、全体 400 万字。上限は `shared/config.ts`)。画面は `LocalHistory.tsx`(Ctrl+Alt+H・タブの右クリック・パレット)。差分は `diffLines`、リネームで `moveFile`。
 - `src/shared/` 共有の定数(`config.ts`)・型・小さな道具。`src/styles/` CSS。`src/i18n/` と `locales/{ja,en,ko}.json`: UI の文字列は日本語の原文をキーにして、ここへ訳を足す。
 - `server/fsapi.ts` と `server/term.ts` と `server/claude.ts` ブラウザ版のファイル操作(`/__fs`)・ターミナル・Claude サブスク用の橋渡し(`/__claude`)。vite の dev サーバーに載っている。
 - `src-tauri/` Tauri の Rust 側(`src/main.rs`: ターミナルと、`fs_op` / `fs_write` / `claude_chat` の受け口)。
