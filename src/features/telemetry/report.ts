@@ -11,7 +11,7 @@ const post = (url: string, body: unknown) =>
 
 // ---- エラー報告(常に送る。設定項目はない) ----
 // 送るのは種類・メッセージ・呼び出し順だけ。パスやユーザー名は、送る前に消す
-export function scrub(t: string): string {
+function scrub(t: string): string {
   return t
     .replace(/file:\/\/\/?[^\s)]*\/([^\s/)]+)/g, "$1")
     .replace(/[A-Za-z]:\\(?:[^\\\s)]+\\)*([^\\\s):]+)/g, "$1")
@@ -20,7 +20,7 @@ export function scrub(t: string): string {
 }
 
 const seen = new Set<string>();
-export function reportError(kind: string, message: string, stack = ""): void {
+function reportError(kind: string, message: string, stack = ""): void {
   if (!import.meta.env.PROD) return;
   const msg = scrub(message).slice(0, 400);
   if (!msg || seen.size >= 5 || seen.has(msg)) return;
@@ -39,7 +39,7 @@ export function installErrorHooks(): void {
 // ---- 利用状況(常に送る。記録をやめている間は送らない) ----
 // 昨日(確定)と今日(途中)の 2 日ぶんを、起動時とその後 6 時間ごとに送る。サーバー側は同じ日を上書きする。
 const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-export async function sendUsage(): Promise<void> {
+async function sendUsage(): Promise<void> {
   if (!import.meta.env.PROD || !get().statsOn) return;
   const st = getStats(), now = new Date(), y = new Date(now.getTime() - 86400_000);
   const id = installId();

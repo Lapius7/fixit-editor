@@ -1,6 +1,6 @@
 [package]
 name = "fixit-installer"
-version = "1.0.0"
+version = "1.0.1"
 description = "Fixit Editor のインストーラー(画面は HTML、WebView2 で表示する)"
 authors = ["Lapius"]
 license-file = "../../LICENSE"

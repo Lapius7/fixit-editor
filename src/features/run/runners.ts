@@ -15,7 +15,7 @@ const BAD = /["`$\r\n%]/; // シェルに解釈される文字を含むパスは
 
 export const cleanExt = (s: string) => s.trim().replace(/^\.+/, "").toLowerCase();
 export const validExt = (s: string) => EXT.test(s);
-export const extOf = (name: string) => { const i = name.lastIndexOf("."); return i > 0 ? name.slice(i + 1).toLowerCase() : ""; };
+const extOf = (name: string) => { const i = name.lastIndexOf("."); return i > 0 ? name.slice(i + 1).toLowerCase() : ""; };
 
 /** 保存された上書きを検査して取り出す(設定の読み込み用) */
 export function cleanRunners(v: unknown): Record<string, string> {
@@ -30,7 +30,7 @@ export function cleanRunners(v: unknown): Record<string, string> {
 }
 
 /** 初期値 + 上書き。空の文字列のものは除く */
-export const effective = (o: Record<string, string>) =>
+const effective = (o: Record<string, string>) =>
   Object.fromEntries(Object.entries({ ...RUN_DEFAULTS, ...o }).filter(([, c]) => c.trim()));
 
 export const runnerFor = (name: string, o: Record<string, string>) => effective(o)[extOf(name)] ?? null;

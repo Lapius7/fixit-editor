@@ -1,4 +1,4 @@
-import { IS_TAURI } from "@/shared/chrome"; import { MAX_OPEN_BYTES, SKIP_DIRS } from "@/shared/config";
+import { IS_TAURI } from "@/shared/chrome"; import { SKIP_DIRS } from "@/shared/config";
 import { get } from "@/features/settings/settings";
 import { RemoteDir, RemoteFile, isRemote, remoteFind } from "@/platform/remote";
 import i18next from 'i18next'
@@ -22,12 +22,6 @@ export async function readDir(dir: FileSystemDirectoryHandle, base = ""): Promis
     out.push({ name, path: `${base}/${name}`, kind: isDir ? "dir" : "file", handle, parent: dir });
   }
   return out.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name, "ja", { numeric: true }) : a.kind === "dir" ? -1 : 1));
-}
-
-export async function readFile(h: FileSystemFileHandle): Promise<string> {
-  const f = await h.getFile();
-  if (f.size > MAX_OPEN_BYTES) throw new Error(i18next.t("ファイルが大きすぎます"));
-  return f.text();
 }
 
 export async function writeFile(h: FileSystemFileHandle, text: string) {

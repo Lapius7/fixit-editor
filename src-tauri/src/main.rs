@@ -280,8 +280,8 @@ fn claude_cancel(state: State<Jobs>, id: String) {
     if let Some(j) = state.0.lock().unwrap().get(&id) { j.cancel(); }
 }
 
-// 既定のブラウザで URL を開く。ログイン画面(Lapount)など、決まった https のアドレスだけを許す
-const OPEN_ALLOW: [&str; 1] = ["https://account.lapius7.com/"];
+// 既定のブラウザで URL を開く。http(s) のアドレスだけを許す(ターミナルのリンクとログイン画面から呼ぶ)
+const OPEN_ALLOW: [&str; 2] = ["https://", "http://"];
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
     if !OPEN_ALLOW.iter().any(|p| url.starts_with(p)) || url.len() > 2048 || url.chars().any(|c| c.is_control() || c == ' ') {

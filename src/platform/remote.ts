@@ -7,7 +7,7 @@ import { IS_TAURI } from "@/shared/chrome";
 // 実際の読み書きは、開発サーバーの /__fs が行う。
 export type Conn = { kind: "wsl" | "ssh" | "pc"; host?: string; path: string }; // pc: この PC のフォルダ(exe のみ。Windows は C:/... の形)
 
-export class RemoteError extends Error {
+class RemoteError extends Error {
   constructor(message: string, public code = "EIO", public status = 500) { super(message); }
 }
 
@@ -17,7 +17,7 @@ export const sshUrl = (c: Conn, abs: string) => (c.kind === "ssh" ? `ssh://${c.h
 
 const dirPrefix = (p: string) => (p.endsWith("/") ? p : `${p}/`); // "/" や "C:/" の直下を作るとき、区切りを重ねない
 const join = (a: string, b: string) => dirPrefix(a) + b;
-export const baseName = (p: string) => p.replace(/\/+$/, "").split("/").pop() || "/";
+const baseName = (p: string) => p.replace(/\/+$/, "").split("/").pop() || "/";
 
 // exe(Tauri)では、開発サーバーの代わりに Rust 側(fs_op / fs_write)が同じ操作を行う
 async function callTauri(op: string, q: Record<string, string>, body?: BodyInit): Promise<Response> {
@@ -137,7 +137,7 @@ export async function remoteGrep(root: RemoteDir, q: string, o: { re: boolean; c
 
 // ---- 入力の整え ----
 // Windows のパスを WSL のパスにする。C:\x → /mnt/c/x、\\wsl$\Distro\x → /x
-export function toWslPath(input: string): string {
+function toWslPath(input: string): string {
   let s = input.trim().replace(/^["']|["']$/g, "");
   const unc = /^\\\\wsl(?:\$|\.localhost)\\[^\\]+(\\.*)?$/i.exec(s);
   if (unc) return (unc[1] ?? "\\").replace(/\\/g, "/");

@@ -9,14 +9,14 @@ export const LANGS = [["ja", "日本語"], ["en", "English"], ["ko", "한국어"
 export type Lang = (typeof LANGS)[number][0];
 
 // 「自動」のとき、OS の言語から選ぶ
-export function osLang(): Lang {
+function osLang(): Lang {
   for (const l of navigator.languages ?? [navigator.language]) {
     const c = l.toLowerCase().slice(0, 2);
     if (c === "ja" || c === "ko" || c === "en") return c;
   }
   return "en";
 }
-export const resolve = (v: string): Lang => (v === "ja" || v === "en" || v === "ko" ? v : osLang());
+const resolve = (v: string): Lang => (v === "ja" || v === "en" || v === "ko" ? v : osLang());
 
 i18next.use(initReactI18next).init({
   lng: resolve(get().lang),

@@ -16,7 +16,7 @@ const extOf = (p: string) => p.split("?")[0].split("#")[0].split(".").pop()?.toL
 const isExternal = (u: string) => /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(u) || u === "";
 
 // 基準のパス(ファイルのパス)から見た相対参照を、フォルダ内のパスにそろえる。フォルダの外へ出るときは null
-export function resolvePath(from: string, ref: string): string | null {
+function resolvePath(from: string, ref: string): string | null {
   const { prefix, rel } = splitRoot(from);
   const clean = ref.split(/[?#]/)[0];
   const parts = clean.startsWith("/") ? [] : rel.split("/").slice(0, -1);

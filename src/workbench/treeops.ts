@@ -22,7 +22,7 @@ export function renameNode(nodes: Node[], path: string, name: string): Node[] {
 }
 export const exists = (nodes: Node[], path: string): boolean => nodes.some((x) => x.path === path || (x.children ? exists(x.children, path) : false));
 
-export const findNode = (nodes: Node[], path: string): Node | null => {
+const findNode = (nodes: Node[], path: string): Node | null => {
   for (const x of nodes) { if (x.path === path) return x; const r = x.children && findNode(x.children, path); if (r) return r; }
   return null;
 };

@@ -3,7 +3,6 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { createPortal } from "react-dom";
 import { ChevronRight } from "lucide-react";
 import { chips } from "@/features/settings/keys";
-import i18next from 'i18next'
 
 export type Item =
   | { type: "sep" }

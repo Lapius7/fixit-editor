@@ -107,7 +107,7 @@ export function comboOf(ev: KeyboardEvent): string | null {
   return [...p, k].join("+");
 }
 
-export const isMac = () => /Mac|iPhone|iPad/.test(navigator.platform);
+const isMac = () => /Mac|iPhone|iPad/.test(navigator.platform);
 const NAME: Record<string, string> = { ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→", Enter: "Enter", Escape: "Esc", Backspace: "⌫", Delete: "Del", Space: "Space" };
 export const chips = (combo: string): string[] =>
   combo ? combo.split(/\+(?=.)/).map((p) => (p === "Mod" ? (isMac() ? "⌘" : "Ctrl") : p === "Alt" && isMac() ? "⌥" : p === "Shift" && isMac() ? "⇧" : NAME[p] ?? p)) : [];

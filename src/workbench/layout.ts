@@ -7,9 +7,9 @@ export type Edge = "L" | "R" | "T" | "B";
 export const LEAF0: Lay = { id: 0 };
 export const isLeaf = (l: Lay): l is { id: number } => "id" in l;
 export const leaves = (l: Lay): number[] => (isLeaf(l) ? [l.id] : [...leaves(l.a), ...leaves(l.b)]);
-export const has = (l: Lay, id: number): boolean => leaves(l).includes(id);
+const has = (l: Lay, id: number): boolean => leaves(l).includes(id);
 export const nextId = (l: Lay) => Math.max(...leaves(l)) + 1;
-export const clampR = (r: number) => Math.min(80, Math.max(20, Math.round(r)));
+const clampR = (r: number) => Math.min(80, Math.max(20, Math.round(r)));
 
 /** 葉 id を、dir 方向に2つへ割る。edge が "L"/"T" なら新しい画面が先(左・上)に来る */
 export function splitLeaf(l: Lay, id: number, fresh: number, edge: Edge, r = 50): Lay {

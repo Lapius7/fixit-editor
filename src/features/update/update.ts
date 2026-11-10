@@ -6,14 +6,14 @@ export type Manifest = { version: string; date: string; notes: string; file: str
 
 const ver = (v: string) => v.split("-")[0].split(".").map((n) => parseInt(n, 10) || 0);
 // a が b より新しければ true(1.10.0 > 1.9.0)
-export function newer(a: string, b: string): boolean {
+function newer(a: string, b: string): boolean {
   const x = ver(a), y = ver(b);
   for (let i = 0; i < 3; i++) { if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0); }
   return false;
 }
 
 // 新しい版があれば更新情報を返す。なければ null、確かめられなかったら "error"。アプリ版(exe)だけで動く
-export async function checkUpdate(): Promise<Manifest | null | "error"> {
+async function checkUpdate(): Promise<Manifest | null | "error"> {
   if (!IS_TAURI) return null;
   try {
     const r = await fetch(UPDATE_URL, { cache: "no-store" });

@@ -159,6 +159,12 @@ export async function startLogin(): Promise<LoginFlow> {
   return { code: d.user_code, url: d.verification_uri_complete, done, cancel };
 }
 
+// http(s) の URL を、OS の既定のブラウザ(開発用のブラウザ版は新しいタブ)で開く
+export async function openExternal(url: string): Promise<void> {
+  if (!/^https?:\/\//i.test(url)) return;
+  await openLoginPage(url);
+}
+
 // ログイン画面を開く(アプリ版は OS の既定のブラウザ、開発用のブラウザ版は新しいタブ)
 export async function openLoginPage(url: string): Promise<void> {
   if (IS_TAURI) {

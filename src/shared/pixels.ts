@@ -25,7 +25,7 @@ export function textShape(text: string, font: string, cell: number, colors: (i: 
 export class PixelField {
   private ctx: CanvasRenderingContext2D; private A: Fly[] = []; private B: Fly[] = []; private colA = "#000"; private colB = "#000";
   private raf = 0; private shape: Shape | null = null; private dpr = Math.min(3, window.devicePixelRatio || 1);
-  constructor(private cv: HTMLCanvasElement, private cell: number, private w: number, private h: number, private gap = .8) {
+  constructor(cv: HTMLCanvasElement, private cell: number, private w: number, private h: number, private gap = .8) {
     cv.width = Math.round(w * cell * this.dpr); cv.height = Math.round(h * cell * this.dpr);
     cv.style.width = `${w * cell}px`; cv.style.height = `${h * cell}px`;
     this.ctx = cv.getContext("2d")!;

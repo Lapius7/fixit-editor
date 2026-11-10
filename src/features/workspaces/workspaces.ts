@@ -22,7 +22,7 @@ export type Workspace = WsState & {
 };
 type Store = { list: Workspace[]; current: string | null };
 
-export const COLORS = ["#3b6fd9", "#7a5cf0", "#d6479a", "#e0691f", "#2a9d6c", "#5b6473"];
+const COLORS = ["#3b6fd9", "#7a5cf0", "#d6479a", "#e0691f", "#2a9d6c", "#5b6473"];
 const KEY = "fixit:workspaces:v1";
 const uid = () => Math.random().toString(36).slice(2, 9);
 
@@ -89,14 +89,6 @@ export function setWsRoots(id: string, list: RootEntry[]) {
 }
 export const removeWs = (id: string) => { const w = findWs(id); (w ? wsRoots(w) : [{ prefix: "" }]).forEach((o) => delHandle(handleKey(id, o.prefix))); set({ list: st.list.filter((w) => w.id !== id), current: st.current === id ? null : st.current }); };
 export const setCurrent = (id: string | null) => { if (st.current !== id) set({ ...st, current: id }); };
-export function duplicateWs(id: string, max = 30) {
-  const w = findWs(id);
-  if (!w) return null;
-  const c: Workspace = { ...w, id: uid(), name: i18next.t("{{name}} のコピー", { name: w.name }), pinned: false, updated: Date.now() };
-  set({ ...st, list: trim([...st.list, c], c.id, max) });
-  wsRoots(w).forEach((o) => { if (o.ref.kind === "local") getHandle(handleKey(id, o.prefix)).then((h) => h && putHandle(handleKey(c.id, o.prefix), h)); });
-  return c;
-}
 
 // 同じフォルダのワークスペースを探す(WSL・SSH は接続先で、PC のフォルダはハンドルの同一判定で)
 export async function matchRoot(root: RootRef, handle?: FileSystemDirectoryHandle): Promise<Workspace | null> {
@@ -129,7 +121,7 @@ async function tx<T>(mode: IDBTransactionMode, f: (s: IDBObjectStore) => IDBRequ
 }
 export const putHandle = (id: string, h: FileSystemDirectoryHandle) => tx("readwrite", (s) => s.put(h, id));
 export const getHandle = (id: string) => tx<FileSystemDirectoryHandle>("readonly", (s) => s.get(id) as IDBRequest<FileSystemDirectoryHandle>);
-export const delHandle = (id: string) => tx("readwrite", (s) => s.delete(id));
+const delHandle = (id: string) => tx("readwrite", (s) => s.delete(id));
 
 type Perm = { queryPermission?: (o: object) => Promise<string>; requestPermission?: (o: object) => Promise<string> };
 export async function canUse(h: FileSystemDirectoryHandle, ask: boolean): Promise<boolean> {
