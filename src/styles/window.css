@@ -58,21 +58,21 @@ img, svg { -webkit-user-drag: none; user-drag: none; }
   --split-melt: cubic-bezier(.32, .72, 0, 1);
   --split-t: .9s;
 }
-.panes[data-split="true"] { transition: grid-template-columns calc(var(--split-t) * var(--sp)) var(--split-spring), gap calc(var(--split-t) * var(--sp)) var(--split-spring); }
-html[data-splitdir="row"] .panes[data-split="true"] { transition: grid-template-rows calc(var(--split-t) * var(--sp)) var(--split-spring), gap calc(var(--split-t) * var(--sp)) var(--split-spring); }
-.panes > .paper:nth-child(2) { opacity: 0; transform: translateX(32px) scale(.94); filter: blur(calc(var(--ab) * 2)); transform-origin: 0 50%;
-  transition: opacity calc(.38s * var(--sp)) var(--split-melt), transform calc(.6s * var(--sp)) var(--split-melt), filter calc(.5s * var(--sp)) var(--split-melt); }
-html[data-splitdir="row"] .panes > .paper:nth-child(2) { transform: translateY(32px) scale(.94); transform-origin: 50% 0; }
-.panes[data-split="true"] > .paper:nth-child(2) { opacity: 1; transform: none; filter: none;
-  transition: opacity calc(.55s * var(--sp)) var(--split-melt) calc(.05s * var(--sp)), transform calc(var(--split-t) * var(--sp)) var(--split-spring), filter calc(.7s * var(--sp)) var(--split-melt); }
-.panes[data-dragging="true"] { transition: none !important; }
+/* 画面(.slot)は .panes の中に絶対配置。分割・割合の変更・入れ替えは、位置と大きさの遷移で動く */
+.slot { transition: left calc(var(--split-t) * var(--sp)) var(--split-spring), top calc(var(--split-t) * var(--sp)) var(--split-spring), width calc(var(--split-t) * var(--sp)) var(--split-spring), height calc(var(--split-t) * var(--sp)) var(--split-spring),
+  padding calc(var(--split-t) * var(--sp)) var(--split-spring); }
+.panes[data-dragging="true"] > .slot, .panes[data-dragging="true"] > .split-grip, .tabrow[data-dragging="true"] > .slot { transition: none !important; }
+/* 新しい画面は、分けた側から、ぼかしながら現れる */
+.slot[data-born] { --bx: 0px; --by: 0px; animation: pane-in calc(.6s * var(--sp)) var(--split-melt) both; }
+.slot[data-born="R"] { --bx: 32px; } .slot[data-born="L"] { --bx: -32px; } .slot[data-born="B"] { --by: 32px; } .slot[data-born="T"] { --by: -32px; }
+@keyframes pane-in { from { opacity: 0; transform: translate(var(--bx), var(--by)) scale(.94); filter: blur(calc(var(--ab) * 2)); } }
 /* 新しい画面の縁を、光がひと撫でする(水面に光が走る感じ) */
-.panes > .paper:nth-child(2)::before { content: ""; position: absolute; inset: 0; z-index: 5; border-radius: inherit; pointer-events: none; opacity: 0;
+.slot[data-born] > .paper::before { content: ""; position: absolute; inset: 0; z-index: 5; border-radius: inherit; pointer-events: none; opacity: 0;
   background: linear-gradient(105deg, transparent 30%, color-mix(in srgb, #fff 34%, transparent) 46%, color-mix(in srgb, var(--accent) 16%, transparent) 54%, transparent 70%) no-repeat -120% 0 / 220% 100%;
-  box-shadow: 0 0 0 1px color-mix(in srgb, #fff 55%, transparent) inset, 0 0 36px color-mix(in srgb, var(--accent) 26%, transparent) inset; }
-.panes[data-split="true"] > .paper:nth-child(2)::before { animation: split-sheen calc(1.1s * var(--sp)) var(--split-melt) calc(.08s * var(--sp)) both; }
+  box-shadow: 0 0 0 1px color-mix(in srgb, #fff 55%, transparent) inset, 0 0 36px color-mix(in srgb, var(--accent) 26%, transparent) inset;
+  animation: split-sheen calc(1.1s * var(--sp)) var(--split-melt) calc(.08s * var(--sp)) both; }
 @keyframes split-sheen { 0% { opacity: 1; background-position: -120% 0; } 55% { opacity: 1; } 100% { opacity: 0; background-position: 120% 0; } }
-@media (prefers-reduced-motion: reduce) { .panes > .paper:nth-child(2)::before { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .slot, .slot[data-born], .slot[data-born] > .paper::before { transition: none; animation: none !important; } }
 
 /* ---- ファイルツリーのドラッグ移動 ---- */
 .tree-row[data-drop="true"] { background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent) inset; }

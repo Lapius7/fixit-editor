@@ -62,6 +62,7 @@ import { KEYS, DEF, chips, comboOf, keyOf, rec, table } from "@/features/setting
 import { EDIT } from "@/editor/edit-cmds";
 import { codeToPng, shareShot } from "@/editor/shot";
 import { drag, dragEnd, dragging } from "@/workbench/dnd";
+import { LEAF0, boxes, flipAround, fromPair, has as inLay, isLeaf, joints, leaves, nextId, onTop, removeLeaf, renumber, setRatio, splitLeaf, swapLeaves, topLeaves, topRight, valid as validLay, type Box, type Dir, type Edge, type Joint, type Lay } from "@/workbench/layout";
 import { addNode, dirOf, exists, moveNode, removeNode, renameNode } from "@/workbench/treeops";
 import { DEFS, isDark, ms, update, useSettings } from "@/features/settings/settings";
 import type { Tab } from "@/shared/types";
@@ -73,14 +74,14 @@ type Root = { prefix: string; name: string; handle?: FileSystemDirectoryHandle; 
 type Spec = { prefix: string; name: string; handle?: FileSystemDirectoryHandle; conn?: Conn; ref: RootRef };
 const newPrefix = () => "/@" + Math.random().toString(36).slice(2, 7);
 type Dlg = { title: string; desc?: string; input?: string; placeholder?: string; ok: string; danger?: boolean; validate?: (v: string) => string | null; onSubmit: (v: string) => void };
-type Pair<T> = [T, T];
+type Pm<T> = Record<number, T>; // 画面の番号ごとの値
 type Sess = { id: number; num: number; name?: string; exiting?: boolean; cwd?: string; shell?: string; label?: string; host?: string | null }; // host: SSH 先(null は SSH ではない。未指定は先頭のフォルダに合わせる)
 const def = (id: string) => DEFS.find((d) => d.id === id)!.def as number;
 
 const revoke = (t: Tab) => { if ("url" in t.view) URL.revokeObjectURL(t.view.url); };
 const isText = (t?: Tab | null) => t?.view.kind === "text";
 
-type Dz = 0 | 1 | "L" | "R" | "T" | "B";
+type Dz = { pane: number; edge?: Edge }; // 落とす先: 既存の画面(edge なし)か、その画面の端に新しく分割(edge あり)
 
 export default function App() {
   const st = useSettings();
@@ -105,17 +106,17 @@ export default function App() {
   // HTML プレビューが相対パスの CSS・JS・画像を読むための材料(開いているフォルダ、開いているタブの中身)
   const openTexts = useMemo(() => Object.fromEntries(tabs.filter((x) => x.view.kind === "text" && /\.(css|m?js|svg|json)$/i.test(x.node.name)).map((x) => [x.node.path, x.text])), [tabs]);
   const previewSource = (t: Tab) => ({ root: rootOfPath(t.node.path)?.handle as FileSystemDirectoryHandle | undefined, path: t.node.path, open: openTexts });
-  const [act, setAct] = useState<Pair<string | null>>([null, null]);
-  const [fp, setFp] = useState<0 | 1>(0);
-  const [split, setSplit] = useState(false);
-  // 分割: 右の画面を先に置き、次のフレームで幅を広げる(閉じるときは、縮んでから外す)
-  const [splitMount, setSplitMount] = useState(false);
-  const [splitOpen, setSplitOpen] = useState(false);
-  const [grp, setGrp] = useState<Pair<Set<string>>>([new Set(), new Set()]); // 分割時、各画面のタブ(0 側は「両方に出す」印も兼ねる)
+  const [lay, setLay] = useState<Lay>(LEAF0); // 画面の分割(木)。番号は画面ごとに固有で、画面が減っても振り直さない
+  const [act, setAct] = useState<Pm<string | null>>({ 0: null });
+  const [fp, setFp] = useState(0); // いま操作している画面の番号
+  const split = !isLeaf(lay);
+  const first = leaves(lay)[0]; // いちばん左上の画面
+  const [born, setBorn] = useState<Pm<Edge>>({}); // 分割した直後の画面(どの側から現れるか)。現れる動きのために、少しだけ持つ
+  const [grp, setGrp] = useState<Pm<Set<string>>>({ 0: new Set() }); // 分割時、各画面のタブ(どれにも属さないタブは、左上の画面に出す)
   const [fresh, setFresh] = useState<Set<string>>(new Set());   // 開いた直後のタブだけ、伸びる動きをつける(並べ替えで動きが再生されないように)
-  const [dz, setDz] = useState<Dz | null>(null);        // ドラッグ中に落とす先。0/1 は既存の画面、L/R/T/B は「新しく分割してその側に置く」
+  const [dz, setDz] = useState<Dz | null>(null);        // ドラッグ中に落とす先
   const seen = useRef(0); const [chk, setChk] = useState(0);                         // 画面が空になっていないか見直す合図
-  const [tabDrop, setTabDrop] = useState<{ path: string; after: boolean; pane: 0 | 1 } | null>(null);
+  const [tabDrop, setTabDrop] = useState<{ path: string; after: boolean; pane: number } | null>(null);
   const [dragS, setDragS] = useState(false);
   // 新しいタブは、自分の幅まで伸びながら出てくる。伸びる先の幅を、出す前に測っておく
   const measureTab = useCallback((el: HTMLDivElement | null) => { if (!el || el.style.getPropertyValue("--tw")) return; el.style.animation = "none"; el.style.setProperty("--tw", `${el.offsetWidth}px`); el.style.animation = ""; }, []);
@@ -140,8 +141,8 @@ export default function App() {
   const [aiJob, setAiJob] = useState<AiJob | null>(null); // 右クリックから AI パネルへ渡す依頼
   const [aiQuote, setAiQuote] = useState<Clip | null>(null); // 引用して AI パネルへ添える文
   const aiSeq = useRef(0);
-  const [cur, setCur] = useState<Pair<Cursor | null>>([null, null]);
-  const [jump, setJump] = useState<Pair<Jump | undefined>>([undefined, undefined]);
+  const [cur, setCur] = useState<Pm<Cursor | null>>({});
+  const [jump, setJump] = useState<Pm<Jump | undefined>>({});
   const [qo, setQo] = useState(false);
   const [cn, setCn] = useState(false);
   const me = useAccount();
@@ -186,7 +187,7 @@ export default function App() {
   // 外から閉じられても、閉じるアニメーションが終わるまで残す
   const pQo = usePresence(qo), pPal = usePresence(pal), pSetts = usePresence(setts), pDlg = usePresence(dlg), pCn = usePresence(cn);
   const pTp = usePresence(tp, 400), pWs = usePresence(wsDlg), pLh = usePresence(lh), pStats = usePresence(statsOpen), pFb = usePresence(fbOpen), pUp = usePresence(updOpen), pSetup = usePresence(setupOpen), pPop = usePresence(pop, 140), pMenu = usePresence(menu, 140);
-  const views = useRef<Pair<EditorView | null>>([null, null]);
+  const views = useRef<Pm<EditorView | null>>({});
   const apis = useRef(new Map<number, TermApi>());
   const seq = useRef(0);
   const sessRef = useRef<Sess[]>([]);
@@ -194,14 +195,18 @@ export default function App() {
   const cleanT = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const tabOf = (p: string | null) => tabs.find((t) => t.node.path === p) ?? null;
-  const tab = tabOf(act[fp]);
-  // タブがどの画面に出るか。分割していなければ、すべて左(0)。どちらにも属さないものは左に出す
-  const mem = (i: 0 | 1, p: string) => (i === 0 ? !split || !grp[1].has(p) || grp[0].has(p) : split && grp[1].has(p));
-  const paneTabs = (i: 0 | 1) => tabs.filter((t) => mem(i, t.node.path));
-  const grpAdd = (g: Pair<Set<string>>, i: 0 | 1, p: string): Pair<Set<string>> => { const x: Pair<Set<string>> = [new Set(g[0]), new Set(g[1])]; x[i].add(p); return x; };
-  const grpDel = (g: Pair<Set<string>>, ps: Iterable<string>, i?: 0 | 1): Pair<Set<string>> => { const x: Pair<Set<string>> = [new Set(g[0]), new Set(g[1])]; for (const p of ps) { if (i !== 1) x[0].delete(p); if (i !== 0) x[1].delete(p); } return x; };
+  const tab = tabOf(act[fp] ?? null);
+  // タブがどの画面に出るか。分割していなければ、すべて左上の画面。どの画面にも属さないものも、左上に出す
+  const mem = (i: number, p: string) => (!split ? i === first : !!grp[i]?.has(p) || (i === first && !Object.values(grp).some((g) => g.has(p))));
+  const paneTabs = (i: number) => tabs.filter((t) => mem(i, t.node.path));
+  const grpAdd = (g: Pm<Set<string>>, i: number, p: string): Pm<Set<string>> => ({ ...g, [i]: new Set(g[i]).add(p) });
+  const grpDel = (g: Pm<Set<string>>, ps: Iterable<string>, i?: number): Pm<Set<string>> => {
+    const list = new Set(ps), out: Pm<Set<string>> = {};
+    for (const k of Object.keys(g)) { const n = Number(k); out[n] = i === undefined || i === n ? new Set([...g[n]].filter((x) => !list.has(x))) : g[n]; }
+    return out;
+  };
   // その画面で、閉じたタブの代わりに開くタブ(いちばん近いもの)
-  const nearIn = (i: 0 | 1, path: string, list: Tab[] = tabs, skip: Set<string> = new Set([path])) => {
+  const nearIn = (i: number, path: string, list: Tab[] = tabs, skip: Set<string> = new Set([path])) => {
     const k = list.findIndex((t) => t.node.path === path), c = list.filter((t) => !skip.has(t.node.path) && mem(i, t.node.path));
     return (c.find((t) => list.indexOf(t) > k) ?? c[c.length - 1])?.node.path ?? null;
   };
@@ -209,7 +214,7 @@ export default function App() {
   const dirtyList = tabs.filter((t) => isText(t) && t.text !== t.saved);
 
   /* ---------- ファイル ---------- */
-  const open = useCallback(async (n: Node, pane: 0 | 1 = fp, pin = true) => {
+  const open = useCallback(async (n: Node, pane: number = fp, pin = true) => {
     if (!tabs.some((t) => t.node.path === n.path)) {
       try {
         const { view, info } = await load(n);
@@ -217,7 +222,7 @@ export default function App() {
         const nt: Tab = { node: n, view, info, text, saved: text, eol: view.kind === "text" ? view.eol ?? "lf" : "lf" };
         // 一時表示のタブは、次に一時表示で開くものに置き換わる(未保存の変更があるもの・もう一方の画面に出ているものは除く)
         const old = !pin ? tabs.find((t) => t.node.path === preview) : undefined;
-        const swap = !!old && old.text === old.saved && act[pane === 0 ? 1 : 0] !== old.node.path;
+        const swap = !!old && old.text === old.saved && !leaves(lay).some((k) => k !== pane && act[k] === old.node.path);
         setTabs((p) => (p.some((t) => t.node.path === n.path) ? p : swap ? p.map((t) => (t.node.path === old!.node.path ? nt : t)) : [...p, nt]));
         if (swap) { revoke(old!); setGrp((g) => grpDel(g, [old!.node.path])); }
         setPreview(pin ? null : n.path);
@@ -227,14 +232,14 @@ export default function App() {
         }
       } catch (e) { return flash((e as Error).message, "error"); }
     } else if (pin && preview === n.path) setPreview(null);
-    setAct((a) => (pane === 0 ? [n.path, a[1]] : [a[0], n.path]));
-    setGrp((g) => (g[pane].has(n.path) ? g : grpAdd(g, pane, n.path)));
+    setAct((a) => ({ ...a, [pane]: n.path }));
+    setGrp((g) => (g[pane]?.has(n.path) ? g : grpAdd(g, pane, n.path)));
     setFp(pane);
-  }, [tabs, fp, preview, act]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tabs, fp, preview, act, lay]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const goto = async (n: Node, line: number, from = 0, to = 0) => {
     await open(n);
-    setJump((j) => (fp === 0 ? [{ line, from, to, n: Date.now() }, j[1]] : [j[0], { line, from, to, n: Date.now() }]));
+    setJump((j) => ({ ...j, [fp]: { line, from, to, n: Date.now() } }));
   };
 
   // JS/TS の言語機能: 言語サービスには、開いているタブの中身を渡す
@@ -271,7 +276,7 @@ export default function App() {
       setTabs((p) => {
         const keep = p.filter((t) => !gone.has(t.node.path));
         p.filter((t) => gone.has(t.node.path)).forEach(revoke);
-        setAct((a) => a.map((x, i) => (x && gone.has(x) ? nearIn(i as 0 | 1, x, p, gone) : x)) as Pair<string | null>);
+        setAct((a) => Object.fromEntries(Object.entries(a).map(([k, x]) => [k, x && gone.has(x) ? nearIn(Number(k), x, p, gone) : x])) as Pm<string | null>);
         setGrp((g) => grpDel(g, gone));
         return keep;
       });
@@ -287,12 +292,11 @@ export default function App() {
     closeMany([path], true);
   };
   // 分割中、もう一方の画面にも出しているタブは、この画面から外すだけにする
-  const closeIn = (path: string, i: 0 | 1) => {
-    const o = i === 0 ? 1 : 0;
-    if (!split || !mem(o, path)) return close(path);
+  const closeIn = (path: string, i: number) => {
+    if (!split || !leaves(lay).some((k) => k !== i && mem(k, path))) return close(path);
     setChk((c) => c + 1);
-    if (i === 0) setGrp((g) => grpAdd(grpDel(g, [path], 0), 1, path)); else setGrp((g) => grpAdd(grpDel(g, [path], 1), 0, path));
-    setAct((a) => (a[i] === path ? (i === 0 ? [nearIn(0, path), a[1]] : [a[0], nearIn(1, path)]) : a));
+    setGrp((g) => grpDel(g, [path], i));
+    setAct((a) => (a[i] === path ? { ...a, [i]: nearIn(i, path) } : a));
   };
 
   // 保存。設定に応じて、行末の空白を削り、末尾に改行を入れる
@@ -346,14 +350,14 @@ export default function App() {
   }, [gits]);
   useEffect(() => {
     let live = true;
-    for (const path of new Set([act[0], act[1]])) {
+    for (const path of new Set(Object.values(act))) {
       const t = tabs.find((x) => x.node.path === path);
       const r = roots.find((x) => x.prefix === splitRoot(path ?? "").prefix), info = r && gits[r.prefix], abs = t && absOf(t.node);
       if (!t || !isText(t) || !r?.conn || !info || !abs) { setBases((b) => (path && b[path] !== undefined ? { ...b, [path]: null } : b)); continue; }
       void loadBase(r.conn, abs, info.files.get(abs)).then((v) => { if (live) setBases((b) => (b[path!] === v ? b : { ...b, [path!]: v })); });
     }
     return () => { live = false; };
-  }, [gits, act[0], act[1]]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [gits, Object.values(act).join("|")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const reload = async () => {
     const got = await Promise.all(roots.map(async (r) => ({ prefix: r.prefix, handle: r.handle, nodes: r.handle ? await readDir(r.handle, r.prefix).catch(() => null) : null })));
@@ -364,10 +368,15 @@ export default function App() {
   };
   /* ---------- ワークスペース ---------- */
   const snapshot = (): WsState => ({
-    tabs: tabs.map((t) => t.node.path), act, fp, split, g: split ? [[...grp[0]], [...grp[1]]] : undefined, side, panel, term: term && alive().length > 0,
+    tabs: tabs.map((t) => t.node.path), ...savedPanes(), side, panel, term: term && alive().length > 0,
     terms: st.wsTerms ? alive().map((x) => ({ name: x.name, cwd: x.cwd ?? (x.shell ? undefined : root.conn?.path), shell: x.shell, label: x.label, host: x.host })) : [],
     actTerm: Math.max(0, alive().findIndex((x) => x.id === actT)),
   });
+  const savedPanes = () => {
+    const { lay: L, map } = renumber(lay), a: (string | null)[] = [], g: string[][] = [];
+    for (const [o, n] of map) { a[n] = act[o] ?? null; g[n] = [...(grp[o] ?? [])]; }
+    return { act: a, fp: map.get(fp) ?? 0, split, lay: split ? L : undefined, g: split ? g : undefined };
+  };
   const snapRef = useRef(snapshot);
   snapRef.current = snapshot;
   const flushWs = () => {
@@ -382,7 +391,7 @@ export default function App() {
     clearTimeout(wsTimer.current);
     wsTimer.current = setTimeout(() => flushRef.current(), st.wsDelay);
     return () => clearTimeout(wsTimer.current);
-  }, [tabs, act, fp, split, grp, side, panel, term, sess, st.wsDelay, st.wsTerms]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tabs, act, fp, lay, grp, side, panel, term, sess, st.wsDelay, st.wsTerms]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const f = () => flushRef.current();
     addEventListener("pagehide", f);
@@ -420,11 +429,17 @@ export default function App() {
       setFolded(new Set());
       setTabs(restored);
       const has = (p: string | null | undefined) => !!p && restored.some((t) => t.node.path === p);
+      const L: Lay = hit?.split && restored.length > 0 ? (hit.lay && validLay(hit.lay) ? hit.lay : fromPair(true, st.splitDir as Dir, st.splitRatio)) : LEAF0;
+      const ids = leaves(L);
       const a0 = hit && has(hit.act[0]) ? hit.act[0] : restored[0]?.node.path ?? null;
-      const a1 = hit && hit.split ? (has(hit.act[1]) ? hit.act[1] : a0) : null;
-      setAct([a0, a1]); setFp(hit?.split && hit.fp === 1 ? 1 : 0);
-      setSplit(!!hit?.split && restored.length > 0);
-      setGrp(hit?.split && restored.length ? (hit.g ? [new Set(hit.g[0].filter(has)), new Set(hit.g[1].filter(has))] : [new Set(restored.map((t) => t.node.path)), new Set(a1 ? [a1] : [])]) : [new Set(), new Set()]);
+      const nextAct: Pm<string | null> = {}, nextGrp: Pm<Set<string>> = {};
+      ids.forEach((id, k) => {
+        const v = hit?.act[id];
+        nextAct[id] = ids.length === 1 || !has(v) ? a0 : v!;
+        nextGrp[id] = ids.length === 1 ? new Set() : new Set(hit?.g ? (hit.g[id] ?? []).filter(has) : k === 0 ? restored.map((t) => t.node.path) : nextAct[id] ? [nextAct[id]!] : []);
+      });
+      setLay(L); setAct(nextAct); setGrp(nextGrp); setBorn({});
+      setFp(hit && ids.includes(hit.fp) ? hit.fp : ids[0]);
       if (hit) { setSide(hit.side); setPanel(hit.panel === "search" ? "files" : hit.panel); }
       // ターミナル: 開き直したシェルを、同じ場所で立ち上げる
       setSess([]);
@@ -656,8 +671,8 @@ export default function App() {
           } else if (rr.handle && n.kind === "file") handle = await renameFile((n.parent ?? rr.handle) as FileSystemDirectoryHandle, n.handle as FileSystemFileHandle, name);
           else updRoot(rr.prefix, (r) => ({ ...r, nodes: renameNode(r.nodes, n.path, name) }));
           setTabs((p) => p.map((t) => (t.node.path === n.path ? { ...t, node: { ...t.node, name, path: np, handle } } : t)));
-          setGrp((g) => g.map((x) => (x.has(n.path) ? new Set([...x].map((q) => (q === n.path ? np : q))) : x)) as Pair<Set<string>>);
-          setAct((a) => a.map((x) => (x === n.path ? np : x)) as Pair<string | null>);
+          setGrp((g) => Object.fromEntries(Object.entries(g).map(([k, x]) => [k, x.has(n.path) ? new Set([...x].map((q) => (q === n.path ? np : q))) : x])) as Pm<Set<string>>);
+          setAct((a) => Object.fromEntries(Object.entries(a).map(([k, x]) => [k, x === n.path ? np : x])) as Pm<string | null>);
           dropStates((k) => k.endsWith(`:${n.path}`));
           if (rr.handle) await reload();
         } catch (e) { flash("変更できませんでした: " + (e as Error).message); }
@@ -685,8 +700,8 @@ export default function App() {
       if (n.kind === "dir") closeMany(under.map((t) => t.node.path), true);
       else {
         setTabs((p) => p.map((t) => (t.node.path === n.path ? { ...t, node: { ...t.node, path: np, handle, parent: to } } : t)));
-        setAct((a) => a.map((x) => (x === n.path ? np : x)) as Pair<string | null>);
-        setGrp((g) => g.map((x) => (x.has(n.path) ? new Set([...x].map((q) => (q === n.path ? np : q))) : x)) as Pair<Set<string>>);
+        setAct((a) => Object.fromEntries(Object.entries(a).map(([k, x]) => [k, x === n.path ? np : x])) as Pm<string | null>);
+        setGrp((g) => Object.fromEntries(Object.entries(g).map(([k, x]) => [k, x.has(n.path) ? new Set([...x].map((q) => (q === n.path ? np : q))) : x])) as Pm<Set<string>>);
       }
       dropStates((k) => k.endsWith(`:${n.path}`));
       if (rr.handle) await reload();
@@ -715,76 +730,76 @@ export default function App() {
   const copyText = (s: string, m = i18next.t("コピーしました")) => navigator.clipboard.writeText(s).then(() => flash(m), () => flash(i18next.t("コピーできませんでした")));
 
   /* ---------- 分割・ターミナル ---------- */
-  useEffect(() => {
-    if (split) {
-      setSplitMount(true);
-      const r = requestAnimationFrame(() => requestAnimationFrame(() => setSplitOpen(true)));
-      return () => cancelAnimationFrame(r);
-    }
-    setSplitOpen(false);
-    const t = setTimeout(() => setSplitMount(false), ms(700));
-    return () => clearTimeout(t);
-  }, [split]);
-  // 分割を解く。いまフォーカスのある画面のファイルを残す
-  const closePane = () => {
-    if (!split) return;
-    const keep = act[fp];
-    setAct([keep, keep]); setJump((j) => [j[fp], j[fp]]); setSplit(false); setFp(0); setGrp([new Set(), new Set()]);
+  // 画面の木を差し替え、なくなった画面の持ち物(タブの割り振り・カーソル・エディタの状態)を片づける
+  const settle = (L: Lay, keepFp?: number) => {
+    const ids = leaves(L), alive = (k: number) => ids.includes(k);
+    const cut = <T,>(m: Pm<T>) => Object.fromEntries(Object.entries(m).filter(([k]) => alive(Number(k)))) as Pm<T>;
+    for (const k of leaves(lay)) if (!alive(k)) { dropStates((x) => x.startsWith(`${k}:`)); delete views.current[k]; }
+    setLay(L); setAct(cut); setJump(cut); setCur(cut); setBorn(cut); setGrp(ids.length === 1 ? {} : cut);
+    setFp((p) => (alive(keepFp ?? p) ? keepFp ?? p : ids[0]));
   };
-  // 閉じる・送るで片方の画面が空になったら、分割を解く(空の画面にトップページを出さない)
+  // 分割を解く。いまフォーカスのある画面を残す
+  const closePane = () => {
+    if (split) settle({ id: fp }, fp);
+  };
+  // 閉じる・送るで画面が空になったら、その画面をたたむ(空の画面にトップページを出さない)
   useEffect(() => {
     if (!chk || chk === seen.current || closing.size) return;
     seen.current = chk;
     if (!split) return;
-    const e0 = paneTabs(0).length === 0, e1 = paneTabs(1).length === 0;
-    if (!e0 && !e1) return;
-    if (e0 && e1) { setSplit(false); setFp(0); setGrp([new Set(), new Set()]); return; }
-    const keep = act[e0 ? 1 : 0];
-    setAct([keep, keep]); setJump((j) => [j[e0 ? 1 : 0], j[e0 ? 1 : 0]]); setSplit(false); setFp(0); setGrp([new Set(), new Set()]);
-  }, [chk, tabs, grp, closing]); // eslint-disable-line react-hooks/exhaustive-deps
-  // 分割を始める。左にはいまのタブをすべて残し、右には(あれば)開いているタブを複製する
-  const beginSplit = (dup?: string | null) => { setSplit(true); setGrp([new Set(tabs.map((t) => t.node.path)), new Set(dup ? [dup] : [])]); };
+    const gone = leaves(lay).filter((k) => paneTabs(k).length === 0);
+    if (!gone.length) return;
+    let L: Lay | null = lay;
+    for (const k of gone) L = L && removeLeaf(L, k);
+    settle(L ?? { id: first });
+  }, [chk, tabs, grp, closing, lay]); // eslint-disable-line react-hooks/exhaustive-deps
+  const defEdge: Edge = st.splitDir === "row" ? "B" : "R"; // 設定の向きで分割するとき、新しい画面を置く側
+  // 画面 id を、edge の側に新しく分割する。分割していなければ、左にいまのタブをすべて残す。dup のタブは新しい画面にも出す。戻り値は新しい画面の番号
+  const splitAt = (id: number, edge: Edge, dup: string | null): number => {
+    const nid = nextId(lay);
+    setLay((l) => splitLeaf(l, id, nid, edge, edge === "L" || edge === "T" ? 100 - st.splitRatio : st.splitRatio));
+    const mine = new Set(dup ? [dup] : []);
+    setGrp((g) => (split ? { ...g, [nid]: mine } : { [id]: new Set(tabs.map((t) => t.node.path)), [nid]: mine }));
+    setBorn((b) => ({ ...b, [nid]: edge }));
+    setTimeout(() => setBorn((b) => { const x = { ...b }; delete x[nid]; return x; }), ms(900));
+    return nid;
+  };
   const toggleSplit = () => {
     if (split) { closePane(); return; }
-    beginSplit(act[0]); setAct((a) => [a[0], a[0]]); setFp(1);
+    const dup = act[fp] ?? null, nid = splitAt(fp, defEdge, dup);
+    setAct((a) => ({ ...a, [nid]: dup })); setFp(nid);
   };
-  const openSplit = async (n: Node) => { if (!split) beginSplit(); await open(n, fp === 0 ? 1 : 0); };
+  // いまの画面の次の画面(分割していなければ、そのまま)
+  const otherOf = (from = fp) => { const ids = leaves(lay); return ids[(ids.indexOf(from) + 1) % ids.length]; };
+  const openSplit = async (n: Node) => { await open(n, split ? otherOf() : splitAt(fp, defEdge, null)); };
   // 指定の画面で開く。move なら、元の画面には隣のタブを出す
-  const sendTo = async (n: Node, to: 0 | 1, move = false) => {
-    const from = to === 0 ? 1 : 0;
-    if (!split) { if (to === 1) beginSplit(); else return open(n, 0); }
+  const sendTo = async (n: Node, to: number, move = false, from = fp) => {
+    if (to === from) return open(n, to);
     const nb = nearIn(from, n.path);
     await open(n, to);
     if (!move) return;
     setChk((c) => c + 1);
     setGrp((g) => grpDel(g, [n.path], from));
-    setAct((a) => {
-      if (a[from] !== n.path) return a;
-      const x = [...a] as Pair<string | null>;
-      x[from] = nb;
-      return x;
-    });
+    setAct((a) => (a[from] === n.path ? { ...a, [from]: nb } : a));
   };
-  const doSwap = () => { setAct((a) => [a[1], a[0]]); setGrp((g) => [g[1], g[0]]); setJump((j) => [j[1], j[0]]); setCur((c) => [c[1], c[0]]); setFp((p) => (p === 0 ? 1 : 0)); };
-  const swapPanes = () => { if (!split) return; doSwap(); };
-  // 方向を決めて分割して開く。左・上に置くときは、開いたあとで画面を入れ替える
-  const splitDrop = async (n: Node, d: "L" | "R" | "T" | "B", move = false) => {
-    const dir = d === "L" || d === "R" ? "col" : "row";
-    if (st.splitDir !== dir) update({ splitDir: dir });
-    await sendTo(n, 1, move);
-    if (d === "L" || d === "T") doSwap();
+  // 画面を入れ替える(中身ではなく場所を入れ替えるので、エディタの状態はそのまま)
+  const swapPanes = () => { if (split) setLay((l) => swapLeaves(l, fp, otherOf())); };
+  // pane の edge の側に新しく分割して開く
+  const splitDrop = async (n: Node, pane: number, edge: Edge, move = false, from = fp) => {
+    const nid = splitAt(pane, edge, null);
+    await sendTo(n, nid, move, from);
   };
-  // 分割して開くメニュー(分割していないとき用)
-  const splitSub = (n: Node, move = false) => ({
+  // 分割して開くメニュー(タブやファイルの右クリック用)
+  const splitSub = (n: Node, move = false, pane = fp) => ({
     label: i18next.t("分割して開く"), icon: ic(Columns2),
     sub: [
-      { label: i18next.t("左に分割"), icon: ic(PanelLeft), run: () => splitDrop(n, "L", move) },
-      { label: i18next.t("右に分割"), icon: ic(PanelRight), run: () => splitDrop(n, "R", move) },
-      { label: i18next.t("上に分割"), icon: ic(PanelTop), run: () => splitDrop(n, "T", move) },
-      { label: i18next.t("下に分割"), icon: ic(PanelBottom), run: () => splitDrop(n, "B", move) },
+      { label: i18next.t("左に分割"), icon: ic(PanelLeft), run: () => splitDrop(n, pane, "L", move, pane) },
+      { label: i18next.t("右に分割"), icon: ic(PanelRight), run: () => splitDrop(n, pane, "R", move, pane) },
+      { label: i18next.t("上に分割"), icon: ic(PanelTop), run: () => splitDrop(n, pane, "T", move, pane) },
+      { label: i18next.t("下に分割"), icon: ic(PanelBottom), run: () => splitDrop(n, pane, "B", move, pane) },
     ],
   });
-  const flipDir = () => update({ splitDir: st.splitDir === "col" ? "row" : "col" });
+  const flipDir = () => { if (split) setLay((l) => flipAround(l, fp)); else update({ splitDir: st.splitDir === "col" ? "row" : "col" }); };
   const reorder = (path: string, target: string, after: boolean) => setTabs((p) => {
     const m = p.find((t) => t.node.path === path);
     if (!m || path === target) return p;
@@ -805,32 +820,35 @@ export default function App() {
       return rest;
     });
   };
-  // ドラッグ中、ポインタがどの画面の上か。分割していないときは、端に寄せると「新しく分割」になる
+  // ドラッグ中、ポインタがどの画面の上か。画面の端(幅・高さの 28%)に寄せると、その側に新しく分割する
   const zoneOf = (e: React.DragEvent): Dz => {
     const r = e.currentTarget.getBoundingClientRect();
     const fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
-    if (!split) { // 分割していないときは、上下左右の端に寄せると、その側に新しく分割する
-      const m = Math.min(fx, 1 - fx, fy, 1 - fy);
-      if (m > 0.28) return 0;
-      return m === fx ? "L" : m === 1 - fx ? "R" : m === fy ? "T" : "B";
-    }
-    return (st.splitDir === "row" ? fy : fx) < st.splitRatio / 100 ? 0 : 1;
+    let hit = fp, b: Box = { x: 0, y: 0, w: 1, h: 1 };
+    for (const [id, x] of boxes(lay)) if (fx >= x.x && fx <= x.x + x.w && fy >= x.y && fy <= x.y + x.h) { hit = id; b = x; break; }
+    const lx = (fx - b.x) / b.w, ly = (fy - b.y) / b.h;
+    const m = Math.min(lx, 1 - lx, ly, 1 - ly);
+    if (m > 0.28) return { pane: hit };
+    return { pane: hit, edge: m === lx ? "L" : m === 1 - lx ? "R" : m === ly ? "T" : "B" };
   };
   const dropOnPanes = async (z: Dz) => {
-    const n = drag.node, path = drag.tab;
+    const n = drag.node, path = drag.tab, from = path ? drag.from : fp;
     dragEnd(); setDz(null); setTabDrop(null);
     const node = n ?? tabOf(path);
     if (!node) return;
     const nd = "node" in node ? node.node : node;
-    if (typeof z === "string") await splitDrop(nd, z, !!path && tabs.length > 1);
-    else await sendTo(nd, z, !!path);
+    if (z.edge) await splitDrop(nd, z.pane, z.edge, !!path && paneTabs(from).length > 1, from);
+    else await sendTo(nd, z.pane, !!path, from);
   };
-  const gripDown = (e: React.PointerEvent<HTMLDivElement>) => {
+  // 境目をドラッグして、その分割の割合を変える
+  const gripDown = (e: React.PointerEvent<HTMLDivElement>, j: Joint) => {
     e.preventDefault();
-    const el = e.currentTarget.parentElement!, row = st.splitDir === "row";
+    const el = e.currentTarget.parentElement!;
     const mv = (ev: PointerEvent) => {
-      const r = el.getBoundingClientRect(), f = row ? (ev.clientY - r.top) / r.height : (ev.clientX - r.left) / r.width;
-      update({ splitRatio: Math.round(Math.min(80, Math.max(20, f * 100))) });
+      const r = el.getBoundingClientRect();
+      const f = j.dir === "row" ? (ev.clientY - r.top) / r.height : (ev.clientX - r.left) / r.width;
+      const local = j.dir === "row" ? (f - j.box.y) / j.box.h : (f - j.box.x) / j.box.w;
+      setLay((l) => setRatio(l, j.path, local * 100));
     };
     const up = () => { removeEventListener("pointermove", mv); removeEventListener("pointerup", up); setDragS(false); };
     setDragS(true); addEventListener("pointermove", mv); addEventListener("pointerup", up);
@@ -912,9 +930,9 @@ export default function App() {
       renameTerm: () => { if (alive().length) { showTerm(true); setRenaming(actT); } }, clearTerm: () => apis.current.get(actT)?.clear(),
       aiQuote: () => { const v = views.current[fp]; if (v) quoteToAi(v); },
       toggleSide: () => setSide((v) => !v), themePanel: () => setTp((v) => !v), stats: () => setStatsOpen(true), toggleTerm: () => showTerm(), toggleBrowser: () => setBr((v) => !v), toggleAi: () => setAi((v) => !v), togglePreview: () => { if (tab && previewKind(tab.node.name)) setPv((p) => ({ ...p, [tab.node.path]: p[tab.node.path] === undefined ? "split" : p[tab.node.path] === "split" ? "preview" : undefined })); }, toggleSplit,
-      otherPane: () => { if (split) { const n = fp === 0 ? 1 : 0; setFp(n); setTimeout(() => views.current[n]?.focus(), 0); } },
+      otherPane: () => { if (split) { const n = otherOf(); setFp(n); setTimeout(() => views.current[n]?.focus(), 0); } },
       swapPanes, splitDir: flipDir, closePane,
-      moveTab: () => { if (tab) sendTo(tab.node, fp === 0 ? 1 : 0, true); },
+      moveTab: () => { if (tab) sendTo(tab.node, otherOf(), true); },
       explorer: () => { setSide(true); setPanel("files"); },
       toggleTheme: () => update({ mode: isDark(st) ? "light" : "dark" }),
       zoomIn: () => update({ fontSize: Math.min(28, st.fontSize + 1) }), zoomOut: () => update({ fontSize: Math.max(10, st.fontSize - 1) }), zoomReset: () => update({ fontSize: def("fontSize") }),
@@ -1028,7 +1046,7 @@ export default function App() {
   const editorMenu = (e: MouseEvent, v: EditorView) => {
     const sel = !v.state.selection.main.empty, word = sel ? v.state.sliceDoc(v.state.selection.main.from, v.state.selection.main.to) : "";
     const r = (id: string) => () => { v.focus(); EDIT[id](v); };
-    setFp(views.current[0] === v ? 0 : 1);
+    setFp((p) => Number(Object.keys(views.current).find((k) => views.current[Number(k)] === v) ?? p));
     setMenu({
       x: e.clientX, y: e.clientY,
       items: [
@@ -1079,10 +1097,10 @@ export default function App() {
         { label: i18next.t("ローカル履歴"), keys: K("localHistory"), run: () => run("localHistory") },
         { type: "sep" },
         ...(split ? [
-        { label: i18next.t("もう一方の画面へ送る"), icon: ic(ArrowLeftRight), keys: K("moveTab"), run: () => tab && sendTo(tab.node, fp === 0 ? 1 : 0, true), disabled: !tab },
+        { label: i18next.t("もう一方の画面へ送る"), icon: ic(ArrowLeftRight), keys: K("moveTab"), run: () => tab && sendTo(tab.node, otherOf(), true), disabled: !tab },
         { label: i18next.t("もう一方の画面にも開く"), icon: ic(Columns2), run: () => tab && openSplit(tab.node), disabled: !tab },
         ] : [tab ? splitSub(tab.node) : { label: i18next.t("分割して開く"), icon: ic(Columns2), disabled: true }]),
-        ...(split ? [{ label: i18next.t("2つの画面を入れ替える"), icon: ic(ArrowLeftRight), keys: K("swapPanes"), run: swapPanes }] : []),
+        ...(split ? [{ label: leaves(lay).length > 2 ? i18next.t("この画面を次の画面と入れ替える") : i18next.t("2つの画面を入れ替える"), icon: ic(ArrowLeftRight), keys: K("swapPanes"), run: swapPanes }] : []),
         { label: i18next.t("パスをコピー"), icon: ic(Link), run: () => tab && copyText(displayPath(tab.node.path)), disabled: !tab },
       ],
     });
@@ -1140,10 +1158,10 @@ export default function App() {
   };
   const tabMenu = (e: React.MouseEvent, t: Tab) => {
     e.preventDefault();
-    const i = tabs.indexOf(t), row = st.splitDir === "row";
+    const i = tabs.indexOf(t), ids = leaves(lay), row = !isLeaf(lay) && lay.dir === "row";
     const A = row ? i18next.t("上") : i18next.t("左"), B = row ? i18next.t("下") : i18next.t("右"), p = t.node.path;
     const savedOnes = tabs.filter((x) => !(isText(x) && x.text !== x.saved));
-    const inPane = (n: 0 | 1) => split && act[n] === p;
+    const inPane = (n: number) => split && act[n] === p;
     setMenu({
       x: e.clientX, y: e.clientY, path: p,
       items: [
@@ -1158,13 +1176,16 @@ export default function App() {
         { type: "sep" },
         { label: i18next.t("AI チャットに添える"), icon: ic(Sparkles), run: () => void fileToAi(t.node) },
         ...(!split ? [splitSub(t.node)] : [
-        { label: i18next.t("{{A}}の画面で開く", { A }), icon: ic(Columns2), run: () => sendTo(t.node, 0), disabled: inPane(0) },
-        { label: i18next.t("{{B}}の画面で開く", { B }), icon: ic(Columns2), run: () => sendTo(t.node, 1), disabled: inPane(1) },
-        { label: i18next.t("もう一方の画面へ送る"), icon: ic(ArrowLeftRight), keys: K("moveTab"), run: () => sendTo(t.node, act[0] === p && split ? 1 : act[1] === p && split ? 0 : fp === 0 ? 1 : 0, true) },
+        ...ids.map((id, k) => ({
+          label: ids.length === 2 ? i18next.t("{{A}}の画面で開く", { A: k ? B : A }) : i18next.t("{{n}} 番目の画面で開く", { n: k + 1 }),
+          icon: ic(Columns2), run: () => sendTo(t.node, id), disabled: inPane(id),
+        })),
+        { label: i18next.t("もう一方の画面へ送る"), icon: ic(ArrowLeftRight), keys: K("moveTab"), run: () => { const from = ids.find((k) => act[k] === p) ?? fp; sendTo(t.node, otherOf(from), true, from); } },
+        splitSub(t.node, false, ids.find((k) => act[k] === p) ?? fp),
         ]),
         ...(split ? [
-          { label: i18next.t("2つの画面を入れ替える"), icon: ic(ArrowLeftRight), keys: K("swapPanes"), run: swapPanes },
-          { label: row ? i18next.t("左右に並べ替える") : i18next.t("上下に並べ替える"), icon: ic(row ? Columns2 : Rows2), run: flipDir },
+          { label: ids.length > 2 ? i18next.t("この画面を次の画面と入れ替える") : i18next.t("2つの画面を入れ替える"), icon: ic(ArrowLeftRight), keys: K("swapPanes"), run: swapPanes },
+          { label: ids.length > 2 ? i18next.t("この分割の向きを入れ替える") : row ? i18next.t("左右に並べ替える") : i18next.t("上下に並べ替える"), icon: ic(row ? Columns2 : Rows2), run: flipDir },
           { label: i18next.t("分割を解除"), keys: K("toggleSplit"), run: closePane },
         ] : []),
         { type: "sep" },
@@ -1224,30 +1245,44 @@ export default function App() {
   const live = useMemo(() => new Map(tabs.filter(isText).map((t) => [t.node.path, t.text])), [tabs]);
   const dirty = useMemo(() => new Set(dirtyList.map((t) => t.node.path)), [tabs]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 画面(葉)の外側の矩形を、.panes に対する割合で置く。ふちの内側は、隣との隙間の半分だけ内側に寄せる
+  const gapH = "calc(var(--pane-gap, 8px) / 2)", EPS = 1e-6;
+  const slot = (b: Box, strip = false): React.CSSProperties => ({
+    left: `${b.x * 100}%`, width: `${b.w * 100}%`, top: strip ? 0 : `${b.y * 100}%`, height: strip ? "100%" : `${b.h * 100}%`,
+    paddingLeft: b.x > EPS ? gapH : 0, paddingRight: b.x + b.w < 1 - EPS ? gapH : 0,
+    paddingTop: !strip && b.y > EPS ? gapH : 0, paddingBottom: !strip && b.y + b.h < 1 - EPS ? gapH : 0,
+  });
+  // 境目のつまみ。つまみの太さの半分だけ、境目から戻して置く
+  const gripPos = (j: Joint): React.CSSProperties => {
+    const f = j.r / 100;
+    return j.dir === "col"
+      ? { left: `${(j.box.x + j.box.w * f) * 100}%`, top: `${j.box.y * 100}%`, height: `${j.box.h * 100}%` }
+      : { top: `${(j.box.y + j.box.h * f) * 100}%`, left: `${j.box.x * 100}%`, width: `${j.box.w * 100}%` };
+  };
   // ドラッグ中に光らせる範囲(.panes に対する割合)
   const dropRect = (z: Dz): React.CSSProperties => {
-    if (typeof z === "string") return z === "L" ? { left: 0, width: "50%", top: 0, bottom: 0 } : z === "R" ? { left: "50%", width: "50%", top: 0, bottom: 0 } : z === "T" ? { top: 0, height: "50%", left: 0, right: 0 } : { top: "50%", height: "50%", left: 0, right: 0 };
-    const r = st.splitRatio;
-    const [a, b] = !split ? [0, 100] : z === 0 ? [0, r] : [r, 100 - r];
-    return st.splitDir === "row" ? { top: `${a}%`, height: `${b}%`, left: 0, right: 0 } : { left: `${a}%`, width: `${b}%`, top: 0, bottom: 0 };
+    const b = boxes(lay).get(z.pane) ?? { x: 0, y: 0, w: 1, h: 1 };
+    let { x, y, w, h } = b;
+    if (z.edge === "L") w /= 2; else if (z.edge === "R") { x += w / 2; w /= 2; } else if (z.edge === "T") h /= 2; else if (z.edge === "B") { y += h / 2; h /= 2; }
+    return { left: `${x * 100}%`, top: `${y * 100}%`, width: `${w * 100}%`, height: `${h * 100}%` };
   };
-  const col = st.splitDir === "col";
-  const lastBar: 0 | 1 = (split || splitMount) && col ? 1 : 0; // 右上のボタンを置く側
-  const dropTab = async (i: 0 | 1, target: string | null, after: boolean) => {
+  const lastBar = topRight(lay); // 右上のボタンを置く画面
+  const firstBar = topLeaves(lay)[0]; // 左上(窓のボタン・サイドバーを開くボタン)を置く画面
+  const dropTab = async (i: number, target: string | null, after: boolean) => {
     const p = drag.tab, from = drag.from;
     dragEnd(); setTabDrop(null); setDz(null);
     if (!p) return;
     const t = tabOf(p);
-    if (t && split && from !== i) await sendTo(t.node, i, true);
+    if (t && split && from !== i) await sendTo(t.node, i, true, from);
     if (target && target !== p) reorder(p, target, after);
   };
   // 画面ごとのタブ列(VSCode と同じ。分割中は、それぞれの画面の上に置く)
-  const strip = (i: 0 | 1) => {
+  const strip = (i: number) => {
     const list = paneTabs(i);
     return (
       <div className="tabbar" role="tablist" data-pane={i} data-focus={!split || fp === i} data-tauri-drag-region onDragEnter={() => setDz(null)}>
-        {i === 0 && CHROME && !side && <WinControls />}
-        {i === 0 && !side && <button className="icon-btn" aria-label={i18next.t("サイドバーを開く")} onClick={() => setSide(true)}><PanelLeft /></button>}
+        {i === firstBar && CHROME && !side && <WinControls />}
+        {i === firstBar && !side && <button className="icon-btn" aria-label={i18next.t("サイドバーを開く")} onClick={() => setSide(true)}><PanelLeft /></button>}
         {list.map((t) => {
           const path = t.node.path;
           return (
@@ -1258,7 +1293,7 @@ export default function App() {
               onDrop={(e) => { if (!drag.tab) return; e.preventDefault(); dropTab(i, path, !!tabDrop?.after); }}
               aria-selected={path === act[i]} data-closing={closing.has(path)} data-preview={preview === path}
               onDoubleClick={() => setPreview((v) => (v === path ? null : v))}
-              onClick={(e) => { if (e.altKey && split) sendTo(t.node, i === 0 ? 1 : 0); else open(t.node, i, false); }} onAuxClick={(e) => { if (e.button === 1) closeIn(path, i); }} onContextMenu={(e) => tabMenu(e, t)}>
+              onClick={(e) => { if (e.altKey && split) sendTo(t.node, otherOf(i), false, i); else open(t.node, i, false); }} onAuxClick={(e) => { if (e.button === 1) closeIn(path, i); }} onContextMenu={(e) => tabMenu(e, t)}>
               <span className="tab-name">{t.node.name}</span>
               <button className="tab-x" data-pin={pinned.has(path) || undefined} aria-label={pinned.has(path) ? i18next.t("ピン留めを外す") : i18next.t("{{name}} を閉じる", { name: t.node.name })} onClick={(e) => { e.stopPropagation(); if (pinned.has(path)) togglePin(path); else closeIn(path, i); }}>
                 {pinned.has(path) ? <Pin /> : dirty.has(path) ? <svg className="dot" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" /></svg> : <X />}
@@ -1282,11 +1317,11 @@ export default function App() {
       </div>
     );
   };
-  const pane = (i: 0 | 1) => {
+  const pane = (i: number) => {
     const t = tabOf(act[i]);
     return (
-      <div className={i === 1 && !col ? "paper has-strip" : "paper"} data-focus={fp === i} onMouseDown={() => setFp(i)} onContextMenu={(e) => { if (!t) stageMenu(e); }}>
-        {i === 1 && !col && strip(1)}
+      <div className={onTop(lay, i) ? "paper" : "paper has-strip"} data-focus={fp === i} onMouseDown={() => setFp(i)} onContextMenu={(e) => { if (!t) stageMenu(e); }}>
+        {!onTop(lay, i) && strip(i)}
         {!t ? (
           <div className="empty">
             <p className="empty-title">{APP_NAME}</p>
@@ -1314,7 +1349,7 @@ export default function App() {
           })() : undefined}
             key={`${i}:${t.node.path}`} docKey={`${i}:${t.node.path}`} path={displayPath(t.node.path)} name={t.node.name} value={t.text} jump={jump[i]}
             onChange={(v) => { setTabs((p) => p.map((x) => (x.node.path === t.node.path && x.text !== v ? { ...x, text: v } : x))); setPreview((q) => (q === t.node.path ? null : q)); }}
-            onCursor={(c) => setCur((p) => (i === 0 ? [c, p[1]] : [p[0], c]))}
+            onCursor={(c) => setCur((p) => ({ ...p, [i]: c }))}
             onFocus={() => setFp(i)} onReady={(v) => { views.current[i] = v; }} onContext={editorMenu} gitBase={bases[t.node.path]}
           />
           {previewKind(t.node.name) && (
@@ -1404,19 +1439,19 @@ export default function App() {
         </aside>
 
         <section className="main">
-          <div className="tabrow" data-split={splitOpen && col}
-            style={splitOpen && col ? { gridTemplateColumns: `${st.splitRatio}fr ${100 - st.splitRatio}fr` } : undefined}>
-            {strip(0)}{(split || splitMount) && col && strip(1)}
+          <div className="tabrow" data-dragging={dragS}>
+            {topLeaves(lay).map((i) => <div key={i} className="slot" style={slot(boxes(lay).get(i)!, true)}>{strip(i)}</div>)}
           </div>
           <div className="work">
             <div className="work-row">
-            <div className="panes" data-split={splitOpen} data-dragging={dragS} style={splitOpen ? ({ ["--split-r" as string]: st.splitRatio / 100, ...(st.splitDir === "row" ? { gridTemplateRows: `${st.splitRatio}fr ${100 - st.splitRatio}fr` } : { gridTemplateColumns: `${st.splitRatio}fr ${100 - st.splitRatio}fr` }) }) : undefined}
-              onDragOverCapture={(e) => { if (!st.splitDrop || !dragging() || (drag.tab && (e.target as HTMLElement).closest?.(".tabbar"))) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = drag.tab ? "move" : "copy"; const z = zoneOf(e); setDz((d) => (d === z ? d : z)); }}
+            <div className="panes" data-split={split} data-dragging={dragS}
+              onDragOverCapture={(e) => { if (!st.splitDrop || !dragging() || (drag.tab && (e.target as HTMLElement).closest?.(".tabbar"))) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = drag.tab ? "move" : "copy"; const z = zoneOf(e); setDz((d) => (d && d.pane === z.pane && d.edge === z.edge ? d : z)); }}
               onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as globalThis.Node | null)) setDz(null); }}
               onDropCapture={(e) => { if (!st.splitDrop || !dragging() || (drag.tab && (e.target as HTMLElement).closest?.(".tabbar"))) return; e.preventDefault(); e.stopPropagation(); dropOnPanes(zoneOf(e)); }}>
-              {pane(0)}{(split || splitMount) && pane(1)}
-              {splitOpen && <div className="split-grip" role="separator" aria-orientation={st.splitDir === "row" ? "horizontal" : "vertical"} title={i18next.t("ドラッグで幅を変える・ダブルクリックで半分に戻す")} data-drag={dragS} onPointerDown={gripDown} onDoubleClick={() => update({ splitRatio: 50 })} />}
-              {dz !== null && dragging() && <div className="drop-hint" data-dir={st.splitDir} style={dropRect(dz)} />}
+              {leaves(lay).map((i) => <div key={i} className="slot" data-born={born[i]} style={slot(boxes(lay).get(i)!)}>{pane(i)}</div>)}
+              {joints(lay).map((j) => <div key={j.path.join("")} className="split-grip" data-dir={j.dir} data-drag={dragS} role="separator" aria-orientation={j.dir === "row" ? "horizontal" : "vertical"} style={gripPos(j)}
+                title={i18next.t("ドラッグで幅を変える・ダブルクリックで半分に戻す")} onPointerDown={(e) => gripDown(e, j)} onDoubleClick={() => setLay((l) => setRatio(l, j.path, 50))} />)}
+              {dz && dragging() && <div className="drop-hint" data-edge={dz.edge} style={dropRect(dz)} />}
             </div>
             {br && <ColGrip width={st.brW} def={560} min={280} max={1000} dir={-1} onChange={(w) => update({ brW: w })} />}
             {br && <BrowserDock onClose={() => setBr(false)} />}

@@ -2,6 +2,7 @@ import { kvGet, kvSet, kvWatch, mergeById } from "@/platform/appdata";
 import { useSyncExternalStore } from "react";
 import { connKey, type Conn } from "@/platform/remote";
 import type { Node } from "@/platform/fs";
+import type { Lay } from "@/workbench/layout";
 import i18next from 'i18next'
 
 // ワークスペース: 開いているフォルダと、タブ・分割・ターミナルの状態に名前をつけて残したもの。
@@ -9,9 +10,10 @@ import i18next from 'i18next'
 export type RootRef = { kind: "demo" } | { kind: "local"; name: string } | { kind: "wsl" | "ssh" | "pc"; host?: string; path: string; name: string };
 export type TermRef = { name?: string; cwd?: string; shell?: string; label?: string; host?: string | null };
 export type WsState = {
-  tabs: string[]; act: [string | null, string | null]; fp: 0 | 1; split: boolean;
+  tabs: string[]; act: (string | null)[]; fp: number; split: boolean; // act は画面の番号ごと。fp はフォーカスのある画面の番号
+  lay?: Lay; // 画面の分け方(なければ split と設定の向き・割合から作る)
   side: boolean; panel: "files" | "search"; term: boolean; terms: TermRef[]; actTerm: number;
-  g?: [string[], string[]]; // 分割時、それぞれの画面に属するタブ
+  g?: string[][]; // 分割時、それぞれの画面(番号ごと)に属するタブ
 };
 // 複数のフォルダを同時に開くとき、2 つ目以降の道しるべ。prefix は、ツリー上のパスの先頭につく「/@xxxx」(先頭のフォルダは空)
 export type RootEntry = { ref: RootRef; prefix: string };
