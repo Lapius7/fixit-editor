@@ -18,7 +18,7 @@ const NAME_NODES = new Set(["VariableDefinition", "TypeDefinition", "PropertyDef
 
 function textOf(s: EditorState, n: { from: number; to: number }, max = 60) { const t = s.doc.sliceString(n.from, Math.min(n.to, n.from + max * 3)).replace(/\s+/g, " ").trim(); return t.length > max ? t.slice(0, max) + "…" : t; }
 
-function nameOf(s: EditorState, n: SyntaxNode, kind: string): string | null {
+function nameOf(s: EditorState, n: SyntaxNode, kind: string, full = false): string | null {
   if (kind.startsWith("h")) return textOf(s, n).replace(/^#+\s*/, "").replace(/\s*#+$/, "") || null;
   if (kind === "rule") {
     const sel = n.getChild("SelectorList") ?? n.getChild("Selector") ?? n.firstChild;
@@ -26,9 +26,9 @@ function nameOf(s: EditorState, n: SyntaxNode, kind: string): string | null {
     return sel ? textOf(s, { from: n.from, to: sel.to }) : null;
   }
   if (kind === "tag") {
-    const open = n.getChild("OpenTag"); const tn = open?.getChild("TagName"); if (!tn) return null;
+    const open = n.getChild("OpenTag") ?? n.getChild("SelfClosingTag"); const tn = open?.getChild("TagName"); if (!tn) return null;
     const nm = s.doc.sliceString(tn.from, tn.to);
-    if (!/^(html|head|body|main|header|footer|nav|section|article|aside|form|table|ul|ol|dialog|template|script|style|h[1-6])$/i.test(nm) && !/\b(id|class)\s*=/.test(s.doc.sliceString(open!.from, open!.to))) return null;
+    if (!full && !/^(html|head|body|main|header|footer|nav|section|article|aside|form|table|ul|ol|dialog|template|script|style|h[1-6])$/i.test(nm) && !/\b(id|class)\s*=/.test(s.doc.sliceString(open!.from, open!.to))) return null;
     const id = /\bid\s*=\s*["']([^"']+)/.exec(s.doc.sliceString(open!.from, open!.to));
     const cl = /\bclass\s*=\s*["']([^"']+)/.exec(s.doc.sliceString(open!.from, open!.to));
     return nm + (id ? "#" + id[1] : cl ? "." + cl[1].trim().split(/\s+/)[0] : "");
@@ -46,13 +46,14 @@ function varFunc(s: EditorState, n: SyntaxNode): { name: string; node: SyntaxNod
   return null;
 }
 
-export function outline(state: EditorState): Sym[] {
+// full: HTML のタグを、id・class のないものも含めてすべて拾う(パンくずで、いまいる場所までの道筋を正しく出すため)
+export function outline(state: EditorState, full = false): Sym[] {
   const root: Sym = { name: "", kind: "", from: 0, to: state.doc.length, line: 1, depth: -1, children: [] };
   let count = 0;
   const walk = (n: SyntaxNode, parent: Sym, depth: number) => {
     for (let c = n.firstChild; c && count < 1500; c = c.nextSibling) {
       let kind = KINDS[c.name], name: string | null = null;
-      if (kind) name = nameOf(state, c, kind);
+      if (kind) name = nameOf(state, c, kind, full);
       else { const v = varFunc(state, c); if (v) { kind = "function"; name = v.name; } }
       // Markdown の見出しは、階層でなく平らに並んでいるので、あとで組み直す
       if (kind && name) {
