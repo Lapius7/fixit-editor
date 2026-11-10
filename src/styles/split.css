@@ -19,13 +19,6 @@ html[data-tcblink="step"] .term-body .xterm-rows .xterm-cursor.xterm-cursor-blin
 .tab { flex: 0 1 auto; min-width: 84px; overflow: hidden; animation: none; position: relative; }
 .tab[data-fresh="true"] { animation: tab-in calc(.34s * var(--sp)) var(--out) backwards; }
 .tab[data-closing="true"] { min-width: 0; animation: tab-out calc(.22s * var(--sp)) var(--out) forwards; }
-/* 分割: 右の画面が横から広がり、左の画面が譲る。閉じるときは逆に縮む */
-.panes { grid-template-columns: 1fr 0fr; gap: 0; transition: grid-template-columns calc(.6s * var(--sp)) var(--split-melt), gap calc(.6s * var(--sp)) var(--split-melt); }
-.panes[data-split="true"] { grid-template-columns: 1fr 1fr; gap: var(--pane-gap, 8px); }
-.panes > .paper:nth-child(2) { opacity: 0; transform: translateX(24px) scale(.985); filter: blur(calc(var(--ab) * 1.00)); transition: opacity calc(.35s * var(--sp)) var(--out), transform calc(.6s * var(--sp)) var(--split-melt), filter calc(.35s * var(--sp)) var(--out); }
-.panes[data-split="true"] > .paper:nth-child(2) { opacity: 1; transform: none; filter: none; }
-.panes:not([data-split="true"]) > .paper:nth-child(2) { pointer-events: none; }
-@media (prefers-reduced-motion: reduce) { .panes, .panes > .paper:nth-child(2) { transition: none; } }
 
 /* ターミナルのスクロールバー: 端に貼りつく四角い棒をやめ、内側に浮く丸棒にする。ふだんは薄く、近づくと濃くなる */
 .term-body .xterm-scrollable-element > .scrollbar.vertical { width: 14px !important; }
@@ -45,22 +38,18 @@ html[data-tcbar="none"] .term-body .xterm-scrollable-element > .scrollbar { disp
 .scroll:hover, .cm-scroller:hover { scrollbar-color: var(--ink-3) transparent; }
 
 /* 分割の向き・境界線・ドラッグ */
-.panes { position: relative; }
-html[data-splitdir="row"] .panes { grid-template-columns: 1fr; grid-template-rows: 1fr 0fr; transition: grid-template-rows calc(.6s * var(--sp)) var(--split-melt), gap calc(.6s * var(--sp)) var(--split-melt); }
-html[data-splitdir="row"] .panes[data-split="true"] { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
-html[data-splitdir="row"] .panes > .paper:nth-child(2) { transform: translateY(24px) scale(.985); }
-html[data-splitdir="row"] .panes[data-split="true"] > .paper:nth-child(2) { transform: none; }
-.panes[data-dragging="true"] { transition: none; }
-.panes[data-dragging="true"] > .paper { pointer-events: none; user-select: none; }
+.panes[data-dragging="true"] > .slot { pointer-events: none; user-select: none; }
 
-.split-grip { position: absolute; z-index: 3; touch-action: none; opacity: 0; animation: grip-in calc(.5s * var(--sp)) var(--split-spring) calc(.55s * var(--sp)) both;
-  left: calc((100% - var(--pane-gap, 8px)) * var(--split-r, .5) + var(--pane-gap, 8px) / 2 - 7px); top: 0; bottom: 0; width: 14px; cursor: col-resize; }
-.split-grip::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 40px; border-radius: 4px; transform: translate(-50%, -50%);
+.split-grip { position: absolute; z-index: 3; touch-action: none; opacity: 0; animation: grip-in calc(.5s * var(--sp)) var(--split-spring) calc(.1s * var(--sp)) both;
+  transition: left calc(var(--split-t) * var(--sp)) var(--split-spring), top calc(var(--split-t) * var(--sp)) var(--split-spring), width calc(var(--split-t) * var(--sp)) var(--split-spring), height calc(var(--split-t) * var(--sp)) var(--split-spring); }
+.split-grip[data-dir="col"] { width: 14px; margin-left: -7px; cursor: col-resize; }
+.split-grip[data-dir="row"] { height: 14px; margin-top: -7px; cursor: row-resize; }
+.split-grip::after { content: ""; position: absolute; left: 50%; top: 50%; border-radius: 4px; transform: translate(-50%, -50%);
   background: var(--press); box-shadow: 0 0 0 .5px color-mix(in srgb, #fff 40%, transparent) inset; transition: background-color calc(.18s * var(--sp)) var(--out), height calc(.5s * var(--sp)) var(--split-spring), width calc(.5s * var(--sp)) var(--split-spring), box-shadow calc(.3s * var(--sp)) var(--out); }
-.split-grip:hover::after, .split-grip[data-drag="true"]::after { background: var(--accent); height: 64px; }
-html[data-splitdir="row"] .split-grip { left: 0; right: 0; width: auto; top: calc((100% - var(--pane-gap, 8px)) * var(--split-r, .5) + var(--pane-gap, 8px) / 2 - 7px); bottom: auto; height: 14px; cursor: row-resize; }
-html[data-splitdir="row"] .split-grip::after { width: 40px; height: 4px; }
-html[data-splitdir="row"] .split-grip:hover::after, html[data-splitdir="row"] .split-grip[data-drag="true"]::after { width: 64px; height: 4px; }
+.split-grip[data-dir="col"]::after { width: 4px; height: 40px; }
+.split-grip[data-dir="row"]::after { width: 40px; height: 4px; }
+.split-grip[data-dir="col"]:hover::after, .split-grip[data-dir="col"][data-drag="true"]::after { background: var(--accent); height: 64px; }
+.split-grip[data-dir="row"]:hover::after, .split-grip[data-dir="row"][data-drag="true"]::after { background: var(--accent); width: 64px; }
 @keyframes grip-in { from { opacity: 0; transform: scale(.3); } to { opacity: 1; transform: none; } }
 
 /* ドラッグ中、落とす先を示す */

@@ -933,5 +933,8 @@
   "スキップ": "Skip",
   "戻る": "Back",
   "次へ": "Next",
-  "設定・プロファイル・ワークスペースの場所をほかの PC とそろえ、フィードバックの返信を受け取れます。ログインしなくても、すべての機能を使えます。あとで「設定」の「アカウント」からもできます。": "Keep settings, profiles and workspace locations in sync with your other PCs, and receive replies to your feedback. Every feature works without logging in. You can also do this later from Settings > Account."
+  "設定・プロファイル・ワークスペースの場所をほかの PC とそろえ、フィードバックの返信を受け取れます。ログインしなくても、すべての機能を使えます。あとで「設定」の「アカウント」からもできます。": "Keep settings, profiles and workspace locations in sync with your other PCs, and receive replies to your feedback. Every feature works without logging in. You can also do this later from Settings > Account.",
+  "{{n}} 番目の画面で開く": "Open in pane {{n}}",
+  "この画面を次の画面と入れ替える": "Swap this pane with the next",
+  "この分割の向きを入れ替える": "Flip this split"
 }
