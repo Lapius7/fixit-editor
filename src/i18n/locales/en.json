@@ -959,5 +959,11 @@
   "公式サイト": "Official site",
   "ドキュメント": "Documentation",
   "更新履歴": "Release notes",
-  "GitHub": "GitHub"
+  "GitHub": "GitHub",
+  "含めるファイル": "Include",
+  "除外するファイル": "Exclude",
+  "開いているタブだけ": "Open tabs only",
+  "対象のファイルを絞る": "Filter files",
+  "(絞り込み中)": " (filtered)",
+  "すべて開く": "Expand all"
 }

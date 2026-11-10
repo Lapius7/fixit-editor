@@ -27,6 +27,10 @@ export function tauriPty(id: number, host?: string, cwd?: string, shell?: string
   const s: Sock = { readyState: 0, send: () => {}, close: () => {}, onopen: null, onmessage: null, onclose: null, onerror: null };
   const offs: (() => void)[] = [];
   let dead = false;
+  // 接続が済む前に端末が返す応答(起動直後のカーソル位置の問い合わせへの返事など)は、捨てずに溜めておく。
+  // Windows の ConPTY はこの返事が来るまで表示を始めないので、捨てると空白のまま止まる
+  const early: string[] = [];
+  s.send = (d) => { if (!d.startsWith("\u0000r") && early.length < 64) early.push(d); };
   (async () => {
     if (!IS_TAURI) return;
     const [{ invoke }, { listen }] = await Promise.all([import("@tauri-apps/api/core"), import("@tauri-apps/api/event")]);
@@ -48,6 +52,7 @@ export function tauriPty(id: number, host?: string, cwd?: string, shell?: string
       else invoke("pty_write", { id: key, data: d });
     };
     s.close = () => { dead = true; invoke("pty_close", { id: key }); offs.forEach((f) => f()); };
+    for (const x of early.splice(0)) s.send(x);
     s.onopen?.();
   })().catch(() => s.onerror?.());
   s.close = () => { dead = true; offs.forEach((f) => f()); };

@@ -11,7 +11,7 @@ import { OUTLINE_EVENT } from "@/editor/Crumbs";
 import LangUI from "@/editor/LangUI";
 import { openFiles, isScript, type Edit, type Loc } from "@/editor/ts/client";
 import Editor, { dropStates, type Cursor, type Jump } from "@/editor/Editor";
-import FileTree, { GitMarks, canDrop, type GitMark } from "@/workbench/FileTree";
+import FileTree, { DropGhost, GitMarks, canDrop, type GitMark } from "@/workbench/FileTree";
 import { ColGrip, RatioGrip } from "@/workbench/ColGrip";
 import { loadBase, loadGit, type GitInfo } from "@/features/git/git";
 import QuickOpen from "@/workbench/QuickOpen";
@@ -1465,6 +1465,7 @@ export default function App() {
                         <Folder className="ico folder" />
                         <span className="truncate">{r.name}</span>
                       </button>
+                      <DropGhost on={dropHead === r.prefix} depth={1} />
                       <div className="collapse" data-open={!shut} inert={shut}>
                         <div className="collapse-inner">
                           <FileTree nodes={r.nodes} activePath={act[fp]} ctxPath={menu?.path ?? null} rev={rev} onOpen={(n, pin) => openOrFocus(n, !!pin)} onContext={(e, n) => treeMenu(e, n)} onMove={moveTo} />
@@ -1480,6 +1481,7 @@ export default function App() {
                 ) : (
                   <FileTree nodes={root.nodes} activePath={act[fp]} ctxPath={menu?.path ?? null} rev={rev} onOpen={(n, pin) => openOrFocus(n, !!pin)} onContext={(e, n) => treeMenu(e, n)} onMove={moveTo} />
                 )}
+                {roots.length === 1 && <DropGhost on={rootDrop && !!drag.node} depth={0} />}
               </nav>
               <div className="side-foot">
                 <button className="open-btn" onClick={openFolder} disabled={!supportsFs()} title={supportsFs() ? "" : i18next.t("このブラウザではフォルダを開けません(Chrome か Edge を使ってください)")}>

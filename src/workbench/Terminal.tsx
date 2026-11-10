@@ -79,7 +79,7 @@ export default function TerminalSession({ id, active, open, focusKey, host: sshH
       else t.write(i18next.t("\r\n\u001b[2m[終了しました。Enter で閉じます]\u001b[0m"));
     };
     sock.onerror = () => t.write(i18next.t("\r\n\u001b[31mターミナルに接続できません。\u001b[0m\r\nこの機能は開発サーバー(pnpm dev)かデスクトップ版で使えます。"));
-    t.onData((d) => { if (sock.readyState === 1) sock.send(d); else if (d === "\r") cb.current.onExit(id); });
+    t.onData((d) => { if (sock.readyState === 1 || (IS_TAURI && sock.readyState === 0)) sock.send(d); else if (d === "\r") cb.current.onExit(id); });
     t.onSelectionChange(() => { if (copyOnSelect.current) { const x = t.getSelection(); if (x) navigator.clipboard.writeText(x).catch(() => {}); } });
     cb.current.register(id, {
       copy: () => { const x = t.getSelection(); if (x) navigator.clipboard.writeText(x).catch(() => {}); },

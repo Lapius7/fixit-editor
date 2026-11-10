@@ -23,6 +23,27 @@ const iconFor = (name: string) => {
 };
 
 // Git の印(M・A・U など)。親から関数で受ける(未対応のフォルダでは何も返さない)
+// ドラッグ中のファイルを、移動先に半透明で出す(離したあとにここへ来る、という見え方)。外れるときは薄れて消える
+export function DropGhost({ on, depth }: { on: boolean; depth: number }) {
+  const indent = useSettings().treeIndent;
+  const [shown, setShown] = useState<Node | null>(null);
+  const [out, setOut] = useState(false);
+  useEffect(() => {
+    if (on && drag.node) { setShown(drag.node); setOut(false); return; }
+    setOut(true);
+    const t = setTimeout(() => setShown(null), 200);
+    return () => clearTimeout(t);
+  }, [on]);
+  if (!shown) return null;
+  return (
+    <div className="tree-ghost" data-out={out} aria-hidden="true" style={{ paddingLeft: 10 + depth * indent }}>
+      <ChevronRight className="chev" data-hidden />
+      {shown.kind === "dir" ? <Folder className="ico folder" /> : iconFor(shown.name)}
+      <span className="truncate">{shown.name}</span>
+    </div>
+  );
+}
+
 export type GitMark = "M" | "A" | "D" | "U" | "R" | "C" | "dir";
 export const GitMarks = createContext<(n: Node) => GitMark | undefined>(() => undefined);
 
@@ -99,6 +120,7 @@ function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, depth, i
         <span className="truncate">{n.name}</span>
         {git && <span className="git-badge" data-g={git}>{git === "dir" ? "" : git === "U" ? "U" : git}</span>}
       </button>
+      {isDir && <DropGhost on={over} depth={depth + 1} />}
       {isDir && kids && (
         <div className="collapse" data-open={open && armed}>
           <div className="collapse-inner"><FileTree nodes={kids} activePath={activePath} ctxPath={ctxPath} rev={rev} onOpen={onOpen} onContext={onContext} onMove={onMove} depth={depth + 1} /></div>
