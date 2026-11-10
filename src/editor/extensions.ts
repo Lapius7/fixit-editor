@@ -2,7 +2,7 @@ import { langService } from "@/editor/langsvc";
 import { rainbowBrackets, tagSync, diagnostics, minimap } from "@/editor/intel";
 import { EditorSelection, EditorState, countColumn, type Extension } from "@codemirror/state";
 import { gitGutter } from "./gitgutter";
-import { EditorView, RectangleMarker, layer, crosshairCursor, drawSelection, dropCursor, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, highlightTrailingWhitespace, highlightWhitespace, lineNumbers, rectangularSelection, scrollPastEnd } from "@codemirror/view";
+import { Decoration, ViewPlugin, type DecorationSet, type ViewUpdate, EditorView, RectangleMarker, layer, crosshairCursor, drawSelection, dropCursor, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, highlightTrailingWhitespace, highlightWhitespace, lineNumbers, rectangularSelection, scrollPastEnd } from "@codemirror/view";
 import { highlightSelectionMatches } from "@codemirror/search";
 import type { Settings } from "@/features/settings/settings";
 import { acceptCompletion, autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
@@ -99,6 +99,26 @@ const trimmedSelection = layer({
   update: (u) => u.docChanged || u.selectionSet || u.viewportChanged || u.geometryChanged || u.focusChanged,
 });
 
+// 折り返した行を、その行の字下げの位置にそろえる(インデント線が折り返した文字に重ならない)
+const hangingIndent = ViewPlugin.fromClass(class {
+  decorations: DecorationSet;
+  constructor(v: EditorView) { this.decorations = this.build(v); }
+  update(u: ViewUpdate) { if (u.docChanged || u.viewportChanged || u.geometryChanged) this.decorations = this.build(u.view); }
+  build(v: EditorView) {
+    const ts = v.state.tabSize, ranges: ReturnType<Decoration["range"]>[] = [];
+    for (const { from, to } of v.visibleRanges) {
+      for (let pos = from; pos <= to;) {
+        const line = v.state.doc.lineAt(pos);
+        const ws = /^[ \t]*/.exec(line.text)![0];
+        const cols = countColumn(ws, ts);
+        if (cols) ranges.push(Decoration.line({ attributes: { style: `padding-left:calc(var(--pad-x, 8px) + ${cols}ch);text-indent:-${cols}ch` } }).range(line.from));
+        pos = line.to + 1;
+      }
+    }
+    return Decoration.set(ranges);
+  }
+}, { decorations: (p) => p.decorations });
+
 const BLINK: Record<string, number> = { off: 0, slow: 1600, normal: 1200, fast: 600 };
 export type EditorOpts = Pick<Settings,
   "tabSize" | "insertSpaces" | "wrap" | "lineNumbers" | "activeLine" | "foldGutter" | "indentGuides" | "bracketMatching" | "matchHighlight" | "rainbowBrackets" | "tagSync" | "diagnostics" | "langService" | "minimap" | "whitespace" | "cursorBlink" |
@@ -108,7 +128,7 @@ export type EditorOpts = Pick<Settings,
 export const dynamic = (o: EditorOpts): Extension => [
   indentUnit.of(o.insertSpaces ? " ".repeat(o.tabSize) : "\t"),
   EditorState.tabSize.of(o.tabSize),
-  o.wrap ? EditorView.lineWrapping : [],
+  o.wrap ? [EditorView.lineWrapping, hangingIndent] : [],
   o.lineNumbers ? lineNumbers() : [],
   gitGutter(),
   o.activeLine ? [highlightActiveLine(), highlightActiveLineGutter()] : [],

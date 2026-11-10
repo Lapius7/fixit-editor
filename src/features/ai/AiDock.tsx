@@ -9,6 +9,7 @@ import { toUrl } from "@/features/browser/BrowserDock";
 import { AI_MAX_HISTORY_CHARS } from "@/shared/config";
 import { AiError, isAbort, streamChat, type AiErrorKind, type Msg, type Stop } from "@/features/ai/providers";
 import { actionLabel, actionPrompt, ctxLabel, systemPrompt, withCode, type AiJob, type Ctx } from "@/features/ai/prompts";
+import { ms } from "@/features/settings/settings";
 import { getAi, hasEffort, ready, PROVIDER_NAME, setConsent, useAi, useLink, type Provider } from "@/features/ai/store";
 import { ModelPicker } from "@/features/ai/ModelPicker";
 import { refreshLink } from "@/features/ai/link";
@@ -165,9 +166,16 @@ export function AiDock({ open, job, getCtx, onClose, onSettings }: { open: boole
   const dropChat = (c: Chat) => { if (c.id === chatId) startNew(); deleteChat(c.id); };
   const when = (t: number) => new Date(t).toLocaleString(i18next.language, { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
-  if (!open) return null;
+  // 閉じるときは、縮みきってから外す
+  const [mounted, setMounted] = useState(open);
+  useEffect(() => {
+    if (open) { setMounted(true); return; }
+    const t = setTimeout(() => setMounted(false), ms(260));
+    return () => clearTimeout(t);
+  }, [open]);
+  if (!open && !mounted) return null;
   return (
-    <aside className="ai-dock" aria-label="AI" onKeyDown={(e) => { if (e.key === "Escape" && hist) { e.stopPropagation(); setHist(false); } }}>
+    <aside className="ai-dock" data-closing={!open} aria-label="AI" onKeyDown={(e) => { if (e.key === "Escape" && hist) { e.stopPropagation(); setHist(false); } }}>
       <div className="ai-bar">
         <span className="ai-title">AI<small>{cfg.models[cfg.provider] || (cfg.provider === "claude-cli" ? "claude" : "")}</small></span>
         <button className="icon-btn" aria-label={i18next.t("新しい会話")} title={i18next.t("新しい会話")} disabled={!msgs.length} onClick={startNew}><SquarePen /></button>

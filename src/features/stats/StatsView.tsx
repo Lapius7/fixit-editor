@@ -33,6 +33,9 @@ export default function StatsView({ onClose, out }: { onClose: () => void; out?:
   const max = Math.max(60, ...days.map((x) => x.d.sec));
   const langMax = Math.max(1, ...sm.langs.slice(0, 6).map((x) => x[1]));
   const hMax = Math.max(1, ...sm.hours);
+  const total = days.reduce((a, x) => a + x.d.sec, 0);
+  const langSum = Math.max(1, sm.langs.reduce((a, x) => a + x[1], 0));
+  const peak = sm.hours.some((v) => v > 0) ? sm.hours.indexOf(Math.max(...sm.hours)) : -1;
   return (
     <div className="qo-backdrop" data-mid data-closing={closing || !!out} onMouseDown={close}>
       <div className="qo dlg stats" role="dialog" aria-label={i18next.t("統計")} onMouseDown={(e) => e.stopPropagation()}>
@@ -56,13 +59,23 @@ export default function StatsView({ onClose, out }: { onClose: () => void; out?:
               <button aria-pressed={range === 30} onClick={() => setRange(30)}><Trans i18nKey="30 日" /></button>
             </div>
           </div>
-          <div className="st-bars" data-n={range}>
-            {days.map((x, i) => (
-              <div key={x.key} className="st-bar" title={i18next.t("{{label}}  {{arg1}} · {{arg2}} 文字", { label: x.label, arg1: dur(x.d.sec), arg2: x.d.chars.toLocaleString() })} data-today={i === days.length - 1}>
-                <i style={{ height: `${Math.max(x.d.sec ? 4 : 0, (x.d.sec / max) * 100)}%` }} />
-                <span>{range === 7 || i % 5 === 0 ? x.label : ""}</span>
-              </div>
-            ))}
+          <p className="st-sum">
+            <span>{i18next.t("合計 {{arg0}}", { arg0: dur(total) })}</span>
+            <span>{i18next.t("1日あたり {{arg0}}", { arg0: dur(Math.round(total / range)) })}</span>
+          </p>
+          <div className="st-chart">
+            <div className="st-grid" aria-hidden>
+              {[1, 0.5, 0].map((r) => <div key={r}><em>{r === 1 ? dur(max) : ""}</em></div>)}
+            </div>
+            <div className="st-bars" data-n={range}>
+              {days.map((x, i) => (
+                <div key={x.key} className="st-bar" data-today={i === days.length - 1} data-edge={i > days.length - 4 ? "r" : i < 3 ? "l" : undefined} aria-label={`${x.label} ${dur(x.d.sec)}`}>
+                  <div className="st-col"><i style={{ height: `${Math.max(x.d.sec ? 4 : 2, (x.d.sec / max) * 100)}%` }} data-zero={!x.d.sec} /></div>
+                  <span>{range === 7 || i % 5 === 0 || i === days.length - 1 ? x.label : ""}</span>
+                  <div className="st-tip" role="tooltip"><b>{x.label}</b><span>{dur(x.d.sec)}</span><small>{i18next.t("{{arg0}} 文字", { arg0: x.d.chars.toLocaleString() })}</small></div>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -71,15 +84,16 @@ export default function StatsView({ onClose, out }: { onClose: () => void; out?:
             <h3><Trans i18nKey="言語" /></h3>
             {sm.langs.length === 0 && <p className="st-none"><Trans i18nKey="まだありません" /></p>}
             {sm.langs.slice(0, 6).map(([k, v]) => (
-              <div key={k} className="st-lang"><span>{k}</span><div><i style={{ width: `${(v / langMax) * 100}%` }} /></div><em>{dur(v)}</em></div>
+              <div key={k} className="st-lang"><span>{k}</span><div><i style={{ width: `${(v / langMax) * 100}%` }} /></div><em>{dur(v)}<small>{Math.round((v / langSum) * 100)}%</small></em></div>
             ))}
           </section>
           <section className="st-sec">
             <h3><Trans i18nKey="時間帯" /></h3>
             <div className="st-hours" aria-label={i18next.t("時間帯ごとの作業量")}>
-              {sm.hours.map((v, h) => <i key={h} title={i18next.t("{{h}} 時  {{arg1}}", { h, arg1: dur(v) })} style={{ opacity: v ? 0.2 + 0.8 * (v / hMax) : 0.08 }} />)}
+              {sm.hours.map((v, h) => <i key={h} data-peak={hMax > 0 && v === hMax && v > 0} title={i18next.t("{{h}} 時  {{arg1}}", { h, arg1: dur(v) })} style={{ opacity: v ? 0.25 + 0.75 * (v / hMax) : 0.1 }} />)}
             </div>
-            <div className="st-hours-ax"><span>0</span><span>6</span><span>12</span><span>18</span><span>24</span></div>
+            <div className="st-hours-ax">{[0, 6, 12, 18].map((h) => <span key={h} style={{ gridColumn: `${h + 1} / span 6` }}>{h}</span>)}</div>
+            {peak >= 0 && <p className="st-peak">{i18next.t("いちばん多い時間帯 {{h}} 時台", { h: peak })}</p>}
           </section>
         </div>
 
