@@ -781,5 +781,11 @@
   "履歴をすべて消す": "Clear all history",
   "通知": "Notifications",
   "保存できませんでした: {{m}}": "Could not save: {{m}}",
-  "読み込めませんでした: {{m}}": "Could not import: {{m}}"
+  "読み込めませんでした: {{m}}": "Could not import: {{m}}",
+  "プレビューを更新": "Reload preview",
+  "プレビューを閉じる": "Close preview",
+  "プレビューを横に開く": "Open preview to the side",
+  "エディタも表示する": "Show the editor too",
+  "プレビューだけにする": "Preview only",
+  "Emmet 記法を Tab で展開する(HTML・CSS など)": "Expand Emmet abbreviations with Tab (HTML, CSS, etc.)"
 }

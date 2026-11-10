@@ -1,5 +1,7 @@
 // Markdown / HTML のプレビュー。どちらも sandbox の iframe に入れ、親ページには触れさせない
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { RotateCw } from "lucide-react";
+import { inline, type Source } from "./resolve";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import i18next from "i18next";
@@ -22,11 +24,52 @@ function build(kind: PreviewKind, text: string): string {
   return `<!doctype html><meta charset="utf-8"><base target="_blank"><style>${MD_CSS}</style>${body}`;
 }
 
-export default function Preview({ kind, text, name }: { kind: PreviewKind; text: string; name: string }) {
+// 親へ「いまのスクロール位置」を知らせ、作り直したあとにそこへ戻す(Live Server と同じく、書き直しても位置が飛ばない)
+const keepScroll = (y: number) => `<script>(function(){var y=${Math.round(y)};function s(){try{parent.postMessage({fixitScroll:scrollY},"*")}catch(e){}}addEventListener("load",function(){scrollTo(0,y);setTimeout(function(){scrollTo(0,y)},60)});addEventListener("scroll",s,{passive:true})})()</script>`;
+const withScroll = (doc: string, y: number) => (/<head[^>]*>/i.test(doc) ? doc.replace(/<head[^>]*>/i, (m) => m + keepScroll(y)) : keepScroll(y) + doc);
+
+export type PreviewSource = Omit<Source, "nonce">;
+
+export default function Preview({ kind, text, name, source }: { kind: PreviewKind; text: string; name: string; source?: PreviewSource }) {
   // 打鍵のたびに作り直さないよう、少し待ってから反映する
   const [shown, setShown] = useState(text);
+  const [nonce, setNonce] = useState(0); // 読み直しの番号
+  const [doc, setDoc] = useState("");
+  const frame = useRef<HTMLIFrameElement>(null);
+  const y = useRef(0);
   useEffect(() => { const t = setTimeout(() => setShown(text), PREVIEW_DELAY_MS); return () => clearTimeout(t); }, [text]);
-  const doc = useMemo(() => build(kind, shown), [kind, shown]);
+  // 参照しているファイルを開いているタブの中身(未保存を含む)が変わったら、作り直す
+  const openNow = source ? JSON.stringify(source.open) : "";
+  const [openKey, setOpenKey] = useState(openNow);
+  useEffect(() => { const t = setTimeout(() => setOpenKey(openNow), PREVIEW_DELAY_MS); return () => clearTimeout(t); }, [openNow]);
+  useEffect(() => {
+    let live = true;
+    const run = async () => {
+      let html = build(kind, shown);
+      if (kind === "html" && source) html = await inline(html, { ...source, nonce }).catch(() => html);
+      if (live) setDoc(withScroll(html, y.current));
+    };
+    void run();
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, shown, openKey, nonce, source?.root, source?.path]);
+  useEffect(() => {
+    const on = (e: MessageEvent) => { if (e.source === frame.current?.contentWindow && typeof e.data?.fixitScroll === "number") y.current = e.data.fixitScroll; };
+    addEventListener("message", on);
+    return () => removeEventListener("message", on);
+  }, []);
+  // ウィンドウに戻ってきたら、フォルダの中で変わったファイル(別のエディタでの編集など)を読み直す
+  useEffect(() => {
+    if (kind !== "html" || !source?.root) return;
+    const on = () => setNonce((n) => n + 1);
+    addEventListener("focus", on);
+    return () => removeEventListener("focus", on);
+  }, [kind, source?.root]);
   // HTML は JS を動かせるが、allow-same-origin は付けない(エディタの localStorage などに届かせない)
-  return <iframe className="pv-frame" title={i18next.t("プレビュー") + ": " + name} sandbox={kind === "html" ? "allow-scripts allow-forms allow-modals" : ""} srcDoc={doc} />;
+  return (
+    <div className="pv-wrap">
+      <iframe ref={frame} className="pv-frame" title={i18next.t("プレビュー") + ": " + name} sandbox={kind === "html" ? "allow-scripts allow-forms allow-modals" : ""} srcDoc={doc} />
+      <button className="icon-btn pv-reload" aria-label={i18next.t("プレビューを更新")} title={i18next.t("プレビューを更新")} onClick={() => { y.current = 0; setNonce((n) => n + 1); }}><RotateCw /></button>
+    </div>
+  );
 }

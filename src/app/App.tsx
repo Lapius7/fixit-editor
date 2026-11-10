@@ -27,7 +27,7 @@ import ContextMenu, { type Item } from "@/workbench/ContextMenu";
 import Dialog from "@/workbench/Dialog";
 import Connect from "@/features/workspaces/Connect";
 import Workspaces from "@/features/workspaces/Workspaces";
-import { Sparkles, Server, HardDrive, Unplug, FolderKanban, Eye, Code2 } from "lucide-react";
+import { Sparkles, Server, HardDrive, Unplug, FolderKanban, Eye, Code2, Maximize2, Minimize2 } from "lucide-react";
 import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
 import { displayPath, setRootNames } from "@/workbench/rootpath";
 import { getProfiles, switchProfile, useProfiles } from "@/features/settings/profiles";
@@ -84,8 +84,12 @@ export default function App() {
   const updRoot = (prefix: string, f: (r: Root) => Root) => setRoots((p) => p.map((r) => (r.prefix === prefix ? f(r) : r)));
   // 見出し(フォルダそのもの)を、ツリーの項目と同じ形で扱うための項目
   const headNode = (r: Root): Node => ({ name: r.name, path: r.prefix, kind: "dir", handle: r.handle });
-  const isRootNode = (n: Node) => roots.some((r) => r.prefix === n.path);
+ 
+ const isRootNode = (n: Node) => roots.some((r) => r.prefix === n.path);
   const [tabs, setTabs] = useState<Tab[]>([]);
+  // HTML プレビューが相対パスの CSS・JS・画像を読むための材料(開いているフォルダ、開いているタブの中身)
+  const openTexts = useMemo(() => Object.fromEntries(tabs.filter((x) => x.view.kind === "text" && /\.(css|m?js|svg|json)$/i.test(x.node.name)).map((x) => [x.node.path, x.text])), [tabs]);
+  const previewSource = (t: Tab) => ({ root: rootOfPath(t.node.path)?.handle as FileSystemDirectoryHandle | undefined, path: t.node.path, open: openTexts });
   const [act, setAct] = useState<Pair<string | null>>([null, null]);
   const [fp, setFp] = useState<0 | 1>(0);
   const [split, setSplit] = useState(false);
@@ -1112,10 +1116,12 @@ export default function App() {
           const at = list.find((t) => t.node.path === act[i]);
           if (!at || at.view.kind !== "text" || !previewKind(at.node.name)) return null;
           const cur = pv[at.node.path];
-          const modes: [PvMode | undefined, string, typeof Code2][] = [[undefined, i18next.t("テキスト"), Code2], ["split", i18next.t("両方"), Columns2], ["preview", i18next.t("プレビュー"), Eye]];
+          const on = cur !== undefined, wide = cur === "preview", key = chips(K("togglePreview")).join(" ");
+          const set = (m: PvMode | undefined) => setPv((p) => ({ ...p, [at.node.path]: m }));
           return (
-            <div className="seg pv-seg" role="group" aria-label={i18next.t("プレビュー")}>
-              {modes.map(([m, label, Icon]) => <button key={label} aria-pressed={cur === m} onClick={() => setPv((p) => ({ ...p, [at.node.path]: m }))}><Icon />{label}</button>)}
+            <div className="seg pv-seg" role="group" aria-label={i18next.t("プレビュー")} data-open={on}>
+              <button aria-pressed={on} title={`${on ? i18next.t("プレビューを閉じる") : i18next.t("プレビューを横に開く")} (${key})`} onClick={() => set(on ? undefined : "split")}><Eye />{i18next.t("プレビュー")}</button>
+              {on && <button className="pv-wide" aria-pressed={wide} aria-label={wide ? i18next.t("エディタも表示する") : i18next.t("プレビューだけにする")} title={wide ? i18next.t("エディタも表示する") : i18next.t("プレビューだけにする")} onClick={() => set(wide ? "split" : "preview")}>{wide ? <Minimize2 /> : <Maximize2 />}</button>}
             </div>
           );
         })()}
@@ -1157,7 +1163,7 @@ export default function App() {
           />
           {previewKind(t.node.name) && (
             <div className="pv-pane" inert={!pv[t.node.path]}>
-              {(pv[t.node.path] || pvSeen.current.has(t.node.path)) && (pvSeen.current.add(t.node.path), <Preview kind={previewKind(t.node.name)!} text={t.text} name={t.node.name} />)}
+              {(pv[t.node.path] || pvSeen.current.has(t.node.path)) && (pvSeen.current.add(t.node.path), <Preview kind={previewKind(t.node.name)!} text={t.text} name={t.node.name} source={previewSource(t)} />)}
             </div>
           )}
           </div>
