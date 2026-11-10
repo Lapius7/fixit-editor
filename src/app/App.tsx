@@ -401,6 +401,18 @@ export default function App() {
     setRoots((p) => p.map((r) => { const g = got.find((x) => x.prefix === r.prefix && x.handle === r.handle); return g?.nodes ? { ...r, nodes: g.nodes } : r; }));
     setRev((r) => r + 1);
   };
+  // Git の操作でファイルが書き換わったあと、未編集のタブをディスクの中身に読み直す(古い内容を自動保存で書き戻さないため)
+  const syncTabs = async () => {
+    await reload().catch(() => {});
+    for (const t of tabs) {
+      if (!isText(t) || t.text !== t.saved || !t.node.handle) continue;
+      try {
+        const { view } = await load(t.node);
+        if (view.kind !== "text" || view.text === t.saved) continue;
+        setTabs((p) => p.map((x) => (x.node.path === t.node.path && isText(x) && x.text === x.saved ? { ...x, text: view.text, saved: view.text } : x)));
+      } catch { /* 消えたファイルなどは、そのまま */ }
+    }
+  };
   /* ---------- ワークスペース ---------- */
   const snapshot = (): WsState => ({
     tabs: tabs.map((t) => t.node.path), ...savedPanes(), side, panel, term: term && alive().length > 0,
@@ -1524,7 +1536,7 @@ export default function App() {
             {br && <BrowserDock onClose={() => setBr(false)} />}
             {ai && <ColGrip width={st.aiW} def={440} min={280} max={900} dir={-1} onChange={(w) => update({ aiW: w })} />}
             <AiDock open={ai} job={aiJob} quote={aiQuote} resolve={clipOf} getCtx={aiCtx} onClose={() => setAi(false)} onSettings={() => setSetts("ai")} />
-            <GitPanel open={gitOpen} conn={root.conn ?? null} root={gits[root.prefix]?.root ?? null} rev={gitTick} onClose={() => setGitOpen(false)} onChanged={() => setGitTick((n) => n + 1)} />
+            <GitPanel open={gitOpen} conn={root.conn ?? null} root={gits[root.prefix]?.root ?? null} rev={gitTick} onClose={() => setGitOpen(false)} onChanged={() => { setGitTick((n) => n + 1); void syncTabs(); }} guard={() => !dirtyList.length || confirm(i18next.t("保存していない変更が {{length}} 件あります。ファイルが書き換わると失われることがあります。続けますか?", { length: dirtyList.length }))} />
             </div>
             {sess.length > 0 && (
               <div className="term-wrap" data-open={term && shown} data-drag={dragT}>

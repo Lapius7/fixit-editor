@@ -999,5 +999,6 @@
   "切り替え": "Switch",
   "もう一度押すと削除します": "Press again to delete",
   "ブランチを削除": "Delete branch",
-  "Git パネルの表示": "Toggle Git panel"
+  "Git パネルの表示": "Toggle Git panel",
+  "保存していない変更が {{length}} 件あります。ファイルが書き換わると失われることがあります。続けますか?": "You have {{length}} unsaved change(s). They may be lost when files are rewritten. Continue?"
 }

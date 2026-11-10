@@ -12,7 +12,7 @@ import {
 
 type Tab = "changes" | "tree" | "log" | "branches";
 type Side = "staged" | "unstaged" | "conflict";
-type Props = { open: boolean; conn: Conn | null; root: string | null; rev: number; onClose: () => void; onChanged: () => void };
+type Props = { open: boolean; conn: Conn | null; root: string | null; rev: number; onClose: () => void; onChanged: () => void; guard?: () => boolean };
 
 const ROW = 28, LANE = 12, COLORS = 8;
 const base = (p: string) => p.slice(p.lastIndexOf("/") + 1);
@@ -29,7 +29,10 @@ function ago(at: number) {
   return new Date(at).toLocaleDateString(i18next.language);
 }
 
-export function GitPanel({ open, conn, root, rev, onClose, onChanged }: Props) {
+// 作業フォルダのファイルを書き換える操作
+const REWRITES = new Set(["checkout", "discard", "clean", "pull"]);
+
+export function GitPanel({ open, conn, root, rev, onClose, onChanged, guard }: Props) {
   const [tab, setTab] = useState<Tab>("changes");
   const [st, setSt] = useState<Status | null>(null);
   const [commits, setCommits] = useState<Commit[]>([]);
@@ -80,6 +83,8 @@ export function GitPanel({ open, conn, root, rev, onClose, onChanged }: Props) {
   // 書き込み操作。終わったら、パネルとファイルツリーを更新する
   const run = async (label: string, body: Record<string, unknown>, after?: () => void) => {
     if (!conn || !root || busy) return;
+    // 作業フォルダのファイルを書き換える操作は、未保存のタブがあれば先に確かめる
+    if (REWRITES.has(String(body.cmd)) && guard && !guard()) return;
     setBusy(label); setErr("");
     try { await gitWrite(conn, root, body); after?.(); onChanged(); await load(); }
     catch (e) { setErr(msg(e)); }
