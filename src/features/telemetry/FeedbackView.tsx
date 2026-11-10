@@ -11,7 +11,7 @@ import { loadReplies, markRepliesSeen, postReply, useReplies, type MyFeedback } 
 
 const KINDS: [FeedbackKind, string][] = [["bug", "不具合"], ["idea", "要望"], ["other", "その他"]];
 const KIND_NAME: Record<string, string> = { bug: "不具合", idea: "要望", other: "その他" };
-const when = (t: number) => new Date(t).toLocaleString(i18next.language, { dateStyle: "medium", timeStyle: "short" });
+const when = (t: number) => new Date(Number(t)).toLocaleString(i18next.language, { dateStyle: "medium", timeStyle: "short" });
 
 // スレッドに続けて書き込む欄。開いたときだけ出す
 function ReplyBox({ id }: { id: number }) {
@@ -43,8 +43,8 @@ function Mine({ items }: { items: MyFeedback[] }) {
   if (!items.length) return <p className="fb-note"><Trans i18nKey="ログイン中に送ったフィードバックが、ここに並びます。" /></p>;
   return (
     <div className="fb-list overscroll-contain">
-      {items.map((f) => (
-        <article key={f.id} className="fb-item">
+      {items.map((f, i) => (
+        <article key={f.id} className="fb-item" style={{ ["--i" as string]: Math.min(i, 6) }}>
           <header><span>{i18next.t(KIND_NAME[f.kind] ?? "その他")}</span><span className="fb-st" data-done={f.status === "done" || undefined}>{i18next.t(f.status === "done" ? "対応済み" : "受付中")}</span><time>{when(f.ts)}</time></header>
           <p>{f.message}</p>
           {f.replies.map((r) => (
@@ -101,7 +101,7 @@ export default function FeedbackView({ onClose, out }: { onClose: () => void; ou
             <button aria-pressed={tab === "mine"} onClick={() => setTab("mine")}><Trans i18nKey="送ったもの・返信" />{mine.unread > 0 && <b className="fb-badge">{mine.unread}</b>}</button>
           </div>
         )}
-        {tab === "mine" && user ? <Mine items={mine.items} /> : <>
+        {tab === "mine" && user ? <div key="mine" className="fb-pane"><Mine items={mine.items} /></div> : <div key="new" className="fb-pane">
         <div className="seg" role="group" aria-label={i18next.t("種類")}>
           {KINDS.map(([k, label]) => <button key={k} aria-pressed={kind === k} onClick={() => setKind(k)}>{i18next.t(label)}</button>)}
         </div>
@@ -111,15 +111,11 @@ export default function FeedbackView({ onClose, out }: { onClose: () => void; ou
         <p className="fb-who">
           {user ? <><Avatar user={user} size={18} /><span>{i18next.t("{{name}} のアカウントに紐づけて送ります。返信はここで読めます", { name: user.name })}</span></> : <span><Trans i18nKey="ログインしていないので、匿名で送ります。返信がほしいときは、設定の「アカウント」からログインしてください。" /></span>}
         </p>
-        </>}
-        {tab === "mine" && user ? (
-          <div className="dlg-foot"><button className="btn" onClick={close}><Trans i18nKey="閉じる" /></button></div>
-        ) : (
-          <div className="dlg-foot">
-            <button className="btn" onClick={close}><Trans i18nKey="やめる" /></button>
-            <button className="btn" data-primary="true" disabled={!text.trim() || busy} onClick={send}><Trans i18nKey={busy ? "送っています…" : "送る"} /></button>
-          </div>
-        )}
+        <div className="dlg-foot">
+          <button className="btn" onClick={close}><Trans i18nKey="やめる" /></button>
+          <button className="btn" data-primary="true" disabled={!text.trim() || busy} onClick={send}><Trans i18nKey={busy ? "送っています…" : "送る"} /></button>
+        </div>
+        </div>}
       </div>
     </div>
   );

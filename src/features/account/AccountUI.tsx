@@ -14,12 +14,14 @@ const dashboardUrl = () => { const l = i18next.language.slice(0, 2); return `${S
 
 // アイコン。読み込めないとき・未設定のときは、名前の頭文字
 export function Avatar({ user, size = 28 }: { user: Pick<Account, "name" | "avatar">; size?: number }) {
-  const [bad, setBad] = useState(false), [ok, setOk] = useState(false);
-  useEffect(() => { setBad(false); setOk(false); }, [user.avatar]);
+  // 読み込めた/失敗した画像の URL で持つ。data: の画像はすぐ読み込みが終わるので、URL が変わったときに effect で消すと、表示しないまま残る
+  const [okSrc, setOkSrc] = useState(""), [badSrc, setBadSrc] = useState("");
+  const src = user.avatar, ok = !!src && okSrc === src, bad = !!src && badSrc === src;
+  const seen = (img: HTMLImageElement | null) => { if (img?.complete && img.naturalWidth > 0 && src) setOkSrc(src); };
   const initial = (user.name || "?").trim().slice(0, 1).toUpperCase();
   return (
     <span className="acct-av" data-loading={!!user.avatar && !bad && !ok} style={{ width: size, height: size, fontSize: Math.round(size * 0.42) }} aria-hidden>
-      {user.avatar && !bad ? <img src={user.avatar} alt="" draggable={false} onLoad={() => setOk(true)} onError={() => setBad(true)} style={{ opacity: ok ? 1 : 0 }} /> : initial}
+      {user.avatar && !bad ? <img ref={seen} key={src} src={src} alt="" draggable={false} onLoad={() => setOkSrc(src)} onError={() => setBadSrc(src)} style={{ opacity: ok ? 1 : 0 }} /> : initial}
     </span>
   );
 }

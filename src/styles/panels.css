@@ -386,7 +386,7 @@ body:has(.col-grip[data-drag="true"]) iframe, body:has(.col-grip[data-drag="true
 .bc[data-cut] .bc-trail { -webkit-mask-image: linear-gradient(to right, transparent, #000 22px); mask-image: linear-gradient(to right, transparent, #000 22px); }
 
 /* ---- タブ: エディタとは繋げず、選んだタブだけを浮いた丸いピルにする ---- */
-.tabbar { align-items: center; padding-bottom: 10px; gap: 2px; }
+.tabbar { align-items: center; padding-bottom: 0; gap: 2px; }
 .tab { border-radius: calc(var(--r-sm) * var(--rk, 1) + 4px); box-shadow: none; }
 .tab[aria-selected="true"], .tab[data-other="true"] { box-shadow: none; }
 .tab[aria-selected="true"] {
