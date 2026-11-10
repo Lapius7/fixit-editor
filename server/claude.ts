@@ -5,21 +5,34 @@ import path from "node:path";
 import type { ServerResponse } from "node:http";
 import type { Plugin } from "vite";
 import { body, check } from "./fsapi";
+import { AI_CLI_MAX_BODY, AI_IMAGE_TYPES } from "../src/shared/config";
 
 // Claude のサブスクリプション(claude.ai のログイン)で AI を使うための橋渡し(開発サーバー専用)。
 // この PC の公式 `claude` コマンドを、ツールなし・空のフォルダ・設定なしで 1 回だけ動かし、返事を流す。
 // ログインの情報(トークン)はこのコードからは読まない。API キーの環境変数は渡さない(渡すと API の課金に切り替わるため)。
 const BIN = process.env.FIXIT_CLAUDE_BIN || "claude";
-const MAX_BODY = 4 * 1024 * 1024;
 const TIMEOUT_MS = 5 * 60_000;
 const MAX_RUNNING = 2;
 const MODEL = /^[A-Za-z0-9._\-[\]]{1,64}$/;
 const EFFORT = /^(low|medium|high|xhigh|max)?$/;
-type Msg = { role: "user" | "assistant"; content: string };
+type Img = { type: string; data: string };
+type Msg = { role: "user" | "assistant"; content: string; images?: Img[] };
+const MAX_IMG_B64 = 5_000_000;
+const B64 = /^[A-Za-z0-9+/]+=*$/;
+const imgOk = (i: unknown) => { const x = i as Img; return !!x && (AI_IMAGE_TYPES as readonly string[]).includes(x.type) && typeof x.data === "string" && x.data.length > 0 && x.data.length <= MAX_IMG_B64 && B64.test(x.data); };
 let running = 0;
 
 // 1 回の呼び出しに会話を渡すため、履歴を台本の形にして送る
 const transcript = (m: Msg[]) => (m.length === 1 ? m[0].content : m.map((x) => `<${x.role}>\n${x.content}\n</${x.role}>`).join("\n\n") + "\n\n上の会話の最後の <user> に答えてください。");
+
+// claude に渡す中身。画像があるときだけ stream-json の 1 行(画像 → 台本の文字の順)にする。src-tauri/fixit-core/src/claude.rs と同じ形
+const payload = (m: Msg[]): [boolean, string] => {
+  const text = transcript(m);
+  const imgs = m.flatMap((x) => x.images ?? []);
+  if (!imgs.length) return [false, text];
+  const content = [...imgs.map((i) => ({ type: "image", source: { type: "base64", media_type: i.type, data: i.data } })), { type: "text", text }];
+  return [true, JSON.stringify({ type: "user", message: { role: "user", content } }) + "\n"];
+};
 
 const line = (res: ServerResponse, v: unknown) => { if (!res.writableEnded) res.write(JSON.stringify(v) + "\n"); };
 
@@ -82,9 +95,9 @@ export function claudeBridge(): Plugin {
             return;
           }
           if (req.method !== "POST") { res.statusCode = 405; res.end(); return; }
-          const j = JSON.parse((await body(req, MAX_BODY)).toString("utf8")) as { system?: unknown; model?: unknown; effort?: unknown; messages?: unknown };
+          const j = JSON.parse((await body(req, AI_CLI_MAX_BODY)).toString("utf8")) as { system?: unknown; model?: unknown; effort?: unknown; messages?: unknown };
           const ms = Array.isArray(j.messages) ? j.messages : [];
-          if (!ms.length || ms.some((m) => !m || (m.role !== "user" && m.role !== "assistant") || typeof m.content !== "string")) { res.statusCode = 400; res.end(); return; }
+          if (!ms.length || ms.some((m) => !m || (m.role !== "user" && m.role !== "assistant") || typeof m.content !== "string" || (m.images !== undefined && (!Array.isArray(m.images) || !m.images.every(imgOk))))) { res.statusCode = 400; res.end(); return; }
           const model = typeof j.model === "string" && j.model ? j.model : "";
           if (model && !MODEL.test(model)) { res.statusCode = 400; res.end(); return; }
           const effort = typeof j.effort === "string" ? j.effort : "";
@@ -96,7 +109,8 @@ export function claudeBridge(): Plugin {
           res.setHeader("cache-control", "no-store");
           const cwd = mkdtempSync(path.join(tmpdir(), "fixit-claude-"));
           const env = { ...process.env }; delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN;
-          const args = ["-p", "--output-format", "stream-json", "--include-partial-messages", "--verbose", "--tools", "", "--no-session-persistence", "--setting-sources", "", "--strict-mcp-config", "--disable-slash-commands", "--system-prompt", typeof j.system === "string" ? j.system : ""];
+          const [jsonIn, input] = payload(ms as Msg[]);
+          const args = [...(jsonIn ? ["--input-format", "stream-json"] : []), "-p", "--output-format", "stream-json", "--include-partial-messages", "--verbose", "--tools", "", "--no-session-persistence", "--setting-sources", "", "--strict-mcp-config", "--disable-slash-commands", "--system-prompt", typeof j.system === "string" ? j.system : ""];
           if (model) args.push("--model", model);
           if (effort) args.push("--effort", effort);
           running++;
@@ -107,7 +121,7 @@ export function claudeBridge(): Plugin {
           res.on("close", () => { if (!p.killed && p.exitCode === null) p.kill("SIGKILL"); });
           p.stderr.on("data", (d: Buffer) => { if (err.length < 4000) err += d.toString(); });
           p.stdin.on("error", () => { /* 先に終わったとき */ });
-          p.stdin.end(transcript(ms as Msg[]));
+          p.stdin.end(input);
           p.stdout.on("data", (d: Buffer) => {
             buf += d.toString("utf8");
             let i: number;

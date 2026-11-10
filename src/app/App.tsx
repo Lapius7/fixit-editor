@@ -59,7 +59,7 @@ import { copyImage } from "@/shared/clipimage";
 import { langName } from "@/editor/lang";
 import { APP_NAME } from "@/shared/config";
 import BrowserDock from "@/features/browser/BrowserDock";
-import { AiDock } from "@/features/ai/AiDock";
+import { AiDock, type AiPic, type AiQuote } from "@/features/ai/AiDock";
 import { GitPanel } from "@/features/git/GitPanel";
 import type { AiAction, AiJob, Clip, Ctx } from "@/features/ai/prompts";
 import Preview, { previewKind } from "@/features/preview/Preview";
@@ -166,7 +166,7 @@ export default function App() {
   const [ai, setAi] = useState(false); // AI パネルの表示
   const [gitOpen, setGitOpen] = useState(false); // Git パネルの表示
   const [aiJob, setAiJob] = useState<AiJob | null>(null); // 右クリックから AI パネルへ渡す依頼
-  const [aiQuote, setAiQuote] = useState<Clip | null>(null); // 引用して AI パネルへ添える文
+  const [aiQuote, setAiQuote] = useState<AiQuote | null>(null); // 引用して AI パネルへ添える文・画像
   const aiSeq = useRef(0);
   const [cur, setCur] = useState<Pm<Cursor | null>>({});
   const [jump, setJump] = useState<Pm<Jump | undefined>>({});
@@ -1160,8 +1160,14 @@ export default function App() {
     if (t) return t.view.kind === "text" ? { name: n.name, text: t.text, scope: "file" } : null;
     try { const r = await load(n); return r.view.kind === "text" ? { name: n.name, text: r.view.text, scope: "file" } : null; } catch { return null; }
   };
+  // AI に添える中身。画像のファイルは画像として、それ以外は文字として読む
+  const aiSource = async (x: Node | string): Promise<Ctx | AiPic | null> => {
+    const n = typeof x === "string" ? tabOf(x)?.node : x;
+    if (n && n.kind !== "dir" && isImageName(n.name)) { try { return { name: n.name, blob: await getFile(n) }; } catch { return null; } }
+    return clipOf(x);
+  };
   const fileToAi = async (n: Node) => {
-    const c = await clipOf(n);
+    const c = await aiSource(n);
     if (!c) { notify(i18next.t("このファイルは文字として読めないため、添えられません"), "error"); return; }
     setAi(true);
     setAiQuote({ id: ++aiSeq.current, ...c });
@@ -1579,7 +1585,7 @@ export default function App() {
             {br && <ColGrip width={st.brW} def={560} min={280} max={1000} dir={-1} onChange={(w) => update({ brW: w })} />}
             {br && <BrowserDock onClose={() => setBr(false)} />}
             {ai && <ColGrip width={st.aiW} def={440} min={280} max={900} dir={-1} onChange={(w) => update({ aiW: w })} />}
-            <AiDock open={ai} job={aiJob} quote={aiQuote} resolve={clipOf} getCtx={aiCtx} onClose={() => setAi(false)} onSettings={() => setSetts("ai")} />
+            <AiDock open={ai} job={aiJob} quote={aiQuote} resolve={aiSource} getCtx={aiCtx} onClose={() => setAi(false)} onSettings={() => setSetts("ai")} />
             <GitPanel open={gitOpen} conn={root.conn ?? null} root={gits[root.prefix]?.root ?? null} rev={gitTick} onClose={() => setGitOpen(false)} onChanged={() => { setGitTick((n) => n + 1); void syncTabs(); }} guard={() => !dirtyList.length || ask({ message: i18next.t("保存していない変更が {{length}} 件あります。ファイルが書き換わると失われることがあります。続けますか?", { length: dirtyList.length }), danger: true })} />
             </div>
             {sess.length > 0 && (

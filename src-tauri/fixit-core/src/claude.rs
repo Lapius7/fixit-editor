@@ -19,6 +19,24 @@ static RUNNING: AtomicUsize = AtomicUsize::new(0);
 pub struct Msg {
     pub role: String,
     pub content: String,
+    // 添えた画像(base64)。文字だけの発言では空
+    #[serde(default)]
+    pub images: Vec<Img>,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct Img {
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub data: String,
+}
+
+// 画像 1 枚の上限(base64 の文字数)。画面側で 3.5MB 以下に縮めてから送る
+const MAX_IMG_B64: usize = 5_000_000;
+fn img_ok(i: &Img) -> bool {
+    matches!(i.kind.as_str(), "image/png" | "image/jpeg" | "image/gif" | "image/webp")
+        && (1..=MAX_IMG_B64).contains(&i.data.len())
+        && i.data.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'/' || b == b'=')
 }
 
 // 画面へ送る 1 件。JSON にすると {"t":"text","s":..} / {"t":"done","stop":..} / {"t":"err","kind":..}
@@ -53,6 +71,22 @@ pub fn effort_ok(e: &str) -> bool {
 
 fn model_ok(m: &str) -> bool {
     (1..=64).contains(&m.len()) && m.chars().all(|c| c.is_ascii_alphanumeric() || "._-[]".contains(c))
+}
+
+// claude に渡す中身。画像がなければ台本の文字だけ。画像があれば stream-json の 1 行(画像 → 台本の文字の順)にする
+pub fn stdin_payload(m: &[Msg]) -> (bool, String) {
+    let text = transcript(m);
+    if !m.iter().any(|x| !x.images.is_empty()) {
+        return (false, text);
+    }
+    let mut content: Vec<serde_json::Value> = m
+        .iter()
+        .flat_map(|x| x.images.iter())
+        .map(|i| serde_json::json!({ "type": "image", "source": { "type": "base64", "media_type": i.kind, "data": i.data } }))
+        .collect();
+    content.push(serde_json::json!({ "type": "text", "text": text }));
+    let line = serde_json::json!({ "type": "user", "message": { "role": "user", "content": content } });
+    (true, format!("{line}\n"))
 }
 
 // 1 回の呼び出しに会話を渡すため、履歴を台本の形にして送る
@@ -98,11 +132,11 @@ fn has_wsl() -> bool {
     cfg!(windows) && std::env::var_os("PATH").map_or(false, |p| std::env::split_paths(&p).any(|d| d.join("wsl.exe").is_file()))
 }
 
-fn claude_args(system: &str, model: &str, effort: &str) -> Vec<String> {
-    let mut a: Vec<String> = ["-p", "--output-format", "stream-json", "--include-partial-messages", "--verbose", "--tools", "", "--no-session-persistence", "--setting-sources", "", "--strict-mcp-config", "--disable-slash-commands", "--system-prompt"]
+fn claude_args(system: &str, model: &str, effort: &str, json_in: bool) -> Vec<String> {
+    let mut a: Vec<String> = if json_in { vec!["--input-format".into(), "stream-json".into()] } else { vec![] };
+    a.extend(["-p", "--output-format", "stream-json", "--include-partial-messages", "--verbose", "--tools", "", "--no-session-persistence", "--setting-sources", "", "--strict-mcp-config", "--disable-slash-commands", "--system-prompt"]
         .iter()
-        .map(|s| s.to_string())
-        .collect();
+        .map(|s| s.to_string()));
     a.push(system.to_string());
     if !model.is_empty() {
         a.push("--model".into());
@@ -124,8 +158,11 @@ fn temp_dir() -> Option<PathBuf> {
 }
 
 // WSL の中の claude を動かすスクリプト。API キーの環境変数は必ず外す(WSL 側のシェルが持っていても課金が変わらないように)
-fn wsl_script(model: &str, effort: &str) -> String {
+fn wsl_script(model: &str, effort: &str, json_in: bool) -> String {
     let mut m = if model.is_empty() { String::new() } else { format!(" --model {}", sq(model)) };
+    if json_in {
+        m.push_str(" --input-format stream-json");
+    }
     if !effort.is_empty() {
         m.push_str(&format!(" --effort {}", sq(effort)));
     }
@@ -150,7 +187,7 @@ fn classify(err: &str) -> &'static str {
 
 // 会話を 1 回送り、返事を emit に流す。終わると必ず Done か Err を 1 回出す
 pub fn chat(system: &str, model: &str, effort: &str, messages: &[Msg], job: &Job, emit: &mut dyn FnMut(Event)) {
-    if messages.is_empty() || messages.iter().any(|m| m.role != "user" && m.role != "assistant") || (!model.is_empty() && !model_ok(model)) || !effort_ok(effort) {
+    if messages.is_empty() || messages.iter().any(|m| (m.role != "user" && m.role != "assistant") || !m.images.iter().all(img_ok)) || (!model.is_empty() && !model_ok(model)) || !effort_ok(effort) {
         return emit(Event::Err { kind: "other" });
     }
     if RUNNING.fetch_add(1, Ordering::SeqCst) >= MAX_RUNNING {
@@ -167,14 +204,15 @@ pub fn chat(system: &str, model: &str, effort: &str, messages: &[Msg], job: &Job
 
 fn run_inner(system: &str, model: &str, effort: &str, messages: &[Msg], job: &Job, dir: Option<&PathBuf>, emit: &mut dyn FnMut(Event)) {
     let Some(dir) = dir else { return emit(Event::Err { kind: "other" }) };
+    let (json_in, text) = stdin_payload(messages);
     let mut cmd = if let Some(bin) = find_native() {
         let mut c = Command::new(bin);
-        c.args(claude_args(system, model, effort));
+        c.args(claude_args(system, model, effort, json_in));
         c
     } else if has_wsl() {
         let mut c = Command::new("wsl.exe");
         c.args(["-e", "sh", "-c", "eval \"$FIXIT_SH\""]);
-        c.env("FIXIT_SH", wsl_script(model, effort)).env("FIXIT_SYS", system);
+        c.env("FIXIT_SH", wsl_script(model, effort, json_in)).env("FIXIT_SYS", system);
         let wslenv = match std::env::var("WSLENV") {
             Ok(v) if !v.is_empty() => format!("{v}:FIXIT_SH:FIXIT_SYS"),
             _ => "FIXIT_SH:FIXIT_SYS".to_string(),
@@ -198,7 +236,6 @@ fn run_inner(system: &str, model: &str, effort: &str, messages: &[Msg], job: &Jo
         job.cancel();
     }
 
-    let text = transcript(messages);
     let w = thread::spawn(move || {
         let _ = stdin.write_all(text.as_bytes());
     });
@@ -381,10 +418,29 @@ mod tests {
 
     #[test]
     fn effort_は引数に渡る() {
-        let a = claude_args("sys", "opus", "high");
+        let a = claude_args("sys", "opus", "high", false);
         assert_eq!(a[a.len() - 2..], ["--effort", "high"]);
-        assert!(!claude_args("sys", "", "").iter().any(|x| x == "--effort"));
-        assert!(wsl_script("opus", "high").contains(" --effort 'high'") || wsl_script("opus", "high").contains(" --effort high"));
+        assert!(!claude_args("sys", "", "", false).iter().any(|x| x == "--effort"));
+        assert!(wsl_script("opus", "high", false).contains(" --effort 'high'") || wsl_script("opus", "high", false).contains(" --effort high"));
+    }
+
+    #[test]
+    fn 画像があるときだけ_stream_json_で渡す() {
+        let t = |c: &str, images: Vec<Img>| Msg { role: "user".into(), content: c.into(), images };
+        let (j, s) = stdin_payload(&[t("hi", vec![])]);
+        assert!(!j && s == "hi");
+        assert!(!claude_args("s", "", "", false).iter().any(|x| x == "--input-format"));
+        let img = Img { kind: "image/png".into(), data: "iVBORw0K".into() };
+        assert!(img_ok(&img));
+        let (j, s) = stdin_payload(&[t("what?", vec![img])]);
+        assert!(j && s.ends_with('\n'));
+        let v: serde_json::Value = serde_json::from_str(s.trim()).unwrap();
+        assert_eq!(v["message"]["content"][0]["source"]["media_type"], "image/png");
+        assert_eq!(v["message"]["content"][1]["text"], "what?");
+        assert!(claude_args("s", "", "", true).windows(2).any(|w| w == ["--input-format", "stream-json"]));
+        assert!(wsl_script("", "", true).contains(" --input-format stream-json"));
+        assert!(!img_ok(&Img { kind: "image/svg+xml".into(), data: "AA==".into() }));
+        assert!(!img_ok(&Img { kind: "image/png".into(), data: "a\"b".into() }));
     }
 
     #[test]

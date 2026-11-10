@@ -21,7 +21,7 @@ fn main() {
         return;
     }
     if op == "claude" {
-        let msgs = vec![claude::Msg { role: "user".into(), content: q.get("msg").cloned().unwrap_or_default() }];
+        let msgs = vec![claude::Msg { role: "user".into(), content: q.get("msg").cloned().unwrap_or_default(), images: vec![] }];
         let job = claude::Job::default();
         let mut out = std::io::stdout();
         claude::chat(q.get("system").map(|s| s.as_str()).unwrap_or(""), q.get("model").map(|s| s.as_str()).unwrap_or(""), q.get("effort").map(|s| s.as_str()).unwrap_or(""), &msgs, &job, &mut |e| {

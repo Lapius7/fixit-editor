@@ -5,7 +5,9 @@ import { AI_DEFAULT_MODEL, AI_MAX_TOKENS } from "@/shared/config";
 import { IS_TAURI } from "@/shared/chrome";
 import type { Effort, Link, Provider } from "@/features/ai/store";
 
-export type Msg = { role: "user" | "assistant"; content: string };
+// 画像は base64(data: の前置きなし)。type は AI_IMAGE_TYPES のどれか
+export type Img = { type: string; data: string };
+export type Msg = { role: "user" | "assistant"; content: string; images?: Img[] };
 export type AiErrorKind = "auth" | "denied" | "rate" | "network" | "model" | "bad" | "nocli" | "login" | "other";
 export class AiError extends Error {
   constructor(public kind: AiErrorKind, public status?: number) { super(kind); }
@@ -22,10 +24,22 @@ async function pump(events: AsyncIterable<Ev>, onText: (s: string) => void) {
   }
 }
 
+// 各社の形に組み直す。images をそのまま渡すと未知のキーとして断られるため
+const forAnthropic = (ms: Msg[]) => ms.map((m) => ({
+  role: m.role,
+  content: m.images?.length
+    ? [...m.images.map((i) => ({ type: "image" as const, source: { type: "base64" as const, media_type: i.type as "image/png", data: i.data } })), { type: "text" as const, text: m.content }]
+    : m.content,
+}));
+const forOpenAi = (ms: Msg[]) => ms.map((m) => ({
+  role: m.role,
+  content: m.images?.length ? [{ type: "text", text: m.content }, ...m.images.map((i) => ({ type: "image_url", image_url: { url: `data:${i.type};base64,${i.data}` } }))] : m.content,
+}));
+
 async function anthropic(r: Req): Promise<Stop> {
   // ブラウザ(Tauri の WebView を含む)から直接呼ぶので dangerouslyAllowBrowser が要る。キーはこの PC の中にしかない。
   const client = new Anthropic({ apiKey: r.key, dangerouslyAllowBrowser: true, maxRetries: 1 });
-  const base = { model: r.model, max_tokens: AI_MAX_TOKENS, system: r.system, messages: r.messages, ...(r.effort ? { output_config: { effort: r.effort } } : {}) };
+  const base = { model: r.model, max_tokens: AI_MAX_TOKENS, system: r.system, messages: forAnthropic(r.messages), ...(r.effort ? { output_config: { effort: r.effort } } : {}) };
   try {
     // 既定モデルでは、断られたときにサーバー側で次のモデルへ切り替える設定(fallbacks)を付ける
     if (r.model === AI_DEFAULT_MODEL.anthropic) {
@@ -58,7 +72,7 @@ async function openai(r: Req): Promise<Stop> {
       method: "POST",
       signal: r.signal,
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${r.key}` },
-      body: JSON.stringify({ model: r.model, stream: true, messages: [{ role: "system", content: r.system }, ...r.messages] }),
+      body: JSON.stringify({ model: r.model, stream: true, messages: [{ role: "system", content: r.system }, ...forOpenAi(r.messages)] }),
     });
   } catch (e) {
     if (r.signal.aborted) throw e;

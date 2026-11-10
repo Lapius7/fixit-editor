@@ -28,6 +28,14 @@ export const AI_MODEL_HINTS = {
   "claude-cli": ["opus", "sonnet", "haiku"],
 } as const;
 export const AI_MAX_HISTORY_CHARS = 120_000; // 会話の履歴として送る量の上限(古い発言から外す)
+// AI に添える画像。API が受け付ける形式(これ以外は PNG に描き直す)と、縮める大きさ
+export const AI_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
+export const AI_IMAGE_MAX_EDGE = 1568; // 長い辺の上限(px)。超えたら縮める
+export const AI_IMAGE_MAX_BYTES = 3_500_000; // 1 枚の上限。base64 にすると 4/3 倍になり、API の 5MB に収まる
+export const AI_IMAGE_SRC_MAX_BYTES = 30_000_000; // 読み込む元の画像の上限
+export const AI_MAX_IMAGES = 4; // 1 回に添えられる枚数
+export const AI_MAX_HISTORY_IMAGES = 8; // 履歴も含めて 1 回のリクエストに載せる枚数(古い画像から外す)
+export const AI_CLI_MAX_BODY = 48 * 1024 * 1024; // 開発サーバーの claude 中継が受け取る大きさ(画像を含む)
 
 // 匿名の利用数(インストール数・利用者数)。送り先と保存キーはここだけで決める
 // 受信と更新配布の口。エンドポイントはここに集める

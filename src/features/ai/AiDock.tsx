@@ -1,13 +1,14 @@
 // AI チャットのパネル。右側に出す(アプリ内ブラウザと同じ置き場所)。
 // 送るのは「利用者が操作したとき」だけ。送る前に、相手と送る範囲を画面に出し、初回は同意を取る。
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Check, Copy, Replace, Settings as Cog, Square, Trash2, X, Paperclip, History, SquarePen, FileText, Quote as QuoteIcon, FileDown } from "lucide-react";
+import { ArrowUp, Check, Copy, Replace, Settings as Cog, Square, Trash2, X, Paperclip, History, SquarePen, FileText, Quote as QuoteIcon, FileDown, ImagePlus } from "lucide-react";
 import i18next from "i18next";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { toUrl } from "@/features/browser/BrowserDock";
-import { AI_MAX_HISTORY_CHARS } from "@/shared/config";
-import { AiError, isAbort, streamChat, type AiErrorKind, type Msg, type Stop } from "@/features/ai/providers";
+import { AI_MAX_HISTORY_CHARS, AI_MAX_HISTORY_IMAGES, AI_MAX_IMAGES } from "@/shared/config";
+import { AiError, isAbort, streamChat, type AiErrorKind, type Img, type Msg, type Stop } from "@/features/ai/providers";
+import { isImageFile, toAiImage, type AiImage, type ImgFail } from "@/features/ai/images";
 import { actionLabel, actionPrompt, clipLabel, ctxLabel, systemPrompt, withClips, withCode, type AiJob, type Clip, type Ctx } from "@/features/ai/prompts";
 import { drag, dragEnd } from "@/workbench/dnd";
 import { notify } from "@/shared/notify";
@@ -18,7 +19,7 @@ import { ModelPicker } from "@/features/ai/ModelPicker";
 import { refreshLink } from "@/features/ai/link";
 import { deleteChat, clearChats, getChats, newChatId, saveChat, setCurChat, useChats, type Chat } from "@/features/ai/chats";
 
-type M = { id: number; role: "user" | "assistant"; content: string; label?: string; ctx?: string; busy?: boolean; err?: AiErrorKind; note?: Stop; job?: AiJob; applied?: "ok" | "stale" };
+type M = { id: number; role: "user" | "assistant"; content: string; label?: string; ctx?: string; imgs?: (Img & { name: string })[]; busy?: boolean; err?: AiErrorKind; note?: Stop; job?: AiJob; applied?: "ok" | "stale" };
 
 const ERR: Record<AiErrorKind, string> = {
   auth: "API キーが正しくありません。設定で確かめてください",
@@ -64,9 +65,13 @@ function Reply({ m, onReplace, onCopy }: { m: M; onReplace: (m: M) => void; onCo
 }
 
 const MAX_CLIPS = 8;
-// エディタから引用した文(id が変わるたびに 1 件ふえる)。resolve は、ドラッグされたファイル・タブの中身を読む
-export type AiQuote = Clip;
-export function AiDock({ open, job, quote, resolve, getCtx, onClose, onSettings }: { open: boolean; job: AiJob | null; quote: AiQuote | null; resolve: (x: NonNullable<typeof drag.node> | string) => Promise<Ctx | null>; getCtx: () => Ctx | null; onClose: () => void; onSettings: () => void }) {
+const imgFail = (r: ImgFail, name: string) => (r === "big" ? i18next.t("{{name}} は大きすぎて添えられません", { name }) : i18next.t("{{name}} は画像として読めないため、添えられません", { name }));
+const imgSrc = (i: Img) => `data:${i.type};base64,${i.data}`;
+// 画像として添えるもの(ファイルの中身)
+export type AiPic = { name: string; blob: Blob };
+// エディタから引用した文・ツリーから添える画像(id が変わるたびに 1 件ふえる)。resolve は、ドラッグされたファイル・タブの中身を読む
+export type AiQuote = Clip | (AiPic & { id: number });
+export function AiDock({ open, job, quote, resolve, getCtx, onClose, onSettings }: { open: boolean; job: AiJob | null; quote: AiQuote | null; resolve: (x: NonNullable<typeof drag.node> | string) => Promise<Ctx | AiPic | null>; getCtx: () => Ctx | null; onClose: () => void; onSettings: () => void }) {
   const cfg = useAi();
   const link = useLink();
   // 会話の履歴。前回開いていた会話を、そのまま開く
@@ -82,7 +87,18 @@ export function AiDock({ open, job, quote, resolve, getCtx, onClose, onSettings 
   const [attach, setAttach] = useState(false);
   const [clips, setClips] = useState<Clip[]>([]);
   const [over, setOver] = useState(false);
+  const [imgs, setImgs] = useState<AiImage[]>([]);
+  const imgsRef = useRef(imgs); imgsRef.current = imgs;
+  const picker = useRef<HTMLInputElement>(null);
   const clipSeq = useRef(0), quoted = useRef(0);
+  // 画像を添える。API が受け付ける形と大きさに直してから並べる
+  const addImage = async (b: Blob, name: string) => {
+    if (imgsRef.current.length >= AI_MAX_IMAGES) { notify(i18next.t("画像を添えられるのは {{n}} 枚までです", { n: AI_MAX_IMAGES }), "error"); return; }
+    const r = await toAiImage(b, name);
+    if (typeof r === "string") { notify(imgFail(r, name), "error"); return; }
+    setImgs((a) => (a.length >= AI_MAX_IMAGES ? a : [...a, { ...r, id: ++clipSeq.current }]));
+    requestAnimationFrame(() => box.current?.focus());
+  };
   const addClip = (c: Ctx & { lines?: [number, number] }) => {
     setClips((a) => (a.length >= MAX_CLIPS ? (notify(i18next.t("添えられるのは {{n}} 件までです", { n: MAX_CLIPS }), "error"), a) : [...a, { ...c, id: ++clipSeq.current }]));
     requestAnimationFrame(() => box.current?.focus());
@@ -91,7 +107,7 @@ export function AiDock({ open, job, quote, resolve, getCtx, onClose, onSettings 
   useEffect(() => {
     if (!quote || quote.id === quoted.current) return;
     quoted.current = quote.id;
-    addClip(quote);
+    if ("blob" in quote) void addImage(quote.blob, quote.name); else addClip(quote);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quote]);
   // ファイル・タブ・OS のファイルを、パネルへドロップして添える
@@ -103,10 +119,11 @@ export function AiDock({ open, job, quote, resolve, getCtx, onClose, onSettings 
     if (n || t) {
       if (n && n.kind === "dir") { notify(i18next.t("フォルダは添えられません。ファイルをドロップしてください"), "error"); return; }
       const c = await resolve(n ?? t!);
-      if (c) addClip(c); else notify(i18next.t("このファイルは文字として読めないため、添えられません"), "error");
+      if (c && "blob" in c) void addImage(c.blob, c.name); else if (c) addClip(c); else notify(i18next.t("このファイルは文字として読めないため、添えられません"), "error");
       return;
     }
     for (const f of files) {
+      if (isImageFile(f, f.name)) { await addImage(f, f.name); continue; }
       if (f.size > MAX_OPEN_BYTES) { notify(i18next.t("{{name}} は大きすぎて添えられません", { name: f.name }), "error"); continue; }
       const head = new Uint8Array(await f.slice(0, 8192).arrayBuffer());
       if (head.includes(0)) { notify(i18next.t("このファイルは文字として読めないため、添えられません"), "error"); continue; }
@@ -126,20 +143,30 @@ export function AiDock({ open, job, quote, resolve, getCtx, onClose, onSettings 
   const patch = (id: number, f: (m: M) => M) => setMsgs((a) => a.map((x) => (x.id === id ? f(x) : x)));
 
   // 履歴を API 用に。古い発言から外して、送る量に上限をかける
+  // 画像は新しいものから AI_MAX_HISTORY_IMAGES 枚まで載せ、古い発言の画像から外す
   const history = (extra: Msg): Msg[] => {
-    const h: Msg[] = msgsRef.current.filter((m) => !m.busy && !m.err && m.content).map((m) => ({ role: m.role, content: m.content }));
+    const h: Msg[] = msgsRef.current.filter((m) => !m.busy && !m.err && m.content).map((m) => ({ role: m.role, content: m.content, ...(m.imgs?.length ? { images: m.imgs.map(({ type, data }) => ({ type, data })) } : {}) }));
     h.push(extra);
     let n = h.reduce((s, m) => s + m.content.length, 0);
     while (h.length > 1 && n > AI_MAX_HISTORY_CHARS) n -= h.shift()!.content.length;
+    let left = AI_MAX_HISTORY_IMAGES;
+    for (let i = h.length - 1; i >= 0; i--) {
+      const im = h[i].images;
+      if (!im) continue;
+      const keep = im.slice(Math.max(0, im.length - left));
+      left -= keep.length;
+      h[i] = keep.length ? { ...h[i], images: keep } : { role: h[i].role, content: h[i].content };
+    }
     return h;
   };
 
-  const run = async (content: string, shown: string, ctx?: string, j?: AiJob) => {
+  const run = async (content: string, shown: string, ctx?: string, j?: AiJob, pics: AiImage[] = []) => {
     const c = getAi(), p = c.provider;
     const uid = ++seq.current, aid = ++seq.current, g = gen.current;
     const pat = (id: number, f: (m: M) => M) => { if (gen.current === g) patch(id, f); };
-    const messages = history({ role: "user", content });
-    setMsgs((a) => [...a, { id: uid, role: "user", content, label: shown, ctx }, { id: aid, role: "assistant", content: "", busy: true, job: j }]);
+    const images = pics.map(({ type, data }) => ({ type, data }));
+    const messages = history({ role: "user", content, ...(images.length ? { images } : {}) });
+    setMsgs((a) => [...a, { id: uid, role: "user", content, label: shown, ctx, ...(pics.length ? { imgs: pics.map(({ type, data, name }) => ({ type, data, name })) } : {}) }, { id: aid, role: "assistant", content: "", busy: true, job: j }]);
     const ac = new AbortController(); abort.current = ac; setBusy(true);
     let acc = "", raf = 0;
     const flush = () => { raf = 0; pat(aid, (m) => ({ ...m, content: acc })); };
@@ -174,11 +201,11 @@ export function AiDock({ open, job, quote, resolve, getCtx, onClose, onSettings 
     const q = text.trim();
     if (!q || busy || !ready(getAi())) return;
     const c = attach ? getCtx() : null;
-    const sent = clips;
+    const sent = clips, pics = imgs;
     const w = sent.length ? withClips(q, c ? [...sent, c] : sent) : c ? withCode(q, c) : { content: q, cut: false };
-    const label = [...sent.map(clipLabel), ...(c ? [ctxLabel(c, w.cut)] : [])].join(" / ") || undefined;
-    setText(""); setClips([]);
-    gate(() => run(w.content, q, label));
+    const label = [...sent.map(clipLabel), ...(c ? [ctxLabel(c, w.cut)] : []), ...pics.map((p) => i18next.t("画像: {{name}}", { name: p.name }))].join(" / ") || undefined;
+    setText(""); setClips([]); setImgs([]);
+    gate(() => run(w.content, q, label, undefined, pics));
   };
 
   const copy = (m: M) => { void navigator.clipboard?.writeText(m.content); };
@@ -256,16 +283,16 @@ export function AiDock({ open, job, quote, resolve, getCtx, onClose, onSettings 
             <ModelPicker />
           </div>
         ) : !msgs.length ? (
-          <p className="ai-empty-t">{i18next.t("質問を入力してください。コードについて聞くときは、下の「コードを添える」をオンにします。エディタを右クリックして「AI」から、要約・翻訳・説明もできます")}</p>
+          <p className="ai-empty-t">{i18next.t("質問を入力してください。コードについて聞くときは、下の「コードを添える」をオンにします。画像は、貼り付けやドロップで添えられます。エディタを右クリックして「AI」から、要約・翻訳・説明もできます")}</p>
         ) : msgs.map((m) => m.role === "user"
-          ? <div key={m.id} className="ai-u"><p>{m.label}</p>{m.ctx && <small>{m.ctx}</small>}</div>
+          ? <div key={m.id} className="ai-u">{m.imgs && <div className="ai-u-imgs">{m.imgs.map((i, k) => <img key={k} src={imgSrc(i)} alt={i.name} title={i.name} />)}</div>}<p>{m.label}</p>{m.ctx && <small>{m.ctx}</small>}</div>
           : <Reply key={m.id} m={m} onReplace={replace} onCopy={copy} />)}
       </div>
       {pending && (
         <div className="ai-consent" role="alertdialog" aria-label={i18next.t("送信の確認")}>
           <p>{pending.p === "claude-cli"
-            ? i18next.t("選んだコード・入力した文章は、この PC の claude コマンドを通して Anthropic のサーバーに送られます。利用は、あなたの Claude の契約の枠に数えられます。このエディタの開発元には送られません")
-            : i18next.t("選んだコード・入力した文章は、{{name}} のサーバーに送られます。送った内容の扱いは、各社の規約に従います。このエディタの開発元には送られません", { name: i18next.t(PROVIDER_NAME[pending.p]) })}</p>
+            ? i18next.t("選んだコード・画像・入力した文章は、この PC の claude コマンドを通して Anthropic のサーバーに送られます。利用は、あなたの Claude の契約の枠に数えられます。このエディタの開発元には送られません")
+            : i18next.t("選んだコード・画像・入力した文章は、{{name}} のサーバーに送られます。送った内容の扱いは、各社の規約に従います。このエディタの開発元には送られません", { name: i18next.t(PROVIDER_NAME[pending.p]) })}</p>
           <div>
             <button className="btn" onClick={() => setPending(null)}>{i18next.t("やめる")}</button>
             <button className="btn" data-primary="true" onClick={() => { const g = pending.go; setConsent(pending.p, true); setPending(null); g(); }}>{i18next.t("同意して送る")}</button>
@@ -274,8 +301,14 @@ export function AiDock({ open, job, quote, resolve, getCtx, onClose, onSettings 
       )}
       {ready(cfg, link) && (
         <div className="ai-compose">
-          {clips.length > 0 && (
+          {clips.length + imgs.length > 0 && (
             <div className="ai-clips" role="list" aria-label={i18next.t("添えた資料")}>
+              {imgs.map((p) => (
+                <span key={p.id} className="ai-clip" data-img role="listitem" title={p.name}>
+                  <img src={imgSrc(p)} alt="" /><span className="truncate">{p.name}</span>
+                  <button className="icon-btn" aria-label={i18next.t("外す")} onClick={() => setImgs((a) => a.filter((x) => x.id !== p.id))}><X /></button>
+                </span>
+              ))}
               {clips.map((c) => (
                 <span key={c.id} className="ai-clip" role="listitem" title={`${clipLabel(c)} · ${i18next.t("{{n}} 行", { n: c.text.split("\n").length })}`}>
                   {c.lines ? <QuoteIcon size={12} /> : <FileText size={12} />}<span className="truncate">{clipLabel(c)}</span>
@@ -285,10 +318,19 @@ export function AiDock({ open, job, quote, resolve, getCtx, onClose, onSettings 
             </div>
           )}
           <textarea ref={box} rows={3} value={text} placeholder={i18next.t("AI に質問(Enter で送信、Shift+Enter で改行)")} aria-label={i18next.t("AI に質問")} onChange={(e) => setText(e.target.value)}
+            onPaste={(e) => {
+              // 画像の貼り付け(スクリーンショットなど)。文字も一緒にあるときは、文字の貼り付けはそのまま通す
+              const fs = Array.from(e.clipboardData.files).filter((f) => isImageFile(f, f.name));
+              if (!fs.length) return;
+              if (!e.clipboardData.getData("text/plain")) e.preventDefault();
+              void (async () => { for (const f of fs) await addImage(f, f.name || "image.png"); })();
+            }}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } if (e.key === "Escape") onClose(); }} />
           <ModelPicker disabled={busy} />
           <div className="ai-row">
             <button className="chipbtn" aria-pressed={attach} onClick={() => setAttach(!attach)} title={i18next.t("選択範囲を、なければファイル全体を、質問と一緒に送ります")}><Paperclip size={14} />{i18next.t("コードを添える")}</button>
+            <button className="chipbtn" onClick={() => picker.current?.click()} title={i18next.t("画像を選んで、質問と一緒に送ります。貼り付けやドロップでも添えられます")}><ImagePlus size={14} />{i18next.t("画像")}</button>
+            <input ref={picker} type="file" accept="image/*" multiple hidden onChange={(e) => { const fs = Array.from(e.target.files ?? []); e.target.value = ""; void (async () => { for (const f of fs) await addImage(f, f.name); })(); }} />
             <span className="ai-to" />
             {busy
               ? <button className="icon-btn ai-send" aria-label={i18next.t("止める")} title={i18next.t("止める")} onClick={() => abort.current?.abort()}><Square /></button>
@@ -296,7 +338,7 @@ export function AiDock({ open, job, quote, resolve, getCtx, onClose, onSettings 
           </div>
         </div>
       )}
-      <div className="ai-drop" aria-hidden="true"><FileDown size={22} /><strong>{i18next.t("ここにドロップして添える")}</strong><small>{i18next.t("ファイルの中身を、質問と一緒に送ります")}</small></div>
+      <div className="ai-drop" aria-hidden="true"><FileDown size={22} /><strong>{i18next.t("ここにドロップして添える")}</strong><small>{i18next.t("ファイルの中身や画像を、質問と一緒に送ります")}</small></div>
     </aside>
   );
 }
