@@ -1,6 +1,6 @@
 import { kvGet, kvSet, kvWatch, mergeById } from "@/platform/appdata";
 import { useSyncExternalStore } from "react";
-import { connKey, type Conn } from "@/platform/remote";
+import { connKey, normConn, type Conn } from "@/platform/remote";
 import type { Node } from "@/platform/fs";
 import type { Lay } from "@/workbench/layout";
 import i18next from 'i18next'
@@ -50,7 +50,7 @@ export const handleKey = (id: string, prefix: string) => id + prefix;
 
 export const rootRefOf = (conn: Conn | undefined, name: string, hasHandle: boolean): RootRef =>
   conn ? { kind: conn.kind, host: conn.host, path: conn.path, name } : hasHandle ? { kind: "local", name } : { kind: "demo" };
-export const connOf = (r: RootRef): Conn | null => (r.kind === "wsl" || r.kind === "ssh" || r.kind === "pc" ? { kind: r.kind, host: r.host, path: r.path } : null);
+export const connOf = (r: RootRef): Conn | null => (r.kind === "wsl" || r.kind === "ssh" || r.kind === "pc" ? normConn({ kind: r.kind, host: r.host, path: r.path }) : null);
 export const rootLabel = (r: RootRef) => (r.kind === "demo" ? i18next.t("サンプル") : r.kind === "local" ? i18next.t("PC · {{name}}", { name: r.name }) : r.kind === "pc" ? i18next.t("PC · {{path}}", { path: r.path }) : r.kind === "ssh" ? i18next.t("SSH · {{host}}:{{path}}", { host: r.host, path: r.path }) : i18next.t("WSL · {{path}}", { path: r.path }));
 
 // 一覧に出す名前。複数のフォルダを開いているときは「+ 残りの数」をつける

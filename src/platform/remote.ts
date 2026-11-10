@@ -136,11 +136,19 @@ export async function remoteGrep(root: RemoteDir, q: string, o: { re: boolean; c
 }
 
 // ---- 入力の整え ----
+// \\wsl$\Distro\x・\\wsl.localhost\Distro\x(スラッシュ区切りも可)→ /x。WSL の UNC パスでなければ null
+export function wslUncPath(input: string): string | null {
+  const m = /^[\\/]{2}wsl(?:\$|\.localhost)[\\/][^\\/]+((?:[\\/].*)?)$/i.exec(input.trim().replace(/^["']|["']$/g, ""));
+  return m ? m[1].replace(/\\/g, "/").replace(/\/+$/, "") || "/" : null;
+}
+// 開いた場所が WSL の UNC パスなら、PC ではなく WSL の絶対パス(/home/…)として扱う
+export const normConn = (c: Conn): Conn => { const w = c.kind === "pc" ? wslUncPath(c.path) : null; return w ? { kind: "wsl", path: w } : c; };
+
 // Windows のパスを WSL のパスにする。C:\x → /mnt/c/x、\\wsl$\Distro\x → /x
 function toWslPath(input: string): string {
   let s = input.trim().replace(/^["']|["']$/g, "");
-  const unc = /^\\\\wsl(?:\$|\.localhost)\\[^\\]+(\\.*)?$/i.exec(s);
-  if (unc) return (unc[1] ?? "\\").replace(/\\/g, "/");
+  const unc = wslUncPath(s);
+  if (unc) return unc;
   const drive = /^([A-Za-z]):[\\/]?(.*)$/.exec(s);
   if (drive) return `/mnt/${drive[1].toLowerCase()}/${drive[2].replace(/\\/g, "/")}`.replace(/\/+$/, "") || "/";
   s = s.replace(/\\/g, "/");
@@ -165,7 +173,7 @@ export async function resolvePath(c: Pick<Conn, "kind" | "host">, raw: string): 
 
 // ---- 最近開いた場所 ----
 const RECENT = "fixit:recent-remote:v1";
-export const getRecent = (): Conn[] => { try { return JSON.parse(kvGet(RECENT) ?? "[]"); } catch { return []; } };
+export const getRecent = (): Conn[] => { try { const seen = new Set<string>(); return (JSON.parse(kvGet(RECENT) ?? "[]") as Conn[]).map(normConn).filter((c) => !seen.has(connKey(c)) && !!seen.add(connKey(c))); } catch { return []; } };
 export function pushRecent(c: Conn) {
   const list = [c, ...getRecent().filter((x) => connKey(x) !== connKey(c))].slice(0, Math.max(1, get().recentMax));
   try { kvSet(RECENT, JSON.stringify(list)); } catch { /* 保存できない */ }

@@ -49,7 +49,7 @@ import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, 
 import { displayPath, setRootNames, splitRoot } from "@/workbench/rootpath";
 import { getProfiles, switchProfile, useProfiles } from "@/features/settings/profiles";
 import { listShells, type ShellOpt } from "@/platform/pty";
-import { RemoteFile, checkDir, connKey, connLabel, pushRecent, rootHandle, sshUrl, type Conn, type RemoteDir } from "@/platform/remote";
+import { RemoteFile, checkDir, connKey, connLabel, normConn, pushRecent, rootHandle, sshUrl, type Conn, type RemoteDir } from "@/platform/remote";
 import { DEMO_NAME, DEMO_TREE } from "@/shared/demo";
 import { IS_TAURI } from "@/shared/chrome";
 import { createDir, createFile, moveEntry, pickFolder, pickPcFolder, readDir, removeEntry, renameFile, supportsFs, writeFile, type Node } from "@/platform/fs";
@@ -563,7 +563,7 @@ export default function App() {
     if (IS_TAURI) {
       const path = await pickPcFolder(i18next.t("フォルダを開く"));
       if (!path) return null;
-      const conn: Conn = { kind: "pc", path };
+      const conn: Conn = normConn({ kind: "pc", path });
       pushRecent(conn);
       return { ...connTarget(conn), conn };
     }
