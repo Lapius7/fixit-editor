@@ -54,7 +54,8 @@ export const connOf = (r: RootRef): Conn | null => (r.kind === "wsl" || r.kind =
 export const rootLabel = (r: RootRef) => (r.kind === "demo" ? i18next.t("サンプル") : r.kind === "local" ? i18next.t("PC · {{name}}", { name: r.name }) : r.kind === "pc" ? i18next.t("PC · {{path}}", { path: r.path }) : r.kind === "ssh" ? i18next.t("SSH · {{host}}:{{path}}", { host: r.host, path: r.path }) : i18next.t("WSL · {{path}}", { path: r.path }));
 
 // 一覧に出す名前。複数のフォルダを開いているときは「+ 残りの数」をつける
-export const wsLabel = (w: Workspace) => rootLabel(w.root) + (w.roots && w.roots.length > 1 ? ` +${w.roots.length - 1}` : "");
+// 複数のフォルダをまとめたものは、数を先に出して 1 つのフォルダと見分けやすくする
+export const wsLabel = (w: Workspace) => (w.roots && w.roots.length > 1 ? i18next.t("{{n}} フォルダ: {{first}} ほか", { n: w.roots.length, first: rootLabel(w.root) }) : rootLabel(w.root));
 
 // 保存数の上限を超えたら、固定していない古いものから消す
 function trim(list: Workspace[], keep: string, max: number): Workspace[] {

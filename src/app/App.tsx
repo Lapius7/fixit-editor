@@ -45,8 +45,8 @@ import Workspaces from "@/features/workspaces/Workspaces";
 import { GitBranch, Pin, History, MessageSquareText, RefreshCw, ArrowUpCircle } from "lucide-react";
 import { Play } from "lucide-react";
 import { runnerFor, buildCommand } from "@/features/run/runners";
-import { Sparkles, Server, FolderKanban, Eye, Maximize2, Minimize2, ImageIcon, ClipboardCopy } from "lucide-react";
-import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
+import { Sparkles, Server, FolderKanban, Eye, Maximize2, Minimize2, ImageIcon, ClipboardCopy, Save } from "lucide-react";
+import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, rootLabel, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
 import { displayPath, setRootNames, splitRoot } from "@/workbench/rootpath";
 import { getProfiles, switchProfile, useProfiles } from "@/features/settings/profiles";
 import { listShells, type ShellOpt } from "@/platform/pty";
@@ -78,6 +78,8 @@ import { Trans } from 'react-i18next'
 // 開いているフォルダ。先頭のフォルダは prefix が空(パスは /src/a.ts)、追加したフォルダは「/@xxxx」から始まる(/@xxxx/src/a.ts)
 type Root = { prefix: string; name: string; handle?: FileSystemDirectoryHandle; nodes: Node[]; conn?: Conn; ref: RootRef };
 type Spec = { prefix: string; name: string; handle?: FileSystemDirectoryHandle; conn?: Conn; ref: RootRef };
+// ツリーの見出しのホバーに出す、フォルダの種類と場所(ブラウザ版の PC のフォルダは場所が分からないので名前だけ)
+const rootPath = (r: { ref: RootRef }) => rootLabel(r.ref);
 const newPrefix = () => "/@" + Math.random().toString(36).slice(2, 7);
 type Dlg = { title: string; desc?: string; input?: string; placeholder?: string; ok: string; danger?: boolean; validate?: (v: string) => string | null; onSubmit: (v: string) => void };
 type Pm<T> = Record<number, T>; // 画面の番号ごとの値
@@ -1510,6 +1512,12 @@ export default function App() {
           </header>
           {panel === "files" ? (
             <>
+              {roots.length > 1 && (
+                <div className="ws-bar">
+                  <span className="ws-bar-name truncate" title={roots.map(rootPath).join("\n")}>{ws ? ws.name : i18next.t("無題のワークスペース")}</span>
+                  {!ws && <button className="chipbtn" onClick={() => void saveNew(roots.map((r) => r.name).join(" + "))} title={i18next.t("開いているフォルダをまとめて、ワークスペースとして保存します")}><Save size={14} />{i18next.t("保存")}</button>}
+                </div>
+              )}
               <nav className="tree scroll overscroll-contain" data-drop={rootDrop}
                 onDragOver={(e) => { if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setRootDrop(true); setExtDrop(true); return; } if (roots.length > 1 || !drag.node || (e.target as HTMLElement).closest(".tree-row") || dirOf(drag.node.path) === roots[0].prefix) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; setRootDrop(true); }}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as globalThis.Node | null)) { setRootDrop(false); setExtDrop(false); } }}
@@ -1519,7 +1527,7 @@ export default function App() {
                   const h = headNode(r), shut = folded.has(r.prefix);
                   return (
                     <section key={r.prefix || "main"} className="root-sec" aria-label={r.name}>
-                      <button className="tree-row root-head" data-ctx={menu?.path === r.prefix} data-drop={dropHead === r.prefix} aria-expanded={!shut}
+                      <button className="tree-row root-head" title={rootPath(r)} data-ctx={menu?.path === r.prefix} data-drop={dropHead === r.prefix} aria-expanded={!shut}
                         onClick={() => setFolded((p) => { const q = new Set(p); if (q.has(r.prefix)) q.delete(r.prefix); else q.add(r.prefix); return q; })}
                         onContextMenu={(e) => { e.stopPropagation(); treeMenu(e, h); }}
                         onDragOver={(e) => { if (!canDrop(h)) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; setDropHead(r.prefix); }}
@@ -1552,6 +1560,16 @@ export default function App() {
                   <FolderOpen /><Trans i18nKey="フォルダを開く" />
                 </button>
                 <button className="open-btn" onClick={() => { setCnAdd(false); setCn(true); }} title={i18next.t("WSL や SSH 先のフォルダを開く")}><Server /><Trans i18nKey="WSL・SSH" /></button>
+                {root.handle && (
+                  <button className="open-btn" aria-haspopup="menu" title={i18next.t("いま開いているフォルダはそのままで、別のフォルダを並べて開きます")} onClick={(e) => {
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setMenu({ x: r.left, y: r.top, items: [
+                      { type: "title", label: i18next.t("フォルダを追加") },
+                      { label: i18next.t("この PC のフォルダ"), icon: ic(FolderOpen), run: addFolder, disabled: !supportsFs() },
+                      { label: i18next.t("WSL・SSH のフォルダ"), icon: ic(Server), run: () => { setCnAdd(true); setCn(true); } },
+                    ] });
+                  }}><FolderPlus /><Trans i18nKey="フォルダを追加" /></button>
+                )}
               </div>
             </>
           ) : (
