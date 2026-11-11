@@ -4,3 +4,4 @@ dist-win
 src-tauri/launcher/target
 CLAUDE.md
 .claude/
+*.tsbuildinfo
