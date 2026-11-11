@@ -287,3 +287,8 @@ button.sb:active { transform: scale(var(--ps)); }
 .qo-backdrop.ask-layer { z-index: 100; }
 .dlg.ask p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ws-bar .ws-ren { flex: 1; min-width: 0; height: 28px !important; padding: 0 8px; font-size: 12px; line-height: 20px; }
+/* フォルダを読み込んでいる間のエクスプローラー */
+.tree-loading { display: flex; align-items: center; gap: 8px; height: var(--row-h, 28px); padding: 0 10px; font-size: 13px; line-height: 20px; color: var(--ink-2); animation: tree-loading-in calc(.2s * var(--sp)) var(--ease) calc(.15s * var(--sp)) both; }
+.tree-loading svg { flex: none; width: 16px; height: 16px; animation: upd-spin .9s linear infinite; }
+@keyframes tree-loading-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .tree-loading svg { animation: none; } }

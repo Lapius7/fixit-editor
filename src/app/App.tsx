@@ -43,7 +43,7 @@ import Dialog from "@/workbench/Dialog";
 import Connect from "@/features/workspaces/Connect";
 import Workspaces from "@/features/workspaces/Workspaces";
 import { GitBranch, Pin, History, MessageSquareText, RefreshCw, ArrowUpCircle } from "lucide-react";
-import { Play, FolderSearch, AppWindow } from "lucide-react";
+import { Play, FolderSearch, AppWindow, LoaderCircle } from "lucide-react";
 import { runnerFor, buildCommand } from "@/features/run/runners";
 import { Sparkles, Server, FolderKanban, Eye, Maximize2, Minimize2, ImageIcon, ClipboardCopy, ChevronUp } from "lucide-react";
 import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, patchWs, rootLabel, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
@@ -515,12 +515,16 @@ export default function App() {
   }, []);
 
   // フォルダ(複数も可)を切り替える。対応するワークスペースがあれば、その状態(タブ・分割・ターミナル)も戻す
+  // フォルダを読み込んでいる間は、エクスプローラーを読み込み中の表示にする(重なっても数えて戻す)
+  const [treeBusy, setTreeBusy] = useState(0);
+  const busyWhile = async <T,>(f: () => Promise<T>): Promise<T> => { setTreeBusy((n) => n + 1); try { return await f(); } finally { setTreeBusy((n) => n - 1); } };
   const enterMany = async (specs: Spec[], target?: Workspace) => {
     if (dirtyList.length && st.confirmClose && !(await ask({ message: i18next.t("保存していない変更が {{length}} 件あります。切り替えると失われます。続けますか?", { length: dirtyList.length }), danger: true }))) return false;
     flushWs();
     restoring.current = true;
     const my = ++gen.current;
     const main = specs[0];
+    setTreeBusy((n) => n + 1);
     try {
       const lists = await Promise.all(specs.map((x) => (x.handle ? readDir(x.handle, x.prefix) : Promise.resolve(DEMO_TREE))));
       await prefetchOpen(lists.flat());
@@ -578,7 +582,7 @@ export default function App() {
       setCurrent(w?.id ?? null);
       if (w?.profile && st.wsProfileLink && getProfiles().list.some((p) => p.id === w!.profile)) switchProfile(w.profile);
       return true;
-    } finally { if (my === gen.current) restoring.current = false; }
+    } finally { setTreeBusy((n) => n - 1); if (my === gen.current) restoring.current = false; }
   };
   // 1 つのフォルダを開く。同じフォルダを先頭にした複数フォルダのワークスペースがあれば、それをまとめて開く
   const enter = async (name: string, handle: FileSystemDirectoryHandle | undefined, ref: RootRef, conn?: Conn, target?: Workspace) => {
@@ -606,9 +610,11 @@ export default function App() {
   const openWs = async (w: Workspace, ask = true) => {
     const specs: Spec[] = [];
     let skipped = 0;
-    for (const [i, e] of wsRoots(w).entries()) {
-      try { specs.push(await specOf(w, e, ask)); } catch (err) { if (i === 0) throw err; skipped++; }
-    }
+    await busyWhile(async () => {
+      for (const [i, e] of wsRoots(w).entries()) {
+        try { specs.push(await specOf(w, e, ask)); } catch (err) { if (i === 0) throw err; skipped++; }
+      }
+    });
     const ok = await enterMany(specs, w);
     if (ok) flash(skipped ? i18next.t("ワークスペース「{{name}}」を開きました(開けないフォルダが {{n}} 件あります)", { name: w.name, n: skipped }) : i18next.t("ワークスペース「{{name}}」を開きました", { name: w.name }));
     return ok;
@@ -745,8 +751,7 @@ export default function App() {
     for (const r of cur) if (await sameFolder(r, ref, handle, conn)) { flash(i18next.t("既に追加されています")); return false; }
     try {
       const prefix = newPrefix();
-      const nodes = await readDir(handle, prefix);
-      await prefetchOpen(nodes);
+      const nodes = await busyWhile(async () => { const l = await readDir(handle, prefix); await prefetchOpen(l); return l; });
       const next = [...rootsNow.current, { prefix, name, handle, nodes, conn, ref }];
       rootsNow.current = next;
       setRoots(next);
@@ -1723,7 +1728,9 @@ export default function App() {
                   e.preventDefault(); moveTo(m, null);
                 }}
                 onContextMenu={(e) => { if (e.target === e.currentTarget || !(e.target as HTMLElement).closest(".tree-row")) treeMenu(e, null); }}>
-                {sectioned ? roots.map((r) => {
+                {treeBusy > 0 ? (
+                  <div className="tree-loading" role="status"><LoaderCircle className="spin" /><Trans i18nKey="読み込み中…" /></div>
+                ) : sectioned ? roots.map((r) => {
                   const h = headNode(r), shut = folded.has(r.prefix);
                   return (
                     <section key={r.prefix || "main"} className="root-sec" data-new={freshRoot === r.prefix} data-drop={dropAt === rootKey(r.prefix) || undefined} aria-label={r.name}
