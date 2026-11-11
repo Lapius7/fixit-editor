@@ -30,6 +30,7 @@
 .inline-edit[data-closing="true"] { animation: none; opacity: 0; transform: scale(.96); pointer-events: none; }
 .label-in { animation: label-in calc(.16s * var(--sp)) var(--out) both; }
 .qo-backdrop[data-closing="true"], .ctx-layer[data-out="true"] { pointer-events: none; }
+.ctx-layer[data-out="true"] .ctx-tip { animation: none; opacity: 0; transition: opacity calc(.09s * var(--sp)) var(--ease); }
 .sb-msg[data-out="true"] { animation: none; opacity: 0; transform: translateY(4px); transition: opacity calc(.18s * var(--sp)) var(--ease), transform calc(.18s * var(--sp)) var(--ease); }
 
 /* テーマパネル: エディタの右に、実際の画面を見ながら見た目を直す */
