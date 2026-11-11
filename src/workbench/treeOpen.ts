@@ -1,6 +1,7 @@
 // ファイル一覧で開いているフォルダの記録。タブの切り替えや再起動でも、開閉の状態を保つ。
 import { kvGet, kvSet } from "@/platform/appdata";
 import { readDir, type Node } from "@/platform/fs";
+import { TREE_PREFETCH_MS } from "@/shared/config";
 
 const KEY = "fixit:tree-open:v1";
 const MAX = 1000;
@@ -24,10 +25,10 @@ export function setOpenPath(path: string, on: boolean) {
 // 前に開いていたフォルダの中身を、一覧を出す前にまとめて読んでおく。
 // 読まずに出すと、親を描く → 中身を読む → 子を描く…が 1 段ずつ進み、見ている前で順に開いていくように見える。
 // 同じ深さのフォルダは並行して読む。時間がかかりすぎるときは、読めた分だけ使い、残りは従来どおり描いてから読む。
+// 読んでいる間は、ファイル一覧に読み込み中の行を出している
 const pre = new Map<string, Node[]>();
-export const PREFETCH_MS = 1500;
 
-export async function prefetchOpen(nodes: Node[], wait = PREFETCH_MS): Promise<void> {
+export async function prefetchOpen(nodes: Node[], wait = TREE_PREFETCH_MS): Promise<void> {
   let stop = false;
   pre.clear(); // 前回の読み残しは使わない
   const walk = async (list: Node[]): Promise<void> => {

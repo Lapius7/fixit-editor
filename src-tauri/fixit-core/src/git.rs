@@ -50,6 +50,26 @@ fn files(v: &Value) -> Result<Vec<String>, FsError> {
         .collect()
 }
 
+// 複製元の URL。https・ssh・git と、user@host:path の形だけ(file:// や手元のパス、ext:: などは断る)
+fn clone_url(v: &Value) -> Result<String, FsError> {
+    let s = v["url"].as_str().unwrap_or("").trim();
+    let scheme = ["http://", "https://", "ssh://", "git://"].iter().find(|p| s.len() > p.len() && s[..p.len()].eq_ignore_ascii_case(p));
+    let url_ok = scheme.map_or(false, |p| s[p.len()..].split_once('/').map_or(false, |(h, rest)| !h.is_empty() && !rest.is_empty()));
+    // user@host:path
+    let scp_ok = s.split_once('@').and_then(|(u, r)| r.split_once(':').map(|(h, p)| (u, h, p))).map_or(false, |(u, h, p)| {
+        let w = |x: &str| !x.is_empty() && x.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c));
+        w(u) && w(h) && !p.is_empty() && !p.starts_with('/')
+    });
+    let ok = s.len() <= 2048 && !s.starts_with('-') && !s.chars().any(|c| c.is_control() || c.is_whitespace()) && (url_ok || scp_ok);
+    if ok { Ok(s.to_string()) } else { Err(bad("URL が正しくありません")) }
+}
+// 複製先のフォルダ名(今のフォルダの直下に作る)
+fn clone_name(v: &Value) -> Result<String, FsError> {
+    let s = v["name"].as_str().unwrap_or("");
+    let ok = !s.is_empty() && s.len() <= 200 && !s.starts_with(['-', '.']) && !s.contains(['/', '\\']) && !s.chars().any(|c| c.is_control());
+    if ok { Ok(s.to_string()) } else { Err(bad("フォルダ名が正しくありません")) }
+}
+
 pub fn plan(body: &[u8]) -> Result<Plan, FsError> {
     let v: Value = serde_json::from_slice(body).map_err(|_| bad("要求が正しくありません"))?;
     let cmd = v["cmd"].as_str().unwrap_or("");
@@ -122,6 +142,9 @@ pub fn plan(body: &[u8]) -> Result<Plan, FsError> {
                 (strs(&["push"]), NET, true)
             }
         }
+        // リポジトリではないフォルダで使う
+        "init" => (strs(&["init"]), FAST, true),
+        "clone" => (vec!["clone".into(), "--".into(), clone_url(&v)?, clone_name(&v)?], NET * 5, true),
         _ => return Err(bad("この Git 操作は使えません")),
     };
     // 先頭に付ける設定。画面からの値は入らない

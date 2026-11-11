@@ -938,7 +938,6 @@
   "コマンド (例: ruby {file})": "Command (e.g. ruby {file})",
   "パスに使えない文字が含まれているため、実行できません": "The path contains characters that can't be used, so it can't be run",
   "拡張子 (例: rb)": "Extension (e.g. rb)",
-  "拡張子ごとに、▶ で走らせるコマンドを決めます。{file} はファイルのパス、{dir} はフォルダ、{name} はファイル名、{stem} は拡張子を除いた名前です。実行はファイルのあるフォルダで行います。": "Set the command that ▶ runs for each extension. {file} is the file path, {dir} the folder, {name} the file name, {stem} the name without its extension. Commands run in the file's folder.",
   "実行しない": "Don't run",
   "実行するコマンド": "Run commands",
   "実行できるファイルを開いてください": "Open a file that can be run",
@@ -1103,5 +1102,16 @@
   "作成を止める": "Stop generating",
   "AI でコミットメッセージを作る": "Write commit message with AI",
   "問題点を探す": "Find problems",
-  "コメントを書き足す": "Add comments"
+  "コメントを書き足す": "Add comments",
+  "拡張子ごとに、▶ で走らせるコマンドを決めます。実行はファイルのあるフォルダに移動してから行うので、{file} と {name} はファイル名、{stem} は拡張子を除いた名前、{dir} はフォルダのパスになります。": "Set the command that ▶ runs for each extension. Commands run after moving into the file's folder, so {file} and {name} are the file name, {stem} the name without the extension, and {dir} the folder path.",
+  "Git パネルで開く": "Open in Git panel",
+  "開いているフォルダに戻す": "Back to the open folder",
+  "ここにリポジトリを作成": "Create a repository here",
+  "作成しています…": "Creating…",
+  "リポジトリを複製": "Clone a repository",
+  "複製": "Clone",
+  "複製しています…": "Cloning…",
+  "「{{name}}」フォルダに複製します": "Clones into the “{{name}}” folder",
+  "中のリポジトリを探しています…": "Looking for repositories inside…",
+  "このフォルダの中のリポジトリ": "Repositories in this folder"
 }

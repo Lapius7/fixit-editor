@@ -213,7 +213,7 @@ function RunList() {
   return (
     <section className="set-sec">
       <h3><Trans i18nKey="実行するコマンド" /></h3>
-      <p className="set-note"><Trans i18nKey="拡張子ごとに、▶ で走らせるコマンドを決めます。{file} はファイルのパス、{dir} はフォルダ、{name} はファイル名、{stem} は拡張子を除いた名前です。実行はファイルのあるフォルダで行います。" /></p>
+      <p className="set-note"><Trans i18nKey="拡張子ごとに、▶ で走らせるコマンドを決めます。実行はファイルのあるフォルダに移動してから行うので、{file} と {name} はファイル名、{stem} は拡張子を除いた名前、{dir} はフォルダのパスになります。" /></p>
       {exts.map((k) => {
         const own = k in s.runners, def = k in RUN_DEFAULTS, changed = own && (!def || s.runners[k] !== RUN_DEFAULTS[k]);
         return (

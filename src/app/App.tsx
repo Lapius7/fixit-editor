@@ -43,8 +43,8 @@ import Dialog from "@/workbench/Dialog";
 import Connect from "@/features/workspaces/Connect";
 import Workspaces from "@/features/workspaces/Workspaces";
 import { GitBranch, Pin, History, MessageSquareText, RefreshCw, ArrowUpCircle } from "lucide-react";
-import { Play, FolderSearch, AppWindow, LoaderCircle } from "lucide-react";
-import { runnerFor, buildCommand } from "@/features/run/runners";
+import { Play, FolderSearch, AppWindow, FolderGit2 } from "lucide-react";
+import { runnerFor, buildCommand, shq } from "@/features/run/runners";
 import { Sparkles, Server, FolderKanban, Eye, Maximize2, Minimize2, ImageIcon, ClipboardCopy, ChevronUp } from "lucide-react";
 import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, patchWs, rootLabel, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
 import { displayPath, setRootNames, splitRoot } from "@/workbench/rootpath";
@@ -92,6 +92,9 @@ const revoke = (t: Tab) => { if ("url" in t.view) URL.revokeObjectURL(t.view.url
 const isText = (t?: Tab | null) => t?.view.kind === "text";
 
 type Dz = { pane: number; edge?: Edge }; // 落とす先: 既存の画面(edge なし)か、その画面の端に新しく分割(edge あり)
+
+// 読み込み中に出す、ファイル一覧の形をした行([深さ, 名前の幅(%), フォルダか])
+const TREE_SKEL: [number, number, boolean][] = [[0, 42, true], [0, 34, true], [1, 50, false], [1, 38, false], [1, 46, false], [0, 30, true], [0, 54, false], [0, 40, false], [0, 48, false], [0, 26, false]];
 
 export default function App() {
   const st = useSettings();
@@ -162,6 +165,7 @@ export default function App() {
   const [pv, setPv] = useState<Record<string, PvMode | undefined>>({}); // プレビュー形式のファイルの表示(パス → 表示)
   const [pvPin, setPvPin] = useState<string | null>(null); // 固定したプレビュー(パス)。同じ画面でほかのファイルを開いている間も横に出し続ける(CSS・JS を直しながら見るため)
   useEffect(() => { if (pvPin && (!pv[pvPin] || !tabs.some((t) => t.node.path === pvPin))) setPvPin(null); }, [pvPin, pv, tabs]);
+  useEffect(() => { if (IS_TAURI) void listShells(); }, []); // 右クリックのメニューで、シェルの一覧を待たずに出せるように
   const pvTools = (path: string) => {
     const cur = pv[path], on = cur !== undefined, wide = cur === "preview", key = chips(K("togglePreview")).join(" ");
     const set = (m: PvMode | undefined) => setPv((p) => ({ ...p, [path]: m }));
@@ -423,6 +427,33 @@ export default function App() {
     }, 300);
     return () => { live = false; clearTimeout(h); };
   }, [roots, gitTick, st.gitStatus]);
+  // Git パネルが見るフォルダ。gitAt は右クリックの「Git パネルで開く」で選んだもの(null なら開いているフォルダ)。
+  // root: リポジトリの最上位。null はリポジトリではない、undefined はまだ調べている
+  type GitAt = { conn: Conn; dir: string; root: string | null | undefined };
+  const [gitAt, setGitAt] = useState<GitAt | null>(null);
+  const connId = root.conn ? connKey(root.conn) : "";
+  useEffect(() => setGitAt(null), [connId]);
+  // ファイルの状態の表示を切っているときは gits が空なので、パネルを開いたときにここで調べる
+  const [rootGit, setRootGit] = useState<{ key: string; root: string | null } | null>(null);
+  useEffect(() => {
+    const c = root.conn;
+    if (!gitOpen || gitAt || !c || st.gitStatus) return;
+    let live = true;
+    void loadGit(c, c.path).then((i) => { if (live) setRootGit({ key: connId, root: i?.root ?? null }); });
+    return () => { live = false; };
+  }, [gitOpen, gitAt, connId, st.gitStatus, gitTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  const gitView: GitAt | null = gitAt ?? (root.conn ? {
+    conn: root.conn, dir: root.conn.path,
+    root: st.gitStatus ? (root.prefix in gits ? gits[root.prefix]?.root ?? null : undefined) : rootGit?.key === connId ? rootGit.root : undefined,
+  } : null);
+  // フォルダを Git パネルで開く。中のリポジトリ(より上のフォルダが最上位のこともある)を調べてから切り替える
+  const gitHere = async (c: Conn, dir: string) => {
+    setGitOpen(true);
+    if (root.conn && connKey(c) === connId && dir === root.conn.path) { setGitAt(null); setGitTick((n) => n + 1); return; }
+    setGitAt({ conn: c, dir, root: undefined });
+    const info = await loadGit(c, dir);
+    setGitAt((g) => (g && g.conn === c && g.dir === dir ? { ...g, root: info?.root ?? null } : g));
+  };
   const absOf = (n: Node) => (n.handle && (n.handle as { path?: string }).path) || null;
   const gitMark = useCallback((n: Node): GitMark | undefined => {
     const info = gits[splitRoot(n.path).prefix], abs = absOf(n);
@@ -1179,7 +1210,7 @@ export default function App() {
     const ssh = rr.conn?.kind === "ssh";
     const cur = alive().find((x) => x.id === actT);
     if (cur && !ssh && !cur.host && !cur.shell && built.dir.startsWith("/") && apis.current.get(cur.id)) { // いまのターミナルを使い回す(場所だけ移す)
-      showTerm(true); setTermKey((k) => k + 1); typeInTerm(cur.id, `cd "${built.dir}" && ${built.cmd}`); return;
+      showTerm(true); setTermKey((k) => k + 1); typeInTerm(cur.id, `cd ${shq(built.dir)} && ${built.cmd}`); return;
     }
     const id = seq.current + 1;
     addTerm(built.dir, undefined, ssh ? rr.conn!.host : null);
@@ -1402,23 +1433,39 @@ export default function App() {
     ...(root.handle ? [{ type: "sep" as const }, { type: "title" as const, label: i18next.t("ワークスペースに追加") }, ...addItems(),
       { type: "sep" as const }, { label: roots.length > 1 ? i18next.t("すべてのフォルダを閉じる") : i18next.t("フォルダを閉じる"), icon: ic(FolderX), keys: K("closeFolder"), run: closeFolder }] : []),
   ];
-  const osOpen = async (c: Conn, path: string, dir: boolean, what: "reveal" | "term") => {
-    try { const { invoke } = await import("@tauri-apps/api/core"); await invoke("os_open", { kind: c.kind, host: c.host ?? null, path, dir, what }); }
+  const osOpen = async (c: Conn, path: string, dir: boolean, what: "reveal" | "term", shell?: ShellOpt) => {
+    try { const { invoke } = await import("@tauri-apps/api/core"); await invoke("os_open", { kind: c.kind, host: c.host ?? null, path, dir, what, shell: shell?.id ?? null }); }
     catch (err) { notify(String(err), "error"); }
   };
-  const treeMenu = (e: React.MouseEvent, n: Node | null) => {
+  const treeMenu = async (e: React.MouseEvent, n: Node | null) => {
     e.preventDefault();
+    const { clientX: x, clientY: y } = e;
+    const shells = await listShells();
     const dir = n?.kind === "dir";
     const head = !!n && isRootNode(n); // 複数のフォルダを開いているときの、フォルダの見出し
     const rr = n ? rootOf(n) : root;
-    const here = (p: string) => addTerm(p, undefined, rr.conn?.kind === "ssh" ? rr.conn.host : null);
+    // ターミナルで開くときに選べるシェル。SSH は選ばない。WSL のフォルダは、既定の WSL と Windows のシェル
+    // (コマンド プロンプトは \\wsl.localhost\... で始められないので除く)。この PC のフォルダは全部
+    const isWsl = (s: ShellOpt) => s.id === "wsl" || s.id.startsWith("wsl:");
+    const shellsFor = (c: Conn): ShellOpt[] => !IS_TAURI ? shells : c.kind === "ssh" ? []
+      : c.kind === "wsl" ? [...shells.filter((s) => s.def), ...shells.filter((s) => !isWsl(s) && s.id !== "cmd")] : shells;
+    // シェルが2つ以上あれば、種類を選ぶ小さなメニューにする
+    const pickShell = (label: string, icon: React.ReactNode, c: Conn, go: (s?: ShellOpt) => void): Item => {
+      const list = shellsFor(c);
+      return list.length < 2 ? { label, icon, run: () => go(list[0]) }
+        : { label, icon, sub: [{ type: "title", label: i18next.t("ターミナルの種類") }, ...list.map((s) => ({ label: s.label, icon: ic(TermIcon), run: () => go(s) }))] };
+    };
+    const termItem = (c: Conn, p: string, isDir: boolean) => {
+      const d = isDir ? p : p.replace(/\/[^/]*$/, "") || "/";
+      return pickShell(i18next.t("ここでターミナルを開く"), ic(SquareTerminal), c, (s) => addTerm(d, s, c.kind === "ssh" ? c.host : null));
+    };
     // exe だけ: Windows のエクスプローラーで表示する・別のウィンドウのターミナルで開く
-    const osItems = (c: Conn | undefined, p: string, isDir: boolean) => !IS_TAURI || !c ? [] : [
-      { label: i18next.t("外部のターミナルで開く"), icon: ic(AppWindow), run: () => void osOpen(c, p, isDir, "term") },
+    const osItems = (c: Conn | undefined, p: string, isDir: boolean): Item[] => !IS_TAURI || !c ? [] : [
+      pickShell(i18next.t("外部のターミナルで開く"), ic(AppWindow), c, (s) => void osOpen(c, p, isDir, "term", s)),
       ...(c.kind !== "ssh" ? [{ label: i18next.t("エクスプローラーで表示"), icon: ic(FolderSearch), run: () => void osOpen(c, p, isDir, "reveal") }] : []),
     ];
     setMenu({
-      x: e.clientX, y: e.clientY, path: n?.path,
+      x, y, path: n?.path,
       items: [
         ...(n ? [{ type: "title" as const, label: head ? rr.name : displayPath(n.path) }] : []),
         ...(n && !dir ? [
@@ -1434,8 +1481,9 @@ export default function App() {
           { type: "sep" as const },
           ...(rr.conn ? [
             { label: i18next.t("絶対パスをコピー"), icon: ic(Link), run: () => copyText(rr.conn!.path) },
-            { label: i18next.t("ここでターミナルを開く"), icon: ic(SquareTerminal), run: () => here(rr.conn!.path) },
+            termItem(rr.conn, rr.conn.path, true),
             ...osItems(rr.conn, rr.conn.path, true),
+            { label: i18next.t("Git パネルで開く"), icon: ic(FolderGit2), run: () => void gitHere(rr.conn!, rr.conn!.path) },
           ] : []),
           { label: i18next.t("ファイル一覧を更新"), icon: ic(RotateCw), run: reload },
           { type: "sep" as const },
@@ -1450,8 +1498,9 @@ export default function App() {
           ...(rr.conn ? [
             { label: i18next.t("絶対パスをコピー"), icon: ic(Link), run: () => copyText(abs(n)) },
             ...(rr.conn.kind === "ssh" ? [{ label: "ssh:// のパスをコピー", icon: ic(Link), run: () => copyText(sshUrl(rr.conn!, abs(n))) }] : []),
-            { label: i18next.t("ここでターミナルを開く"), icon: ic(SquareTerminal), run: () => here(dir ? abs(n) : abs(n).replace(/\/[^/]*$/, "") || "/") },
+            termItem(rr.conn, abs(n), dir),
             ...osItems(rr.conn, abs(n), dir),
+            ...(dir ? [{ label: i18next.t("Git パネルで開く"), icon: ic(FolderGit2), run: () => void gitHere(rr.conn!, abs(n)) }] : []),
           ] : []),
           { label: i18next.t("名前をコピー"), icon: ic(Copy), run: () => copyText(n.name) },
           { type: "sep" as const },
@@ -1459,7 +1508,7 @@ export default function App() {
         ] : [
           { type: "sep" as const },
           { label: i18next.t("ファイル一覧を更新"), icon: ic(RotateCw), run: reload },
-          ...(root.conn ? [{ label: i18next.t("ここでターミナルを開く"), icon: ic(SquareTerminal), run: () => addTerm(root.conn!.path, undefined, root.conn!.kind === "ssh" ? root.conn!.host : null) }, ...osItems(root.conn, root.conn.path, true)] : []),
+          ...(root.conn ? [termItem(root.conn, root.conn.path, true), ...osItems(root.conn, root.conn.path, true)] : []),
           { label: i18next.t("WSL・SSH に接続"), icon: ic(Server), keys: K("connect"), run: () => { setCnAdd(false); setCn(true); } },
           { label: i18next.t("フォルダを開く"), icon: ic(FolderOpen), keys: K("openFolder"), run: openFolder, disabled: !supportsFs() },
           { label: i18next.t("フォルダをワークスペースに追加"), icon: ic(FolderPlus), keys: K("addFolder"), run: addFolder, disabled: !supportsFs() || !root.handle },
@@ -1620,7 +1669,7 @@ export default function App() {
         {i === lastBar && (
           <>
             {upd && <button className="up-pill" title={i18next.t("v{{v}} に更新できます", { v: upd.version })} onClick={() => setUpdOpen(true)}><ArrowUpCircle size={14} /><span>{i18next.t("更新あり")}</span></button>}
-            {gits[root.prefix] && <button className="icon-btn" data-on={gitOpen} aria-label={i18next.t("Git パネルの表示")} title={i18next.t("Git パネルの表示")} onClick={() => setGitOpen((v) => !v)}><GitBranch /></button>}
+            {root.conn && <button className="icon-btn" data-on={gitOpen} aria-label={i18next.t("Git パネルの表示")} title={i18next.t("Git パネルの表示")} onClick={() => setGitOpen((v) => !v)}><GitBranch /></button>}
             <button className="icon-btn" data-on={ai} aria-label={i18next.t("AI パネルの表示")} title={`${i18next.t("AI パネルの表示")} (${chips(K("toggleAi")).join(" ")})`} onClick={() => setAi((v) => !v)}><Sparkles /></button>
             {runCmd && <button className="icon-btn run-btn" aria-label={i18next.t("このファイルを実行")} title={`${i18next.t("このファイルを実行")} (${chips(K("runFile")).join(" ")})`} onClick={runFile}><Play /></button>}
                 <button className="icon-btn" data-on={term} aria-label={i18next.t("ターミナル")} title={i18next.t("ターミナル")} onClick={() => showTerm()}><SquareTerminal /></button>
@@ -1731,7 +1780,9 @@ export default function App() {
                 }}
                 onContextMenu={(e) => { if (e.target === e.currentTarget || !(e.target as HTMLElement).closest(".tree-row")) treeMenu(e, null); }}>
                 {treeBusy > 0 ? (
-                  <div className="tree-loading" role="status"><LoaderCircle className="spin" /><Trans i18nKey="読み込み中…" /></div>
+                  <div className="tree-skel" role="status" aria-label={i18next.t("読み込み中…")}>
+                    {TREE_SKEL.map(([d, w, dir], i) => <div key={i} className="tree-skel-row" style={{ paddingLeft: 10 + d * st.treeIndent, ["--i" as string]: i, ["--w" as string]: `${w}%` }}><i data-dir={dir || undefined} /><i /><b /></div>)}
+                  </div>
                 ) : sectioned ? roots.map((r) => {
                   const h = headNode(r), shut = folded.has(r.prefix);
                   return (
@@ -1824,7 +1875,9 @@ export default function App() {
             {br && <BrowserDock onClose={() => setBr(false)} />}
             {ai && <ColGrip width={st.aiW} def={440} min={280} max={900} dir={-1} onChange={(w) => update({ aiW: w })} />}
             <AiDock open={ai} job={aiJob} quote={aiQuote} resolve={aiSource} onClose={() => setAi(false)} onSettings={() => setSetts("ai")} />
-            <GitPanel open={gitOpen} conn={root.conn ?? null} root={gits[root.prefix]?.root ?? null} rev={gitTick} onClose={() => setGitOpen(false)} onChanged={() => { setGitTick((n) => n + 1); void syncTabs(); }} guard={() => !dirtyList.length || ask({ message: i18next.t("保存していない変更が {{length}} 件あります。ファイルが書き換わると失われることがあります。続けますか?", { length: dirtyList.length }), danger: true })} />
+            <GitPanel open={gitOpen} conn={gitView?.conn ?? null} root={gitView?.root} dir={gitView?.dir}
+              title={gitAt ? (gitAt.root ?? gitAt.dir).replace(/\/+$/, "").split("/").pop() || "/" : undefined} onBack={gitAt ? () => setGitAt(null) : undefined}
+              onRepo={(d) => { void gitHere(gitView!.conn, d); setGitTick((n) => n + 1); void reload(); }} rev={gitTick} onClose={() => setGitOpen(false)} onChanged={() => { setGitTick((n) => n + 1); void syncTabs(); }} guard={() => !dirtyList.length || ask({ message: i18next.t("保存していない変更が {{length}} 件あります。ファイルが書き換わると失われることがあります。続けますか?", { length: dirtyList.length }), danger: true })} />
             </div>
             {sess.length > 0 && (
               <div className="term-wrap" data-open={term && shown} data-drag={dragT}>

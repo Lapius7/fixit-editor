@@ -45,7 +45,7 @@
 .tab-x:active { transform: scale(.9); }
 .tree-row { transition: background-color calc(.2s * var(--sp)) var(--out), box-shadow calc(.25s * var(--sp)) var(--out), transform calc(.15s * var(--sp)) var(--out); }
 .tree-row:active { transform: scale(.985); }
-.tree > ul > li > .tree-row { animation: row-in calc(.5s * var(--sp)) var(--out) both; animation-delay: calc((calc(var(--i, 0) * 32ms + 150ms)) * var(--sp)); }
+.tree > ul > li > .tree-row { animation: row-in calc(.5s * var(--sp)) var(--out) both; animation-delay: calc((calc(min(var(--i, 0), 8) * 18ms + 40ms)) * var(--sp)); }
 /* スクロールすると、上下どちらの端でも、端にかかる行をぼかして薄くする */
 @keyframes row-scroll {
   entry 0%, exit 100% { opacity: 0; transform: translateX(-8px); filter: blur(calc(var(--ab) * 0.50)); }
@@ -53,7 +53,7 @@
 }
 @supports (animation-timeline: view()) {
   .tree .tree-row { animation: row-scroll linear both; animation-timeline: view(); animation-range: entry 0% exit 100%; }
-  .tree > ul > li > .tree-row { animation: row-in calc(.5s * var(--sp)) var(--out) calc((calc(var(--i, 0) * 32ms + 150ms)) * var(--sp)) both, row-scroll linear both; animation-timeline: auto, view(); animation-range: normal, entry 0% exit 100%; }
+  .tree > ul > li > .tree-row { animation: row-in calc(.5s * var(--sp)) var(--out) calc((calc(min(var(--i, 0), 8) * 18ms + 40ms)) * var(--sp)) both, row-scroll linear both; animation-timeline: auto, view(); animation-range: normal, entry 0% exit 100%; }
 }
 .collapse { transition: grid-template-rows calc(.32s * var(--sp)) var(--out), opacity calc(.26s * var(--sp)) var(--out); }
 .collapse li { transition: transform calc(.32s * var(--sp)) var(--out); transform: translateY(-4px); }
@@ -238,7 +238,7 @@ html.theme-fade, html.theme-fade * { transition: background-color calc(.45s * va
 .up-notes { margin: 0; padding: 10px 12px; max-height: 180px; overflow-y: auto; overscroll-behavior: contain; white-space: pre-wrap; font: inherit; font-size: 12.5px; line-height: 20px; color: var(--ink-2); background: color-mix(in srgb, var(--ink) 5%, transparent); border-radius: 10px; }
 /* フォルダを足したときは、見出しが下から現れ、続けて中の行が順に入る */
 .root-sec[data-new="true"] > .root-head { animation: slide-up calc(.42s * var(--sp)) var(--out) both; }
-.root-sec[data-new="true"] .collapse-inner > ul > li > .tree-row { animation: row-in calc(.5s * var(--sp)) var(--out) both; animation-delay: calc((min(var(--i, 0), 12) * 32ms + 160ms) * var(--sp)); }
+.root-sec[data-new="true"] .collapse-inner > ul > li > .tree-row { animation: row-in calc(.5s * var(--sp)) var(--out) both; animation-delay: calc((min(var(--i, 0), 8) * 18ms + 60ms) * var(--sp)); }
 
 /* 左下の項目を広げている間は、その高さぶんだけツリーを下から消す。境目は少しぼかす */
 @property --fh { syntax: "<length>"; inherits: false; initial-value: 0px; }

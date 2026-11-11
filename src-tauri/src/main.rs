@@ -19,9 +19,33 @@ fn which(name: &str) -> bool {
     std::env::var_os("PATH").map_or(false, |p| std::env::split_paths(&p).any(|d| d.join(name).exists()))
 }
 
+// 既定の WSL の中のパスを、Windows から見たパス(\\wsl.localhost\<名前>\...)に直す
+fn wsl_winpath(p: &str) -> Option<String> {
+    let mut c = std::process::Command::new("wsl.exe");
+    c.args(["-e", "wslpath", "-w", p]);
+    #[cfg(windows)]
+    { use std::os::windows::process::CommandExt; c.creation_flags(0x08000000); }
+    let o = c.output().ok()?;
+    let w = String::from_utf8_lossy(&o.stdout).trim().to_string();
+    (o.status.success() && !w.is_empty()).then_some(w)
+}
+
+// Windows で動かすシェルの、実行ファイルと引数。id は pty_shells の id
+fn win_shell(id: &str) -> Result<(String, Vec<String>), String> {
+    let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+    Ok(match id {
+        "cmd" => ("cmd.exe".into(), vec![]),
+        "powershell" => ("powershell.exe".into(), s(&["-NoLogo"])),
+        "pwsh" => ("pwsh.exe".into(), s(&["-NoLogo"])),
+        "gitbash" => (git_bash().ok_or("Git Bash が見つかりません")?.to_string_lossy().into_owned(), s(&["--login", "-i"])),
+        "" => (if which("pwsh.exe") { "pwsh.exe" } else { "powershell.exe" }.into(), s(&["-NoLogo"])),
+        _ => return Err("そのシェルは使えません".into()),
+    })
+}
+
 
 #[derive(serde::Serialize)]
-struct ShellInfo { id: String, label: String }
+struct ShellInfo { id: String, label: String, #[serde(skip_serializing_if = "std::ops::Not::not")] def: bool }
 
 fn git_bash() -> Option<std::path::PathBuf> {
     let mut roots: Vec<std::path::PathBuf> = vec![];
@@ -35,26 +59,31 @@ fn git_bash() -> Option<std::path::PathBuf> {
 #[tauri::command(async)]
 fn pty_shells() -> Vec<ShellInfo> {
     let mut v = vec![];
-    let mut add = |id: &str, label: &str| v.push(ShellInfo { id: id.into(), label: label.into() });
+    let mut add = |id: &str, label: &str| v.push(ShellInfo { id: id.into(), label: label.into(), def: false });
     if which("pwsh.exe") { add("pwsh", "PowerShell 7"); }
     add("powershell", "Windows PowerShell");
     add("cmd", "コマンド プロンプト");
     if git_bash().is_some() { add("gitbash", "Git Bash"); }
-    let mut d: Vec<String> = vec![];
+    // (名前, 既定か)。-v の一覧は、既定のディストリビューションの行頭に * が付く。1行目は見出し
+    let mut d: Vec<(String, bool)> = vec![];
     if which("wsl.exe") {
         let mut c = std::process::Command::new("wsl.exe");
-        c.args(["-l", "-q"]);
+        c.args(["-l", "-v"]);
         #[cfg(windows)]
         { use std::os::windows::process::CommandExt; c.creation_flags(0x08000000); }
         if let Ok(o) = c.output() {
             // wsl.exe は UTF-16LE で出力する
             let u: Vec<u16> = o.stdout.chunks_exact(2).map(|b| u16::from_le_bytes([b[0], b[1]])).collect();
-            d = String::from_utf16_lossy(&u).lines().map(|l| l.trim().trim_start_matches('\u{feff}').to_string())
-                .filter(|l| !l.is_empty() && !l.starts_with("docker-desktop")).collect();
+            d = String::from_utf16_lossy(&u).lines().skip(1).filter_map(|l| {
+                let l = l.trim().trim_start_matches('\u{feff}');
+                let def = l.starts_with('*');
+                let n = l.trim_start_matches('*').split_whitespace().next()?.to_string();
+                (!n.starts_with("docker-desktop")).then_some((n, def))
+            }).collect();
         }
     }
-    if d.is_empty() { add("wsl", "WSL"); }
-    for n in d { v.push(ShellInfo { id: format!("wsl:{n}"), label: format!("WSL · {n}") }); }
+    if d.is_empty() { v.push(ShellInfo { id: "wsl".into(), label: "WSL".into(), def: true }); }
+    for (n, def) in d { v.push(ShellInfo { id: format!("wsl:{n}"), label: format!("WSL · {n}"), def }); }
     v
 }
 
@@ -83,24 +112,19 @@ fn pty_open(app: AppHandle, state: State<Ptys>, id: String, host: Option<String>
             if d.is_empty() || d.starts_with('-') || d.contains(['"', '\0', '\r', '\n']) { return Err("ディストリビューション名が正しくありません".into()); }
             cmd.args(["-d", d]);
         }
-        if cwd.starts_with('/') { cmd.args(["--cd", &cwd]); } else { cmd.args(["--cd", "~"]); }
+        // WSL のパスはそのまま。この PC のフォルダ(C:/...)も --cd に渡せば /mnt/c/... で始まる
+        let win = cwd.replace('/', "\\");
+        if cwd.starts_with('/') { cmd.args(["--cd", &cwd]); }
+        else if !cwd.is_empty() && std::path::Path::new(&win).is_dir() { cmd.args(["--cd", &win]); }
+        else { cmd.args(["--cd", "~"]); }
     } else {
         let home = std::env::var_os("USERPROFILE");
-        match shell.as_str() {
-            "cmd" => { cmd = CommandBuilder::new("cmd.exe"); }
-            "powershell" => { cmd = CommandBuilder::new("powershell.exe"); cmd.arg("-NoLogo"); }
-            "pwsh" => { cmd = CommandBuilder::new("pwsh.exe"); cmd.arg("-NoLogo"); }
-            "gitbash" => {
-                let b = git_bash().ok_or("Git Bash が見つかりません")?;
-                cmd = CommandBuilder::new(b);
-                cmd.args(["--login", "-i"]);
-            }
-            "" => { cmd = CommandBuilder::new(if which("pwsh.exe") { "pwsh.exe" } else { "powershell.exe" }); cmd.arg("-NoLogo"); }
-            _ => return Err("そのシェルは使えません".into()),
-        }
-        // 開いているフォルダが、この PC にある実在のフォルダなら、そこで始める
-        let here = cwd.replace('/', std::path::MAIN_SEPARATOR_STR);
-        if !cwd.is_empty() && !cwd.starts_with('/') && std::path::Path::new(&here).is_dir() { cmd.cwd(here); }
+        let (prog, args) = win_shell(&shell)?;
+        cmd = CommandBuilder::new(prog);
+        cmd.args(&args);
+        // WSL のフォルダ(/home/...)は \\wsl.localhost\... に直して、そこで始める
+        let here = if cwd.starts_with('/') { wsl_winpath(&cwd).unwrap_or_default() } else { cwd.replace('/', std::path::MAIN_SEPARATOR_STR) };
+        if !here.is_empty() && std::path::Path::new(&here).is_dir() { cmd.cwd(here); }
         else if let Some(h) = home { cmd.cwd(h); }
     }
     cmd.env("TERM", "xterm-256color");
@@ -302,17 +326,19 @@ fn open_url(url: String) -> Result<(), String> {
 // エクスプローラーのメニュー「エクスプローラーで表示」「外部のターミナルで開く」。what = "reveal" | "term"
 // pc は C:/... の形、wsl は WSL の中の絶対パス、ssh は接続先の絶対パス(表示はできないのでターミナルだけ)
 #[tauri::command(async)]
-fn os_open(kind: String, host: Option<String>, path: String, dir: bool, what: String) -> Result<(), String> {
+fn os_open(kind: String, host: Option<String>, path: String, dir: bool, what: String, shell: Option<String>) -> Result<(), String> {
     if path.is_empty() || path.starts_with('-') || path.chars().any(|c| c.is_control() || c == '"') { return Err("パスが正しくありません".into()); }
     let host = host.unwrap_or_default();
     if kind == "ssh" && (host.is_empty() || host.starts_with('-') || !host.chars().all(|c| c.is_ascii_alphanumeric() || "-_.@:".contains(c))) {
         return Err("接続先の名前が正しくありません".into());
     }
-    os_open_impl(&kind, &host, &path, dir, &what)
+    let shell = shell.unwrap_or_default();
+    if shell.starts_with('-') || shell.chars().any(|c| c.is_control() || c == '"') { return Err("シェルの名前が正しくありません".into()); }
+    os_open_impl(&kind, &host, &path, dir, &what, &shell)
 }
 
 #[cfg(windows)]
-fn os_open_impl(kind: &str, host: &str, path: &str, dir: bool, what: &str) -> Result<(), String> {
+fn os_open_impl(kind: &str, host: &str, path: &str, dir: bool, what: &str, sh: &str) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
     use std::process::Command;
     const NO_WINDOW: u32 = 0x08000000;
@@ -320,10 +346,7 @@ fn os_open_impl(kind: &str, host: &str, path: &str, dir: bool, what: &str) -> Re
     // WSL のパスを Windows の \\wsl.localhost\... に直す
     let winpath = |p: &str| -> Result<String, String> {
         if kind == "pc" { return Ok(p.replace('/', "\\")); }
-        let o = Command::new("wsl.exe").args(["-e", "wslpath", "-w", p]).creation_flags(NO_WINDOW).output().map_err(|e| e.to_string())?;
-        let w = String::from_utf8_lossy(&o.stdout).trim().to_string();
-        if !o.status.success() || w.is_empty() { return Err("Windows のパスに直せませんでした".into()); }
-        Ok(w)
+        wsl_winpath(p).ok_or_else(|| "Windows のパスに直せませんでした".to_string())
     };
     let parent = |p: &str| -> String { let t = p.trim_end_matches('/'); match t.rfind('/') { Some(0) => "/".into(), Some(i) if t[..i].ends_with(':') => format!("{}/", &t[..i]), Some(i) => t[..i].into(), None => t.into() } };
     match what {
@@ -337,19 +360,25 @@ fn os_open_impl(kind: &str, host: &str, path: &str, dir: bool, what: &str) -> Re
         "term" => {
             let d = if dir { path.to_string() } else { parent(path) };
             // Windows Terminal があれば新しいウィンドウで。なければ新しいコンソールで開く
-            let (prog, args): (&str, Vec<String>) = match kind {
-                "pc" => ("", vec![]),
-                "wsl" => ("wsl.exe", vec!["--cd".into(), d.clone()]),
-                _ => ("ssh.exe", vec!["-t".into(), "--".into(), host.into(), format!("cd {} 2>/dev/null || true && exec $SHELL -l", sq(&d))]),
+            // sh: 選んだシェル(pty_shells の id)。空なら、WSL は WSL、この PC は PowerShell
+            let (shell, args, cwd): (String, Vec<String>, Option<String>) = if kind == "ssh" {
+                ("ssh.exe".into(), vec!["-t".into(), "--".into(), host.into(), format!("cd {} 2>/dev/null || true && exec $SHELL -l", sq(&d))], None)
+            } else if sh == "wsl" || sh.starts_with("wsl:") || (sh.is_empty() && kind == "wsl") {
+                let mut a: Vec<String> = vec![];
+                if let Some(n) = sh.strip_prefix("wsl:") { a.extend(["-d".into(), n.into()]); }
+                // この PC のフォルダも --cd に渡せば、/mnt/c/... で始まる
+                a.extend(["--cd".into(), if kind == "pc" { d.replace('/', "\\") } else { d.clone() }]);
+                ("wsl.exe".into(), a, None)
+            } else {
+                let (p, a) = win_shell(sh)?;
+                (p, a, Some(winpath(&d)?))
             };
-            let shell = if prog.is_empty() { if which("pwsh.exe") { "pwsh.exe" } else { "powershell.exe" } } else { prog };
-            let cwd = if kind == "pc" { Some(d.replace('/', "\\")) } else { None };
             let mut wt = Command::new("wt.exe");
             wt.arg("-w").arg("new");
             if let Some(c) = &cwd { wt.arg("-d").arg(c); }
-            wt.arg(shell).args(&args).creation_flags(NO_WINDOW);
+            wt.arg(&shell).args(&args).creation_flags(NO_WINDOW);
             if wt.spawn().is_ok() { return Ok(()); }
-            let mut c = Command::new(shell);
+            let mut c = Command::new(&shell);
             c.args(&args).creation_flags(NEW_CONSOLE);
             if let Some(d) = &cwd { c.current_dir(d); }
             c.spawn().map(|_| ()).map_err(|e| e.to_string())
@@ -359,7 +388,7 @@ fn os_open_impl(kind: &str, host: &str, path: &str, dir: bool, what: &str) -> Re
 }
 
 #[cfg(not(windows))]
-fn os_open_impl(_kind: &str, _host: &str, _path: &str, _dir: bool, _what: &str) -> Result<(), String> { Err("Windows の exe でだけ使えます".into()) }
+fn os_open_impl(_kind: &str, _host: &str, _path: &str, _dir: bool, _what: &str, _sh: &str) -> Result<(), String> { Err("Windows の exe でだけ使えます".into()) }
 
 // この PC に入っているフォントの家族名(設定の書体の選択肢)。読み込みに時間がかかるので別スレッドで行う
 #[tauri::command]

@@ -1,7 +1,7 @@
 // 右側の Git パネル。変更(ステージ・コミット)・ツリー・履歴・ブランチを、タブで切り替える。
 // Git の操作は gitRead / gitWrite で、固定の操作名だけを backend に渡す。
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Check, GitBranch, GitCommitHorizontal, Minus, Plus, RefreshCw, Sparkles, Square, Trash2, Undo2, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Check, GitBranch, GitCommitHorizontal, Minus, Plus, RefreshCw, Sparkles, Square, Trash2, Undo2, X } from "lucide-react";
 import { aiConsent, aiConsented, aiErrText, aiProviderName, aiReady, askOnce } from "@/features/ai/oneshot";
 import { commitPrompt, commitSystem } from "@/features/ai/prompts";
 import { useAi } from "@/features/ai/store";
@@ -12,10 +12,16 @@ import {
   buildGraph, gitRead, gitWrite, GitError, parseBranches, parseChanges, parseDiff, parseFiles, parseLog, remoteNames,
   type Branch, type Change, type Commit, type DiffLine, type FileChange, type GraphRow, type Status,
 } from "@/features/git/git";
+import { GitSetup } from "@/features/git/GitSetup";
 
 type Tab = "changes" | "tree" | "log" | "branches";
 type Side = "staged" | "unstaged" | "conflict";
-type Props = { open: boolean; conn: Conn | null; root: string | null; rev: number; onClose: () => void; onChanged: () => void; guard?: () => boolean | Promise<boolean> };
+// root: リポジトリの最上位(null はリポジトリではない、undefined はまだ調べている)。dir: 見ているフォルダ
+// title・onBack: 右クリックで別のフォルダを選んでいるとき、その名前と、開いているフォルダに戻すボタン
+type Props = {
+  open: boolean; conn: Conn | null; root: string | null | undefined; dir?: string; title?: string; rev: number;
+  onClose: () => void; onChanged: () => void; onRepo?: (dir: string) => void; onBack?: () => void; guard?: () => boolean | Promise<boolean>;
+};
 
 const ROW = 28, LANE = 12, COLORS = 8;
 const base = (p: string) => p.slice(p.lastIndexOf("/") + 1);
@@ -35,7 +41,7 @@ function ago(at: number) {
 // 作業フォルダのファイルを書き換える操作
 const REWRITES = new Set(["checkout", "discard", "clean", "pull"]);
 
-export function GitPanel({ open, conn, root, rev, onClose, onChanged, guard }: Props) {
+export function GitPanel({ open, conn, root, dir, title, rev, onClose, onChanged, onRepo, onBack, guard }: Props) {
   const [tab, setTab] = useState<Tab>("changes");
   const [st, setSt] = useState<Status | null>(null);
   const [commits, setCommits] = useState<Commit[]>([]);
@@ -62,6 +68,8 @@ export function GitPanel({ open, conn, root, rev, onClose, onChanged, guard }: P
     return () => clearTimeout(h);
   }, [open]);
 
+  // 別のリポジトリに切り替えたら、前の内容を残さない
+  useEffect(() => { seq.current++; setSt(null); setCommits([]); setBranches([]); setErr(""); setLoading(false); }, [root, conn]);
   const load = useCallback(async () => {
     if (!conn || !root) return;
     const my = ++seq.current;
@@ -136,14 +144,20 @@ export function GitPanel({ open, conn, root, rev, onClose, onChanged, guard }: P
   return (
     <aside className="ai-dock git-dock" data-closing={!open} aria-label="Git" onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } }}>
       <div className="ai-bar git-bar">
-        <span className="ai-title"><GitBranch size={15} />{st ? <span className="truncate">{st.detached ? i18next.t("(切り離し)") : st.branch}</span> : "Git"}</span>
+        {onBack && <button className="icon-btn" aria-label={i18next.t("開いているフォルダに戻す")} title={i18next.t("開いているフォルダに戻す")} onClick={onBack}><ArrowLeft /></button>}
+        <span className="ai-title"><GitBranch size={15} />
+          {title && <span className="git-where truncate" title={dir}>{title}</span>}
+          {st ? <span className="truncate">{st.detached ? i18next.t("(切り離し)") : st.branch}</span> : !title && "Git"}
+        </span>
         {st && <button className="icon-btn git-sync" aria-label={i18next.t("リモートから取得")} title={i18next.t("リモートから取得")} disabled={!!busy} onClick={() => void run("fetch", { cmd: "fetch" })}><RefreshCw data-spin={busy === "fetch" || loading} /></button>}
         {st && upstream && <button className="icon-btn git-sync" aria-label={i18next.t("プル")} title={i18next.t("プル(早送りだけ)")} disabled={!!busy || st.behind === 0} onClick={() => void run("pull", { cmd: "pull" })}><ArrowDown /><i>{st.behind || ""}</i></button>}
         {st && !st.detached && <button className="icon-btn git-sync" aria-label={upstream ? i18next.t("プッシュ") : i18next.t("ブランチを公開")} title={upstream ? i18next.t("プッシュ") : i18next.t("ブランチを公開")} disabled={!!busy || (upstream && st.ahead === 0)} onClick={() => void run("push", upstream ? { cmd: "push" } : { cmd: "push", setUpstream: true, name: st.branch })}><ArrowUp /><i>{st.ahead || ""}</i></button>}
         <button className="icon-btn" aria-label={i18next.t("閉じる")} title={i18next.t("閉じる")} onClick={onClose}><X /></button>
       </div>
       {!root || !conn ? (
-        <p className="git-empty">{i18next.t("このフォルダは Git のリポジトリではありません")}</p>
+        root === undefined && conn ? <p className="git-empty">{i18next.t("読み込み中…")}</p>
+          : conn && dir && onRepo ? <GitSetup conn={conn} dir={dir} onRepo={onRepo} />
+          : <p className="git-empty">{i18next.t("このフォルダは Git のリポジトリではありません")}</p>
       ) : (
         <>
           <div className="git-tabs" role="tablist" aria-label="Git">

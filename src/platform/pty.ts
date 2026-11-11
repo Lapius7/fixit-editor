@@ -11,7 +11,7 @@ export type Sock = {
   onerror: (() => void) | null;
 };
 
-export type ShellOpt = { id: string; label: string };
+export type ShellOpt = { id: string; label: string; def?: boolean }; // def: 既定の WSL のディストリビューション
 // 使えるシェルの一覧。デスクトップ版は PC に入っているもの、開発サーバーは向こうの環境のもの
 let shells: Promise<ShellOpt[]> | null = null;
 export const listShells = (): Promise<ShellOpt[]> => (shells ??= (async () => {

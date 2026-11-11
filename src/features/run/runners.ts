@@ -1,5 +1,6 @@
 // ▶ 実行: 拡張子ごとのコマンドの一覧。初期値に、ユーザーが足した・直したものを重ねる(空の文字列は「その拡張子では実行しない」)。
-// 書式: {file} = ファイルの絶対パス(引用符つき) / {dir} = そのフォルダ / {name} = ファイル名 / {stem} = 拡張子を除いたファイル名
+// 書式: {file} = ファイル / {dir} = そのフォルダ / {name} = ファイル名 / {stem} = 拡張子を除いたファイル名
+// 実行は先にファイルのあるフォルダへ cd するので、{file} もファイル名だけにする(画面に出るコマンドを短くするため)
 
 export const RUN_DEFAULTS: Record<string, string> = {
   py: "python {file}",
@@ -35,13 +36,15 @@ const effective = (o: Record<string, string>) =>
 
 export const runnerFor = (name: string, o: Record<string, string>) => effective(o)[extOf(name)] ?? null;
 
+/** シェルに渡す語。記号や空白・日本語などを含むときだけ引用符で囲む */
+export const shq = (x: string) => (/^[\w.+@,:/=-]+$/.test(x) ? x : `"${x}"`);
+
 /** コマンドを組み立てる。使えない文字がパスにあれば null */
 export function buildCommand(tpl: string, abs: string): { cmd: string; dir: string } | null {
   if (BAD.test(abs)) return null;
   const k = abs.lastIndexOf("/") >= abs.lastIndexOf("\\") ? abs.lastIndexOf("/") : abs.lastIndexOf("\\");
   const dir = k > 0 ? abs.slice(0, k) : k === 0 ? abs.slice(0, 1) : ".";
-  const name = abs.slice(k + 1), stem = name.replace(/\.[^.]*$/, "") || name;
-  const q = (x: string) => `"${x}"`;
-  const cmd = tpl.replace(/\{(file|dir|name|stem)\}/g, (_, w: string) => w === "file" ? q(abs) : w === "dir" ? q(dir) : w === "name" ? q(name) : q(stem));
+  const base = abs.slice(k + 1), name = base.startsWith("-") ? `./${base}` : base, stem = base.replace(/\.[^.]*$/, "") || base;
+  const cmd = tpl.replace(/\{(file|dir|name|stem)\}/g, (_, w: string) => shq(w === "dir" ? dir : w === "stem" ? stem : name));
   return { cmd, dir };
 }

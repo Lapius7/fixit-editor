@@ -30,6 +30,21 @@ function files(v: Req): string[] {
   return a as string[];
 }
 
+// 複製元の URL。https・ssh・git と、user@host:path の形だけ(file:// や手元のパス、ext:: などは断る)
+function cloneUrl(v: Req): string {
+  const s = typeof v.url === "string" ? v.url.trim() : "";
+  const ok = s.length <= 2048 && !s.startsWith("-") && !/[\u0000-\u001f\u007f\s]/.test(s)
+    && (/^(https?|ssh|git):\/\/[^/]+\/./i.test(s) || /^[\w.-]+@[\w.-]+:[^/].*/.test(s));
+  if (!ok) throw bad("URL が正しくありません");
+  return s;
+}
+// 複製先のフォルダ名(今のフォルダの直下に作る)
+function cloneName(v: Req): string {
+  const s = typeof v.name === "string" ? v.name : "";
+  if (!s || s.length > 200 || /^[-.]/.test(s) || /[/\\\u0000-\u001f\u007f]/.test(s)) throw bad("フォルダ名が正しくありません");
+  return s;
+}
+
 export function gitPlan(raw: Buffer): GitPlan {
   let v: Req;
   try { v = JSON.parse(raw.toString("utf8")) as Req; } catch { throw bad("要求が正しくありません"); }
@@ -67,6 +82,9 @@ export function gitPlan(raw: Buffer): GitPlan {
     case "fetch": rest = ["fetch", "--all", "--prune"]; ms = NET; merge = true; break;
     case "pull": rest = ["pull", "--ff-only"]; ms = NET; merge = true; break;
     case "push": rest = v.setUpstream === true ? ["push", "-u", typeof v.remote === "string" ? refName(v, "remote") : "origin", refName(v, "name")] : ["push"]; ms = NET; merge = true; break;
+    // リポジトリではないフォルダで使う
+    case "init": rest = ["init"]; ms = FAST; merge = true; break;
+    case "clone": rest = ["clone", "--", cloneUrl(v), cloneName(v)]; ms = NET * 5; merge = true; break;
     default: throw bad("この Git 操作は使えません");
   }
   // 先頭に付ける設定。画面からの値は入らない
