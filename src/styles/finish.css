@@ -122,7 +122,14 @@ html.theme-fade, html.theme-fade * { transition: background-color calc(.45s * va
 .side-foot { padding: 0; margin: 0 12px; border-top: 1px solid var(--hair); }
 .open-btn { height: 40px; justify-content: flex-start; padding: 0 6px; border-radius: 0; background: none; box-shadow: none; color: var(--ink-2); font-weight: 400; -webkit-backdrop-filter: none; backdrop-filter: none; }
 .open-btn:hover:not(:disabled) { background: none; color: var(--ink); box-shadow: none; }
-.open-btn .open-btn-chev { width: 14px; height: 14px; margin-left: auto; opacity: .6; }
+.open-btn .open-btn-chev { width: 14px; height: 14px; margin-left: auto; opacity: .6; transition: transform calc(.26s * var(--sp)) var(--out); }
+.open-btn[aria-expanded="true"] .open-btn-chev { transform: rotate(180deg); }
+.foot-menu { padding: 4px 0 6px; border-bottom: 1px solid var(--hair); }
+.foot-title { padding: 8px 6px 2px; font-size: 11px; line-height: 16px; color: var(--ink-3); }
+.open-btn.foot-item { height: 34px; }
+.foot-kbd { margin-left: auto; font-size: 11px; line-height: 16px; color: var(--ink-3); }
+.side-foot .collapse > .collapse-inner > .foot-menu > * { transition: transform calc(.32s * var(--sp)) var(--out); transform: translateY(8px); }
+.side-foot .collapse[data-open="true"] > .collapse-inner > .foot-menu > * { transform: none; }
 
 /* タブ: 下線で示す */
 .tabbar { gap: 0; padding: 0 4px 0 0; align-items: flex-end; padding-bottom: 10px; }

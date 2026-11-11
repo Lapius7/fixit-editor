@@ -215,7 +215,17 @@ export default function App() {
   const [renOut, setRenOut] = useState(false);
   const [tp, setTp] = useState(false);
   const [dragT, setDragT] = useState(false);
-  const [menu, setMenu] = useState<null | { x: number; y: number; items: Item[]; path?: string; up?: boolean }>(null);
+  const [menu, setMenu] = useState<null | { x: number; y: number; items: Item[]; path?: string }>(null);
+  // 左下の「フォルダ」の項目を広げているか。外をクリックするか Esc で畳む
+  const [footOpen, setFootOpen] = useState(false);
+  const footRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!footOpen) return;
+    const down = (e: MouseEvent) => { if (!footRef.current?.contains(e.target as globalThis.Node)) setFootOpen(false); };
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") setFootOpen(false); };
+    addEventListener("mousedown", down); addEventListener("keydown", key);
+    return () => { removeEventListener("mousedown", down); removeEventListener("keydown", key); };
+  }, [footOpen]);
   const [dlg, setDlg] = useState<Dlg | null>(null);
   // 外から閉じられても、閉じるアニメーションが終わるまで残す
   const pQo = usePresence(qo), pPal = usePresence(pal), pSetts = usePresence(setts), pDlg = usePresence(dlg), pCn = usePresence(cn);
@@ -1574,12 +1584,20 @@ export default function App() {
                 )}
                 {roots.length === 1 && <DropGhost on={rootDrop && !!drag.node} depth={sectioned ? 1 : 0} />}
               </nav>
-              <div className="side-foot">
-                {/* 開く・追加は 1 つのボタンのメニューにまとめ、ツリーの場所を広く取る。フォルダを開くまでは「開く」だけ */}
-                <button className="open-btn" aria-haspopup="menu" onClick={(e) => {
-                  const r = e.currentTarget.getBoundingClientRect();
-                  setMenu({ x: r.left, y: r.top - 4, up: true, items: folderItems() });
-                }}>
+              <div className="side-foot" ref={footRef}>
+                {/* 開く・追加は 1 つのボタンにまとめ、押すとボタンの上に項目が広がる。フォルダを開くまでは「開く」だけ */}
+                <div className="collapse" data-open={footOpen} inert={!footOpen}>
+                  <div className="collapse-inner">
+                    <div className="foot-menu" role="menu">
+                      {folderItems().map((it, i) => it.type === "title" ? <div key={i} className="foot-title">{it.label}</div> : it.type === "sep" ? null : (
+                        <button key={i} role="menuitem" className="open-btn foot-item" disabled={it.disabled} onClick={() => { setFootOpen(false); it.run?.(); }}>
+                          {it.icon}<span className="truncate">{it.label}</span>{it.keys && <span className="foot-kbd">{chips(it.keys).join(" ")}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <button className="open-btn" aria-expanded={footOpen} onClick={() => setFootOpen((v) => !v)}>
                   <FolderOpen /><span className="truncate">{root.handle ? i18next.t("フォルダ") : i18next.t("フォルダを開く")}</span><ChevronUp className="open-btn-chev" />
                 </button>
               </div>
@@ -1679,7 +1697,7 @@ export default function App() {
       {pCn.v && <Connect key={pCn.key} out={pCn.out} current={cnAdd ? null : root.conn ?? null} adding={cnAdd} onConnect={cnAdd ? addConn : connect} onClose={() => setCn(false)} />}
       {pPop.v && <StatusPop key={pPop.key} out={pPop.out} kind={pPop.v} view={ev() ?? null} eol={tab?.eol ?? "lf"} lang={tab ? langName(tab.node.name) : ""} onEol={toggleEol} onClose={() => setPop(null)} />}
       <LangUI onGoto={gotoLoc} onRename={applyRename} />
-      {pMenu.v && <ContextMenu key={pMenu.key} out={pMenu.out} x={pMenu.v.x} y={pMenu.v.y} up={pMenu.v.up} items={pMenu.v.items} onClose={() => setMenu(null)} />}
+      {pMenu.v && <ContextMenu key={pMenu.key} out={pMenu.out} x={pMenu.v.x} y={pMenu.v.y} items={pMenu.v.items} onClose={() => setMenu(null)} />}
     </div>
     </GitMarks.Provider>
   );
