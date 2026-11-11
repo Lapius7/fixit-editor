@@ -9,7 +9,7 @@ import { toUrl } from "@/features/browser/BrowserDock";
 import { AI_MAX_HISTORY_CHARS, AI_MAX_HISTORY_IMAGES, AI_MAX_IMAGES } from "@/shared/config";
 import { AiError, isAbort, streamChat, type AiErrorKind, type Img, type Msg, type Stop } from "@/features/ai/providers";
 import { isImageFile, toAiImage, type AiImage, type ImgFail } from "@/features/ai/images";
-import { actionLabel, actionPrompt, clipLabel, ctxLabel, systemPrompt, withClips, withCode, type AiJob, type Clip, type Ctx } from "@/features/ai/prompts";
+import { actionLabel, actionPrompt, replaceable, clipLabel, ctxLabel, systemPrompt, withClips, withCode, type AiJob, type Clip, type Ctx } from "@/features/ai/prompts";
 import { drag, dragEnd } from "@/workbench/dnd";
 import { notify } from "@/shared/notify";
 import { copyWithNotice } from "@/platform/clipboard";
@@ -19,21 +19,11 @@ import { getAi, hasEffort, ready, PROVIDER_NAME, setConsent, useAi, useLink, typ
 import { ModelPicker } from "@/features/ai/ModelPicker";
 import { ImgPeek, type Peek } from "@/features/ai/ImgPeek";
 import { refreshLink } from "@/features/ai/link";
+import { AI_ERR as ERR } from "@/features/ai/oneshot";
 import { deleteChat, getChats, newChatId, saveChat, setCurChat, useChats, type Chat } from "@/features/ai/chats";
 
 type M = { id: number; role: "user" | "assistant"; content: string; label?: string; ctx?: string; imgs?: (Img & { name: string })[]; busy?: boolean; err?: AiErrorKind; note?: Stop; job?: AiJob; applied?: "ok" | "stale" };
 
-const ERR: Record<AiErrorKind, string> = {
-  auth: "API キーが正しくありません。設定で確かめてください",
-  denied: "このキーでは使えません(権限や地域の制限など)",
-  rate: "リクエストが多すぎるか、利用枠を超えています。しばらくしてからもう一度試してください",
-  network: "接続できませんでした。ネットワークを確かめてください",
-  model: "モデルが見つかりません。設定のモデル名を確かめてください",
-  bad: "リクエストが受け付けられませんでした。モデル名や入力の長さを確かめてください",
-  nocli: "claude コマンドが見つかりません(または、この環境では使えません)。Claude Code を入れてログインしてください",
-  login: "claude にログインしていません。設定の「AI」で、ログインしてください",
-  other: "AI の応答でエラーが起きました",
-};
 
 // 返答は Markdown で来る。画像・スタイル・フォームは通さない(画像の URL にコードを載せて外へ送る手口を防ぐ)
 const SAFE = { ALLOWED_TAGS: ["p", "br", "hr", "pre", "code", "strong", "em", "del", "ul", "ol", "li", "blockquote", "h1", "h2", "h3", "h4", "a", "table", "thead", "tbody", "tr", "th", "td"], ALLOWED_ATTR: ["href"], ALLOW_DATA_ATTR: false };
@@ -57,7 +47,7 @@ function Reply({ m, onReplace, onCopy }: { m: M; onReplace: (m: M) => void; onCo
       {!m.busy && m.content && (
         <div className="ai-acts">
           <button className="ai-act" onClick={() => onCopy(m)}><Copy size={14} />{i18next.t("コピー")}</button>
-          {m.job?.action === "translate" && m.job.scope === "selection" && !m.applied && <button className="ai-act" onClick={() => onReplace(m)}><Replace size={14} />{i18next.t("選択範囲を置き換える")}</button>}
+          {m.job && replaceable(m.job.action) && m.job.scope === "selection" && !m.applied && <button className="ai-act" onClick={() => onReplace(m)}><Replace size={14} />{i18next.t("選択範囲を置き換える")}</button>}
           {m.applied === "ok" && <span className="ai-done"><Check size={14} />{i18next.t("置き換えました")}</span>}
           {m.applied === "stale" && <span className="ai-warn">{i18next.t("元のコードが変わっているため置き換えられません")}</span>}
         </div>

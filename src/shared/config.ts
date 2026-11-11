@@ -22,6 +22,7 @@ export const AI_CHATS_KEY = "fixit:ai-chats:v1"; // 会話の履歴。API キー
 export const AI_CHATS_MAX = 50; // 残す会話の数(古いものから消す)
 export const AI_CHATS_MAX_CHARS = 1_500_000; // 全会話の文字数の上限(localStorage の容量を使い切らないため)
 export const AI_MAX_CONTEXT_CHARS = 60_000; // 1 回に送るコードの上限
+export const AI_COMMIT_DIFF_CHARS = 40_000; // コミットメッセージを作るときに送る差分の上限
 export const AI_MAX_TOKENS = 16_000;
 export const AI_DEFAULT_MODEL = { anthropic: "claude-opus-5-5", openai: "gpt-5", "claude-cli": "" } as const;
 export const AI_MODEL_HINTS = {

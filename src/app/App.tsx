@@ -1366,6 +1366,8 @@ export default function App() {
           { type: "title", label: sel ? i18next.t("選択範囲を送信") : i18next.t("ファイル全体を送信") },
           { label: i18next.t("要約"), run: () => askAi(v, "summarize") },
           { label: i18next.t("コードの説明"), run: () => askAi(v, "explain") },
+          { label: i18next.t("問題点を探す"), run: () => askAi(v, "review") },
+          { label: i18next.t("コメントを書き足す"), run: () => askAi(v, "comment") },
           { label: i18next.t("日本語に翻訳"), run: () => askAi(v, "translate", "ja") },
           { label: i18next.t("英語に翻訳"), run: () => askAi(v, "translate", "en") },
           { label: i18next.t("韓国語に翻訳"), run: () => askAi(v, "translate", "ko") },

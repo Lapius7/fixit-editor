@@ -41,6 +41,9 @@ export function gitPlan(raw: Buffer): GitPlan {
     case "log": rest = ["log", "--all", "--no-color", "-n", "300", "-z", "--date-order", "--format=%H%x1f%P%x1f%an%x1f%at%x1f%D%x1f%s"]; break;
     case "branches": rest = ["for-each-ref", "--format=%(refname)%1f%(refname:short)%1f%(upstream:short)%1f%(upstream:track,nobracket)%1f%(HEAD)%1f%(objectname:short)%1f%(subject)", "refs/heads", "refs/remotes"]; break;
     case "show": rest = ["show", "--format=", "--name-status", "-z", "-M", hash(v)]; break;
+    // ステージ済みの差分をまとめて(AI でコミットメッセージを作るため)。名前の一覧と、短い文脈の差分
+    case "staged-stat": rest = ["diff", "--cached", "--no-color", "--stat=200", "--summary"]; break;
+    case "staged-diff": rest = ["diff", "--cached", "--no-color", "-U1", "--no-ext-diff"]; break;
     case "diff": {
       const f = oneFile(v);
       if (typeof v.hash === "string") rest = ["show", "--format=", "--no-color", "-U3", hash(v), "--", f];

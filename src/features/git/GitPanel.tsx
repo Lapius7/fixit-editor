@@ -1,12 +1,15 @@
 // 右側の Git パネル。変更(ステージ・コミット)・ツリー・履歴・ブランチを、タブで切り替える。
 // Git の操作は gitRead / gitWrite で、固定の操作名だけを backend に渡す。
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Check, GitBranch, GitCommitHorizontal, Minus, Plus, RefreshCw, Trash2, Undo2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, GitBranch, GitCommitHorizontal, Minus, Plus, RefreshCw, Sparkles, Square, Trash2, Undo2, X } from "lucide-react";
+import { aiConsent, aiConsented, aiErrText, aiProviderName, aiReady, askOnce } from "@/features/ai/oneshot";
+import { commitPrompt, commitSystem } from "@/features/ai/prompts";
+import { useAi } from "@/features/ai/store";
 import i18next from "i18next";
 import type { Conn } from "@/platform/remote";
 import { ms } from "@/features/settings/settings";
 import {
-  buildGraph, gitRead, gitWrite, parseBranches, parseChanges, parseDiff, parseFiles, parseLog, remoteNames,
+  buildGraph, gitRead, gitWrite, GitError, parseBranches, parseChanges, parseDiff, parseFiles, parseLog, remoteNames,
   type Branch, type Change, type Commit, type DiffLine, type FileChange, type GraphRow, type Status,
 } from "@/features/git/git";
 
@@ -41,6 +44,9 @@ export function GitPanel({ open, conn, root, rev, onClose, onChanged, guard }: P
   const [busy, setBusy] = useState("");
   const [loading, setLoading] = useState(false);
   const [text, setText] = useState("");
+  const [gen, setGen] = useState<AbortController | null>(null); // AI でコミットメッセージを作っている間
+  useEffect(() => () => gen?.abort(), [gen]);
+  useAi(); // AI の設定が変わったらボタンの状態を変える
   const [newName, setNewName] = useState("");
   const [arm, setArm] = useState("");
   const [openKey, setOpenKey] = useState<string | null>(null);
@@ -100,6 +106,26 @@ export function GitPanel({ open, conn, root, rev, onClose, onChanged, guard }: P
   const nStaged = st?.staged.length ?? 0;
   const canCommit = !!text.trim() && nStaged > 0 && !busy;
   const commit = () => { if (canCommit) void run("commit", { cmd: "commit", message: text.trim() }, () => setText("")); };
+  // ステージした差分から、AI でコミットメッセージを作る。作っている間にもう一度押すと止める
+  const aiMsg = async () => {
+    if (gen) { gen.abort(); return; }
+    if (!conn || !root || nStaged === 0 || busy) return;
+    if (!aiReady()) { setErr(i18next.t("AI が使えません。設定の「AI」でプロバイダーを設定してください")); return; }
+    if (!aiConsented()) {
+      if (arm !== "ai") { clearTimeout(armT.current); setArm("ai"); armT.current = setTimeout(() => setArm(""), 4000); return; }
+      clearTimeout(armT.current); setArm(""); aiConsent();
+    }
+    const ac = new AbortController(); setGen(ac); setErr("");
+    try {
+      const [stat, diff] = await Promise.all([gitRead(conn, root, { cmd: "staged-stat" }), gitRead(conn, root, { cmd: "staged-diff" })]);
+      const recent = commits.filter((c) => c.parents.length < 2).slice(0, 12).map((c) => c.subject);
+      let acc = "";
+      await askOnce({ system: commitSystem(), prompt: commitPrompt(stat, diff, recent), signal: ac.signal, effort: "low", onText: (t) => { acc += t; setText(acc.replace(/^\s+/, "")); } });
+      setText(acc.trim());
+    } catch (e) {
+      if (!ac.signal.aborted) setErr(e instanceof GitError ? msg(e) : i18next.t(aiErrText(e)));
+    } finally { setGen(null); }
+  };
   const upstream = !!st?.upstream;
 
   const tabs: [Tab, string, number][] = [
@@ -129,9 +155,16 @@ export function GitPanel({ open, conn, root, rev, onClose, onChanged, guard }: P
           {tab === "changes" && st && (
             <>
               <div className="git-msg">
-                <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={i18next.t("コミットメッセージ(Ctrl+Enter で確定)")} aria-label={i18next.t("コミットメッセージ")} rows={2} spellCheck={false}
+                <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={i18next.t("コミットメッセージ(Ctrl+Enter で確定)")} aria-label={i18next.t("コミットメッセージ")} rows={2} spellCheck={false} readOnly={!!gen} aria-busy={!!gen}
                   onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commit(); } }} />
-                <button className="git-commit" disabled={!canCommit} onClick={commit}><Check />{i18next.t("コミット")}{nStaged > 0 && <b>{nStaged}</b>}</button>
+                {arm === "ai" && <p className="git-ai-note" role="status">{i18next.t("ステージした差分を {{p}} に送ります。もう一度押すと送信します", { p: aiProviderName() })}</p>}
+                <div className="git-msg-bar">
+                  <button className="git-ai" data-armed={arm === "ai"} disabled={!gen && (nStaged === 0 || !!busy)} onClick={() => void aiMsg()}
+                    aria-label={gen ? i18next.t("作成を止める") : i18next.t("AI でコミットメッセージを作る")} title={gen ? i18next.t("作成を止める") : i18next.t("AI でコミットメッセージを作る")}>
+                    {gen ? <Square /> : <Sparkles />}
+                  </button>
+                  <button className="git-commit" disabled={!canCommit || !!gen} onClick={commit}><Check />{i18next.t("コミット")}{nStaged > 0 && <b>{nStaged}</b>}</button>
+                </div>
               </div>
               <div className="git-body scroll">
                 {st.conflicts.length > 0 && <Group title={i18next.t("衝突")} n={st.conflicts.length}>{st.conflicts.map((c) => <Row key={"c" + c.path} c={c} side="conflict" conn={conn} root={root} open={openKey === "c" + c.path} onOpen={() => setOpenKey(openKey === "c" + c.path ? null : "c" + c.path)} onStage={() => void run("stage", { cmd: "stage", files: [c.path] })} />)}</Group>}

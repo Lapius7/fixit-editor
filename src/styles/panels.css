@@ -451,6 +451,16 @@ body:has(.col-grip[data-drag="true"]) iframe, body:has(.col-grip[data-drag="true
 .git-commit:disabled { opacity: .4; cursor: default; }
 .git-commit svg { width: 14px; height: 14px; stroke-width: 2; }
 .git-commit b { background: rgba(255,255,255,.25); color: #fff; }
+.git-msg-bar { display: flex; gap: 6px; }
+.git-msg-bar .git-commit { flex: 1; min-width: 0; }
+.git-ai { flex: none; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; background: var(--field); box-shadow: 0 0 0 1px var(--hair) inset; color: var(--ink-2); transition: transform calc(.12s * var(--sp)) var(--ease), color calc(.14s * var(--sp)) var(--ease), box-shadow calc(.14s * var(--sp)) var(--ease), opacity calc(.14s * var(--sp)) var(--ease); }
+.git-ai:hover:not(:disabled) { color: var(--accent); }
+.git-ai:active:not(:disabled) { transform: scale(var(--ps)); }
+.git-ai:disabled { opacity: .4; cursor: default; }
+.git-ai[data-armed="true"] { color: var(--accent); box-shadow: 0 0 0 1.5px var(--accent) inset; }
+.git-ai svg { width: 15px; height: 15px; stroke-width: 2; }
+.git-ai-note { margin: 0; font-size: 12px; line-height: 18px; color: var(--ink-2); }
+.git-msg textarea[aria-busy="true"] { color: var(--ink-2); }
 .git-new { display: flex; gap: 6px; padding: 0 2px 8px; }
 .git-new input { flex: 1; min-width: 0; height: 28px; padding-block: 0; }
 .git-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 6px 8px; }

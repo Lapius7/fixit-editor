@@ -69,6 +69,9 @@ pub fn plan(body: &[u8]) -> Result<Plan, FsError> {
             a.push(hash(&v)?);
             (a, FAST, false)
         }
+        // ステージ済みの差分をまとめて(AI でコミットメッセージを作るため)
+        "staged-stat" => (strs(&["diff", "--cached", "--no-color", "--stat=200", "--summary"]), FAST, false),
+        "staged-diff" => (strs(&["diff", "--cached", "--no-color", "-U1", "--no-ext-diff"]), FAST, false),
         "diff" => {
             let f = one_file(&v)?;
             let a = if v["hash"].is_string() {

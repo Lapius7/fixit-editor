@@ -1097,5 +1097,11 @@
   "開発者": "Developer",
   "開発者情報": "About",
   "Mac が作る .DS_Store": "\".DS_Store\" files created by macOS",
-  "Mac の Finder がフォルダごとに作るファイルです。Mac 以外では使われません。Mac では消してもすぐ作り直されるので、一覧に出さないだけにします": "macOS Finder creates this file in every folder. It is not used outside macOS. On a Mac, Finder recreates it right away, so it is only hidden there."
+  "Mac の Finder がフォルダごとに作るファイルです。Mac 以外では使われません。Mac では消してもすぐ作り直されるので、一覧に出さないだけにします": "macOS Finder creates this file in every folder. It is not used outside macOS. On a Mac, Finder recreates it right away, so it is only hidden there.",
+  "AI が使えません。設定の「AI」でプロバイダーを設定してください": "AI is not available. Set up a provider in Settings > AI.",
+  "ステージした差分を {{p}} に送ります。もう一度押すと送信します": "Your staged changes will be sent to {{p}}. Press again to send.",
+  "作成を止める": "Stop generating",
+  "AI でコミットメッセージを作る": "Write commit message with AI",
+  "問題点を探す": "Find problems",
+  "コメントを書き足す": "Add comments"
 }
