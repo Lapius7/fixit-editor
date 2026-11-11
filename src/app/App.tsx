@@ -96,6 +96,8 @@ type Dz = { pane: number; edge?: Edge }; // 落とす先: 既存の画面(edge �
 export default function App() {
   const st = useSettings();
   const [roots, setRoots] = useState<Root[]>([{ prefix: "", name: DEMO_NAME, nodes: DEMO_TREE, ref: { kind: "demo" } }]);
+  const rootsNow = useRef(roots); // 続けて足すとき(複数のフォルダのドロップ)に、最新の一覧を使うため
+  rootsNow.current = roots;
   const root = roots[0]; // タイトル・接続表示・ターミナルの既定の場所は、先頭のフォルダに合わせる
   setRootNames(roots);
   const [folded, setFolded] = useState<Set<string>>(new Set()); // 見出しを畳んでいるフォルダ
@@ -109,6 +111,8 @@ export default function App() {
   const rootOf = (n: Node) => rootOfPath(n.path);
   const updRoot = (prefix: string, f: (r: Root) => Root) => setRoots((p) => p.map((r) => (r.prefix === prefix ? f(r) : r)));
   // 見出し(フォルダそのもの)を、ツリーの項目と同じ形で扱うための項目
+  // フォルダを開いていれば、1 つだけでもフォルダ名の見出しを出す(VSCode と同じ。サンプルのときは出さない)
+  const sectioned = roots.length > 1 || (!!root.handle && root.ref.kind !== "demo");
   const headNode = (r: Root): Node => ({ name: r.name, path: r.prefix, kind: "dir", handle: r.handle });
  
  const isRootNode = (n: Node) => roots.some((r) => r.prefix === n.path);
@@ -630,7 +634,7 @@ export default function App() {
     const name = conn.path === "/" ? "/" : conn.path.split("/").pop()!;
     return { name, handle: rootHandle(conn) as unknown as FileSystemDirectoryHandle, ref: rootRefOf(conn, name, true) };
   };
-  // エクスプローラーへ、OS のフォルダ・ファイルをドロップして開く(先頭がフォルダならそのフォルダを開き、ファイルだけなら各ファイルをタブで開く)
+  // エクスプローラーへ、OS のフォルダ・ファイルをドロップして開く(フォルダはいまのフォルダに並べて足し、ファイルは各ファイルをタブで開く)
   const hasFiles = (e: React.DragEvent) => !drag.node && !drag.tab && e.dataTransfer.types.includes("Files");
   const dropExternal = async (e: React.DragEvent) => {
     setRootDrop(false); setExtDrop(false);
@@ -639,8 +643,9 @@ export default function App() {
     const items = [...e.dataTransfer.items].filter((i) => i.kind === "file");
     const hs = await Promise.all(items.map((i) => (i as unknown as { getAsFileSystemHandle?: () => Promise<FileSystemHandle | null> }).getAsFileSystemHandle?.() ?? null));
     try {
-      const dir = hs.find((h): h is FileSystemDirectoryHandle => h?.kind === "directory");
-      if (dir) { await enter(dir.name, dir, rootRefOf(undefined, dir.name, true)); return; }
+      const dirs = hs.filter((h): h is FileSystemDirectoryHandle => h?.kind === "directory");
+      for (const d of dirs) { await addRoot(d.name, d, rootRefOf(undefined, d.name, true)); await new Promise((r) => setTimeout(r)); } // 開き直したあとの一覧が反映されるのを待つ
+      if (dirs.length) return;
       const files = hs.filter((h): h is FileSystemFileHandle => h?.kind === "file");
       if (!files.length) { flash(i18next.t("ここへはドロップできません"), "error"); return; }
       for (const f of files) await open({ name: f.name, path: f.name, kind: "file", handle: f }, fp, true);
@@ -667,12 +672,14 @@ export default function App() {
     try { return await r.handle.isSameEntry(handle); } catch { return false; }
   };
   const addRoot = async (name: string, handle: FileSystemDirectoryHandle, ref: RootRef, conn?: Conn) => {
-    if (!root.handle) return enter(name, handle, ref, conn);
-    for (const r of roots) if (await sameFolder(r, ref, handle, conn)) { flash(i18next.t("既に追加されています")); return false; }
+    const cur = rootsNow.current;
+    if (!cur[0].handle) return enter(name, handle, ref, conn);
+    for (const r of cur) if (await sameFolder(r, ref, handle, conn)) { flash(i18next.t("既に追加されています")); return false; }
     try {
       const prefix = newPrefix();
       const nodes = await readDir(handle, prefix);
-      const next = [...roots, { prefix, name, handle, nodes, conn, ref }];
+      const next = [...rootsNow.current, { prefix, name, handle, nodes, conn, ref }];
+      rootsNow.current = next;
       setRoots(next);
       if (activeWs.current) {
         setWsRoots(activeWs.current, next.map((r) => ({ ref: r.ref, prefix: r.prefix })));
@@ -1264,7 +1271,7 @@ export default function App() {
           ] : []),
           { label: i18next.t("ファイル一覧を更新"), icon: ic(RotateCw), run: reload },
           { type: "sep" as const },
-          { label: i18next.t("ワークスペースから外す"), icon: ic(FolderMinus), run: () => removeRoot(rr.prefix) },
+          { label: i18next.t("ワークスペースから外す"), icon: ic(FolderMinus), run: () => removeRoot(rr.prefix), disabled: roots.length < 2 },
         ] : n ? [
           { type: "sep" as const },
           { label: i18next.t("名前の変更"), icon: ic(Pencil), run: () => rename(n) },
@@ -1525,7 +1532,7 @@ export default function App() {
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as globalThis.Node | null)) { setRootDrop(false); setExtDrop(false); } }}
                 onDrop={(e) => { if (hasFiles(e)) { void dropExternal(e); return; } setRootDrop(false); if (roots.length > 1 || !drag.node || (e.target as HTMLElement).closest(".tree-row")) return; e.preventDefault(); const m = drag.node; dragEnd(); moveTo(m, null); }}
                 onContextMenu={(e) => { if (e.target === e.currentTarget || !(e.target as HTMLElement).closest(".tree-row")) treeMenu(e, null); }}>
-                {roots.length > 1 ? roots.map((r) => {
+                {sectioned ? roots.map((r) => {
                   const h = headNode(r), shut = folded.has(r.prefix);
                   return (
                     <section key={r.prefix || "main"} className="root-sec" aria-label={r.name}>
@@ -1534,7 +1541,7 @@ export default function App() {
                         onContextMenu={(e) => { e.stopPropagation(); treeMenu(e, h); }}
                         onDragOver={(e) => { if (!canDrop(h)) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; setDropHead(r.prefix); }}
                         onDragLeave={() => setDropHead((v) => (v === r.prefix ? null : v))}
-                        onDrop={(e) => { if (!canDrop(h)) return; e.preventDefault(); e.stopPropagation(); setDropHead(null); const m = drag.node!; dragEnd(); moveTo(m, h); }}>
+                        onDrop={(e) => { if (!canDrop(h)) return; e.preventDefault(); e.stopPropagation(); setDropHead(null); const m = drag.node!; dragEnd(); moveTo(m, roots.length > 1 ? h : null); }}>
                         <ChevronRight className="chev" data-open={!shut} />
                         <Folder className="ico folder" />
                         <span className="truncate">{r.name}</span>
@@ -1555,7 +1562,7 @@ export default function App() {
                 ) : (
                   <FileTree nodes={root.nodes} activePath={act[fp]} ctxPath={menu?.path ?? null} rev={rev} onOpen={(n, pin) => openOrFocus(n, !!pin)} onContext={(e, n) => treeMenu(e, n)} onMove={moveTo} />
                 )}
-                {roots.length === 1 && <DropGhost on={rootDrop && !!drag.node} depth={0} />}
+                {roots.length === 1 && <DropGhost on={rootDrop && !!drag.node} depth={sectioned ? 1 : 0} />}
               </nav>
               <div className="side-foot">
                 <button className="open-btn" onClick={openFolder} disabled={!supportsFs()} title={supportsFs() ? "" : i18next.t("このブラウザではフォルダを開けません(Chrome か Edge を使ってください)")}>
