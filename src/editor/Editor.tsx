@@ -28,6 +28,18 @@ type Props = { path?: string;
 // タブを切り替えても、元に戻す履歴やカーソル位置が残るようにする
 const cache = new Map<string, EditorState>();
 export const dropStates = (match: (key: string) => boolean) => { for (const k of [...cache.keys()]) if (match(k)) cache.delete(k); };
+// ワークスペースに残すカーソル位置(パス → 文書の先頭からの位置)。開いている画面と、切り替えて残した状態の両方から集める
+const live = new Map<string, EditorView>();
+const seeds = new Map<string, number>();
+const pathOf = (key: string) => key.slice(key.indexOf(":") + 1);
+export const cursorsNow = (): Record<string, number> => {
+  const out: Record<string, number> = {};
+  for (const [k, st] of cache) out[pathOf(k)] = st.selection.main.head;
+  for (const [k, v] of live) out[pathOf(k)] = v.state.selection.main.head;
+  return out;
+};
+// 開き直したとき、最初に作る状態でカーソルをそこへ置く(1 回だけ使う)
+export const seedCursors = (m: Record<string, number> | undefined) => { seeds.clear(); for (const [p, h] of Object.entries(m ?? {})) if (Number.isFinite(h)) seeds.set(p, h); };
 
 // 状態を使い回すので、Compartment は全体で共通にする
 const LANG = new Compartment(), DYN = new Compartment(), EMMET = new Compartment();
@@ -48,8 +60,10 @@ export default function Editor({ path, docKey, name, value, onChange, onCursor, 
 
   useEffect(() => {
     const cached = cache.get(docKey);
+    const seed = cached ? undefined : seeds.get(pathOf(docKey));
+    if (seed !== undefined) seeds.delete(pathOf(docKey));
     const state = cached && cached.doc.toString() === value ? cached : EditorState.create({
-      doc: value,
+      doc: value, ...(seed !== undefined ? { selection: { anchor: Math.min(Math.max(seed, 0), value.length) } } : {}),
       extensions: [
         history(), fileName.of(name), filePath.of(docKey.slice(docKey.indexOf(":") + 1)), DYN.of(dynamic(st)), LANG.of([]), EMMET.of([]), fixitTheme, fixitSearch, power,
         keymap.of(keys),
@@ -92,11 +106,13 @@ export default function Editor({ path, docKey, name, value, onChange, onCursor, 
     // 描画が止まる(Crumbs・StatusPop が view を受け取るため)。たどられないよう、observer だけ列挙の対象から外す(動作には関係しない)
     try { Object.defineProperty(v, "observer", { enumerable: false }); } catch { /* 外せなくても動作は同じ */ }
     view.current = v; setVw(v);
+    live.set(docKey, v);
+    if (seed !== undefined) requestAnimationFrame(() => v.dispatch({ effects: EditorView.scrollIntoView(v.state.selection.main.head, { y: "center" }) }));
     cb.current.onReady(v);
     // 切り替え直後のカーソル情報を状態バーへ
     const m = v.state.selection.main, l = v.state.doc.lineAt(m.head);
     cb.current.onCursor({ l: l.number, c: m.head - l.from + 1, sel: 0, lines: v.state.doc.lines });
-    return () => { clearTimeout(verT.current); setVw(null); cache.set(docKey, v.state); cb.current.onReady(null); v.destroy(); };
+    return () => { clearTimeout(verT.current); setVw(null); cache.set(docKey, v.state); if (live.get(docKey) === v) live.delete(docKey); cb.current.onReady(null); v.destroy(); };
   }, [docKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 設定の反映(開いた直後にも一度流す)

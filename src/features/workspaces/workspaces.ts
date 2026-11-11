@@ -14,6 +14,8 @@ export type WsState = {
   lay?: Lay; // 画面の分け方(なければ split と設定の向き・割合から作る)
   side: boolean; panel: "files" | "search"; term: boolean; terms: TermRef[]; actTerm: number;
   g?: string[][]; // 分割時、それぞれの画面(番号ごと)に属するタブ
+  cur?: Record<string, number>; // タブごとのカーソル位置(パス → 文書の先頭からの位置)
+  pv?: { mode?: "split" | "preview"; pin?: string | null; r?: number }; // プレビューの表示・固定・幅の割合
 };
 // 複数のフォルダを同時に開くとき、2 つ目以降の道しるべ。prefix は、ツリー上のパスの先頭につく「/@xxxx」(先頭のフォルダは空)
 export type RootEntry = { ref: RootRef; prefix: string };

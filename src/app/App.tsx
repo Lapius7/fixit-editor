@@ -10,7 +10,7 @@ import { notify, type NoticeKind } from "@/shared/notify";
 import { OUTLINE_EVENT } from "@/editor/Crumbs";
 import LangUI from "@/editor/LangUI";
 import { openFiles, isScript, type Edit, type Loc } from "@/editor/ts/client";
-import Editor, { dropStates, type Cursor, type Jump } from "@/editor/Editor";
+import Editor, { dropStates, cursorsNow, seedCursors, type Cursor, type Jump } from "@/editor/Editor";
 import FileTree, { GitMarks, canDrop, type GitMark } from "@/workbench/FileTree";
 import { ColGrip, RatioGrip } from "@/workbench/ColGrip";
 import { loadBase, loadGit, type GitInfo } from "@/features/git/git";
@@ -517,6 +517,8 @@ export default function App() {
   /* ---------- ワークスペース ---------- */
   const snapshot = (): WsState => ({
     tabs: tabs.map((t) => t.node.path), ...savedPanes(), side, panel, term: term && alive().length > 0,
+    cur: (() => { const c = cursorsNow(), keep = new Set(tabs.map((t) => t.node.path)); return Object.fromEntries(Object.entries(c).filter(([k]) => keep.has(k))); })(),
+    pv: { mode: pvMode, pin: pvPin, r: pvR },
     terms: st.wsTerms ? alive().map((x) => ({ name: x.name, cwd: x.cwd ?? (x.shell ? undefined : root.conn?.path), shell: x.shell, label: x.label, host: x.host })) : [],
     actTerm: Math.max(0, alive().findIndex((x) => x.id === actT)),
   });
@@ -539,7 +541,7 @@ export default function App() {
     clearTimeout(wsTimer.current);
     wsTimer.current = setTimeout(() => flushRef.current(), st.wsDelay);
     return () => clearTimeout(wsTimer.current);
-  }, [tabs, act, fp, lay, grp, side, panel, term, sess, st.wsDelay, st.wsTerms]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tabs, act, fp, lay, grp, side, panel, term, sess, pvMode, pvPin, pvR, cur, st.wsDelay, st.wsTerms]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const f = () => flushRef.current();
     addEventListener("pagehide", f);
@@ -580,6 +582,7 @@ export default function App() {
       tabs.forEach(revoke); dropStates(() => true);
       setRoots(specs.map((x, i) => (x.handle ? { prefix: x.prefix, name: x.name, handle: x.handle, nodes: lists[i], conn: x.conn, ref: x.ref } : { prefix: "", name: DEMO_NAME, nodes: DEMO_TREE, ref: { kind: "demo" } as RootRef })));
       setFolded(new Set());
+      seedCursors(hit?.cur);
       setTabs(restored);
       const has = (p: string | null | undefined) => !!p && restored.some((t) => t.node.path === p);
       const L: Lay = hit?.split && restored.length > 0 ? (hit.lay && validLay(hit.lay) ? hit.lay : fromPair(true, st.splitDir as Dir, st.splitRatio)) : LEAF0;
@@ -594,6 +597,9 @@ export default function App() {
       setLay(L); setAct(nextAct); setGrp(nextGrp); setBorn({});
       setFp(hit && ids.includes(hit.fp) ? hit.fp : ids[0]);
       if (hit) { setSide(hit.side); setPanel(hit.panel === "search" ? "files" : hit.panel); }
+      setPvMode(hit?.pv?.mode === "split" || hit?.pv?.mode === "preview" ? hit.pv.mode : undefined);
+      setPvPin(hit?.pv?.pin && has(hit.pv.pin) ? hit.pv.pin : null);
+      if (typeof hit?.pv?.r === "number" && hit.pv.r > 0.1 && hit.pv.r < 0.9) setPvR(hit.pv.r);
       // ターミナル: 開き直したシェルを、同じ場所で立ち上げる
       setSess([]);
       const list = hit && st.wsTerms ? hit.terms.slice(0, st.termMax) : [];
