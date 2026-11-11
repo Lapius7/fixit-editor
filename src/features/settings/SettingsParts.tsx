@@ -107,7 +107,8 @@ function FontSelect({ d, value, onChange }: { d: AnyDef; value: string; onChange
     return l.sort((a, b) => Number(b.mono) - Number(a.mono) || a.name.localeCompare(b.name));
   }, [fonts, monoOnly, needle]);
   const pick = (v: string) => { if (v !== value) onChange(v); setOpen(false); btn.current?.focus(); };
-  const fam = (n: string) => `"${n.replace(/["\\\n]/g, "")}"`;
+  // 一覧の見本は、設定で実際に使う書体の指定で描く(画面の文字の設定に引きずられないよう、var(--font-sans) には頼らない)
+  const look = (v: string) => (d as { fmt?: (v: string) => string }).fmt?.(v) || undefined;
 
   return (
     <>
@@ -120,14 +121,14 @@ function FontSelect({ d, value, onChange }: { d: AnyDef; value: string; onChange
           {d.mono && <label className="fp-mono"><input type="checkbox" checked={monoOnly} onChange={(e) => setMonoOnly(e.target.checked)} />{i18next.t("等幅だけ出す")}</label>}
           <ul className="fp-list overscroll-contain" role="listbox">
             {!needle && presets.map(([k, t]) => (
-              <li key={k} role="option" aria-selected={k === value} className="ctx-item" onClick={() => pick(k)}><span className="ctx-label">{i18next.t(t)}</span>{k === value && <Check aria-hidden />}</li>
+              <li key={k} role="option" aria-selected={k === value} className="ctx-item" onClick={() => pick(k)}><span className="ctx-label" style={{ fontFamily: look(k) }}>{i18next.t(t)}</span>{k === value && <Check aria-hidden />}</li>
             ))}
             {!needle && <li className="fp-sep" role="presentation">{i18next.t("この PC のフォント")}</li>}
             {!fonts && <li className="fp-note" role="presentation">{i18next.t("読み込み中…")}</li>}
             {fonts && !shown.length && <li className="fp-note" role="presentation">{i18next.t("見つかりません")}</li>}
             {shown.map((f) => {
               const v = LOCAL + f.name;
-              return <li key={f.name} role="option" aria-selected={v === value} className="ctx-item" onClick={() => pick(v)}><span className="ctx-label" style={{ fontFamily: `${fam(f.name)}, var(--font-sans)` }}>{f.name}</span>{v === value && <Check aria-hidden />}</li>;
+              return <li key={f.name} role="option" aria-selected={v === value} className="ctx-item" onClick={() => pick(v)}><span className="ctx-label" style={{ fontFamily: look(v) }}>{f.name}</span>{v === value && <Check aria-hidden />}</li>;
             })}
           </ul>
         </div>, document.body)}

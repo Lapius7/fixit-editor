@@ -212,6 +212,8 @@ html.theme-fade, html.theme-fade * { transition: background-color calc(.45s * va
 /* フィードバック */
 .dlg.fb { width: min(520px, calc(100vw - 32px)); padding: 18px 20px 14px; }
 .dlg.fb .seg { margin-bottom: 10px; }
+.dlg.fb .field[aria-invalid="true"] { box-shadow: 0 0 0 2px #d93b3b inset; }
+.dlg.fb .btn:disabled { opacity: .45; }
 .dlg.fb .fb-text { display: block; height: 160px; padding: 10px 12px; margin-bottom: 8px; resize: none; line-height: 22px; font: inherit; color: inherit; overscroll-behavior: contain; }
 .dlg.fb .fb-note { margin: 10px 0 0; color: var(--ink-3); font-size: 11px; line-height: 16px; }
 .up-ver { margin: 4px 0 10px; font-size: 13px; line-height: 20px; color: var(--ink-2); }

@@ -828,7 +828,6 @@
   "要望": "Request",
   "その他": "Other",
   "困っていること、直してほしいこと、あったらうれしい機能など": "What's bothering you, what to fix, features you'd like…",
-  "連絡先(任意。返事がほしいときだけ)": "Contact (optional; only if you want a reply)",
   "送るのは、ここに書いた内容と、アプリの版・OS・言語だけです。ファイルの中身や名前、パスは送りません。": "Only what you write here and the app version, OS and language are sent. File contents, names and paths are never sent.",
   "送る": "Send",
   "送っています…": "Sending…",
@@ -919,7 +918,6 @@
   "確認コードの有効期限が切れました。もう一度お試しください": "The confirmation code expired. Please try again",
   "設定・プロファイル・ワークスペースを同期する": "Sync settings, profiles and workspaces",
   "{{name}} のアカウントに紐づけて送ります。返信はここで読めます": "Sent linked to the account of {{name}}. You can read replies here",
-  "ログインしていないので、匿名で送ります。返信がほしいときは、設定の「アカウント」からログインしてください。": "You are not logged in, so this is sent anonymously. To get a reply, log in from Account in Settings.",
   "ログイン中に送ったフィードバックが、ここに並びます。": "Feedback you send while logged in appears here.",
   "新しく送る": "Send new",
   "送ったもの・返信": "Sent and replies",
@@ -1058,5 +1056,9 @@
   "{{name}} は画像として読めないため、添えられません": "{{name}} can't be read as an image, so it can't be attached",
   "画像を添えられるのは {{n}} 枚までです": "You can attach up to {{n}} images",
   "画像: {{name}}": "Image: {{name}}",
-  "画像を選んで、質問と一緒に送ります。貼り付けやドロップでも添えられます": "Choose images to send with your question. You can also paste or drop them."
+  "画像を選んで、質問と一緒に送ります。貼り付けやドロップでも添えられます": "Choose images to send with your question. You can also paste or drop them.",
+  "メールアドレス(任意。返事がほしいときだけ)": "Email (optional, only if you want a reply)",
+  "メールアドレス": "Email address",
+  "ログインしていないので、匿名で送ります。返事がほしいときは、メールアドレスを書くか、設定の「アカウント」からログインしてください。": "You are not logged in, so this is sent anonymously. If you want a reply, enter your email or log in from Account in Settings.",
+  "{{name}} を大きく見る": "View {{name}} larger"
 }

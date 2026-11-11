@@ -15,7 +15,7 @@ export const useReplies = (): View => useSyncExternalStore((f) => (subs.add(f), 
 export async function loadReplies(): Promise<void> {
   if (!getAccount()) { view = { items: [], unread: 0, loaded: false }; subs.forEach((f) => f()); return; }
   try {
-    const r = await authFetch(MY_FEEDBACK_URL);
+    const r = await authFetch(MY_FEEDBACK_URL, { cache: "no-store" });
     if (r && r.ok) set((await r.json()) as MyFeedback[]);
   } catch { /* 次の周期でやり直す */ }
 }

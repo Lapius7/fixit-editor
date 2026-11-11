@@ -91,7 +91,7 @@ export default function Connect({ current, adding, onConnect, onClose, out }: Pr
   };
 
   return (
-    <div className="qo-backdrop" data-mid data-closing={closing || !!out} onMouseDown={() => close()}>
+    <div className="qo-backdrop" data-mid data-closing={closing || !!out}>
       <div className="qo dlg cn" role="dialog" aria-label={adding ? i18next.t("WSL・SSH のフォルダを追加") : i18next.t("WSL・SSH に接続")} onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => { if (e.key === "Escape") close(); else if (e.key === "Enter" && !busy) { e.preventDefault(); go(); } }}>
         <h2>{adding ? i18next.t("WSL・SSH のフォルダを追加") : i18next.t("WSL・SSH のフォルダを開く")}</h2>

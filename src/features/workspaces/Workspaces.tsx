@@ -100,7 +100,7 @@ export default function Workspaces({ initial, curId, saveName, max, onOpen, onSa
   );
 
   return (
-    <div className="qo-backdrop" data-mid data-closing={closing || !!out} onMouseDown={close}>
+    <div className="qo-backdrop" data-mid data-closing={closing || !!out}>
       <div className="qo dlg ws" role="dialog" aria-label={i18next.t("ワークスペースとプロファイル")} onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => { if (e.key === "Escape" && !ren) close(); }}>
         <div className="seg ws-seg" role="group" aria-label={i18next.t("種類")}>

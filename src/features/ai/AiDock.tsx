@@ -16,6 +16,7 @@ import { MAX_OPEN_BYTES } from "@/shared/config";
 import { ms } from "@/features/settings/settings";
 import { getAi, hasEffort, ready, PROVIDER_NAME, setConsent, useAi, useLink, type Provider } from "@/features/ai/store";
 import { ModelPicker } from "@/features/ai/ModelPicker";
+import { ImgPeek, type Peek } from "@/features/ai/ImgPeek";
 import { refreshLink } from "@/features/ai/link";
 import { deleteChat, clearChats, getChats, newChatId, saveChat, setCurChat, useChats, type Chat } from "@/features/ai/chats";
 
@@ -85,6 +86,7 @@ export function AiDock({ open, job, quote, resolve, getCtx, onClose, onSettings 
   const [msgs, setMsgs] = useState<M[]>(init.current.msgs);
   const [text, setText] = useState("");
   const [attach, setAttach] = useState(false);
+  const [peek, setPeek] = useState<Peek | null>(null);
   const [clips, setClips] = useState<Clip[]>([]);
   const [over, setOver] = useState(false);
   const [imgs, setImgs] = useState<AiImage[]>([]);
@@ -285,7 +287,7 @@ export function AiDock({ open, job, quote, resolve, getCtx, onClose, onSettings 
         ) : !msgs.length ? (
           <p className="ai-empty-t">{i18next.t("質問を入力してください。コードについて聞くときは、下の「コードを添える」をオンにします。画像は、貼り付けやドロップで添えられます。エディタを右クリックして「AI」から、要約・翻訳・説明もできます")}</p>
         ) : msgs.map((m) => m.role === "user"
-          ? <div key={m.id} className="ai-u">{m.imgs && <div className="ai-u-imgs">{m.imgs.map((i, k) => <img key={k} src={imgSrc(i)} alt={i.name} title={i.name} />)}</div>}<p>{m.label}</p>{m.ctx && <small>{m.ctx}</small>}</div>
+          ? <div key={m.id} className="ai-u">{m.imgs && <div className="ai-u-imgs">{m.imgs.map((i, k) => <button key={k} className="ai-pic-open" title={i.name} aria-label={i18next.t("{{name}} を大きく見る", { name: i.name })} onClick={() => setPeek({ src: imgSrc(i), name: i.name })}><img src={imgSrc(i)} alt="" /></button>)}</div>}<p>{m.label}</p>{m.ctx && <small>{m.ctx}</small>}</div>
           : <Reply key={m.id} m={m} onReplace={replace} onCopy={copy} />)}
       </div>
       {pending && (
@@ -304,9 +306,9 @@ export function AiDock({ open, job, quote, resolve, getCtx, onClose, onSettings 
           {clips.length + imgs.length > 0 && (
             <div className="ai-clips" role="list" aria-label={i18next.t("添えた資料")}>
               {imgs.map((p) => (
-                <span key={p.id} className="ai-clip" data-img role="listitem" title={p.name}>
-                  <img src={imgSrc(p)} alt="" /><span className="truncate">{p.name}</span>
-                  <button className="icon-btn" aria-label={i18next.t("外す")} onClick={() => setImgs((a) => a.filter((x) => x.id !== p.id))}><X /></button>
+                <span key={p.id} className="ai-pic" role="listitem">
+                  <button className="ai-pic-open" title={p.name} aria-label={i18next.t("{{name}} を大きく見る", { name: p.name })} onClick={() => setPeek({ src: imgSrc(p), name: p.name })}><img src={imgSrc(p)} alt="" /></button>
+                  <button className="icon-btn ai-pic-x" aria-label={i18next.t("外す")} title={i18next.t("外す")} onClick={() => setImgs((a) => a.filter((x) => x.id !== p.id))}><X /></button>
                 </span>
               ))}
               {clips.map((c) => (
@@ -338,6 +340,7 @@ export function AiDock({ open, job, quote, resolve, getCtx, onClose, onSettings 
           </div>
         </div>
       )}
+      {peek && <ImgPeek img={peek} onClose={() => setPeek(null)} />}
       <div className="ai-drop" aria-hidden="true"><FileDown size={22} /><strong>{i18next.t("ここにドロップして添える")}</strong><small>{i18next.t("ファイルの中身や画像を、質問と一緒に送ります")}</small></div>
     </aside>
   );

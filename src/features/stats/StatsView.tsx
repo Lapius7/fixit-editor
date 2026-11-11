@@ -38,7 +38,7 @@ export default function StatsView({ onClose, out }: { onClose: () => void; out?:
   const langSum = Math.max(1, sm.langs.reduce((a, x) => a + x[1], 0));
   const peak = sm.hours.some((v) => v > 0) ? sm.hours.indexOf(Math.max(...sm.hours)) : -1;
   return (
-    <div className="qo-backdrop" data-mid data-closing={closing || !!out} onMouseDown={close}>
+    <div className="qo-backdrop" data-mid data-closing={closing || !!out}>
       <div className="qo dlg stats" role="dialog" aria-label={i18next.t("統計")} onMouseDown={(e) => e.stopPropagation()}>
         <header className="st-head">
           <h2><Trans i18nKey="統計" /></h2>

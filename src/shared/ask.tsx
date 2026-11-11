@@ -1,5 +1,5 @@
 // OS 標準の confirm() の代わりの確認ダイアログ。await ask({ message }) で、続けるなら true を返す。
-// 表示は <AskHost /> が 1 つだけ受け持つ(boot.tsx で置く)。Enter で決定、Esc と外側のクリックでやめる。
+// 表示は <AskHost /> が 1 つだけ受け持つ(boot.tsx で置く)。Enter で決定、Esc か「やめる」でやめる(外側のクリックでは閉じない)。
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import i18next from "i18next";
 import { ms } from "@/features/settings/settings";
@@ -43,7 +43,7 @@ export function AskHost() {
   });
   if (!cur) return null;
   return (
-    <div className="qo-backdrop ask-layer" data-mid="true" data-closing={closing} onMouseDown={() => done(false)}>
+    <div className="qo-backdrop ask-layer" data-mid="true" data-closing={closing}>
       <div className="qo dlg ask" role="alertdialog" aria-modal="true" aria-labelledby="ask-t" aria-describedby="ask-m" onMouseDown={(e) => e.stopPropagation()}>
         <h2 id="ask-t">{cur.title ?? i18next.t("確認")}</h2>
         <p id="ask-m">{cur.message}</p>

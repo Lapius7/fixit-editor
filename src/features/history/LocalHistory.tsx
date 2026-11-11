@@ -22,7 +22,7 @@ export default function LocalHistory({ path, name, current, onRestore, onClose, 
   const stats = useMemo(() => list.map((x) => stat(x.text)), [list, current]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="qo-backdrop" data-mid data-closing={closing || !!out} onMouseDown={() => close()}>
+    <div className="qo-backdrop" data-mid data-closing={closing || !!out}>
       <div className="qo dlg lh" role="dialog" aria-label={i18next.t("ローカル履歴")} onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === "Escape") close(); }}>
         <h2><History size={16} />{i18next.t("ローカル履歴")}<span className="lh-name">{name}</span></h2>
         {list.length ? (

@@ -24,7 +24,7 @@ export default function UpdateView({ m, onClose, out }: { m: Manifest; onClose: 
     else notify(i18next.t("更新できませんでした。ネットワークを確かめて、もう一度試してください"), "error");
   };
   return (
-    <div className="qo-backdrop" data-mid data-closing={closing || !!out} onMouseDown={close}>
+    <div className="qo-backdrop" data-mid data-closing={closing || !!out}>
       <div className="qo dlg fb" role="dialog" aria-label={i18next.t("新しい版があります")} onMouseDown={(e) => e.stopPropagation()}>
         <header className="st-head">
           <h2><Trans i18nKey="新しい版があります" /></h2>

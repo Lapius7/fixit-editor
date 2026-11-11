@@ -57,6 +57,7 @@ export const LINK_URL = `${API_BASE}/api/me/link`; // ログイン前の利用�
 export const SYNC_POLL_MS = 60_000; // 他の端末の変更を見に行く間隔
 export const SYNC_PUSH_DELAY_MS = 4_000; // 変更が止まってから送るまでの待ち
 export const REPLY_POLL_MS = 5 * 60_000; // フィードバックの返信を見に行く間隔
+export const REPLY_OPEN_POLL_MS = 30_000; // フィードバックの画面を開いている間に、返信や削除を見に行く間隔
 export const USAGE_STORE_KEY = "fixit:usage-sent:v1";
 export const TELEMETRY_STORE_KEY = "fixit:telemetry:v1";
 

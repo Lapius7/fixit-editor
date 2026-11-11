@@ -12,7 +12,7 @@ export default function Dialog({ title, desc, input, placeholder, ok, danger, va
   const submit = () => { if (!err && (input === undefined || v.trim())) close(() => onSubmit(v.trim())); };
 
   return (
-    <div className="qo-backdrop" data-mid data-closing={closing || !!out} onMouseDown={() => close()}>
+    <div className="qo-backdrop" data-mid data-closing={closing || !!out}>
       <div className="qo dlg" role="dialog" aria-label={title} onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => { if (e.key === "Escape") close(); else if (e.key === "Enter") { e.preventDefault(); submit(); } }}>
         <h2>{title}</h2>
