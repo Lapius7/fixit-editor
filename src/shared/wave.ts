@@ -13,6 +13,10 @@ if (typeof window !== "undefined") addEventListener("pointerdown", (e) => { last
 const RECENT = 4000; // ms。これより前に押した位置は使わない
 const SOURCE = 56; // 波の出る所の大きさ(CSS px)。原作の「中央から」の型の丸ボタンに合わせる
 export const WINDOW_CORNER = 12; // 窓の角の丸み(CSS px)。縁の色はこの形に沿う
+// 原作の見本は 375×509 の枠の中で、ボタンから一番遠い角まで約 500px を広がる。
+// 窓は広いので、同じ時間だと波が速く見える。一番遠い角までの距離に合わせて時間を伸ばし、進む速さを原作に近づける
+const REF_REACH = 500; // CSS px
+const MAX_STRETCH = 2.2; // 伸ばすのはここまで(1920×1080 の中央からで約 9 秒)
 
 // 原作の「中央から」の型。色だけ、原作の見本の虹色(colorful)にする
 export const WAVE_STYLE: WaveStyle = { ...defaultStyle("center"), palette: PALETTES.colorful, cornerRadius: WINDOW_CORNER };
@@ -27,13 +31,14 @@ export const origin = (): Pt => (last && performance.now() - last.at < RECENT ? 
 // 波を出す。at を省くと、直前に押した位置(なければ画面の中央)から出す
 export function wave(at?: Pt) {
   const s = WAVE_STYLE;
-  const total = duration(s); // 秒
-  const dur = ms(total * 1000);
+  const o = at ?? origin();
+  const reach = Math.max(Math.hypot(o.x, o.y), Math.hypot(innerWidth - o.x, o.y), Math.hypot(o.x, innerHeight - o.y), Math.hypot(innerWidth - o.x, innerHeight - o.y));
+  const stretch = Math.min(Math.max(reach / REF_REACH, 1), MAX_STRETCH);
+  const dur = ms(duration(s) * 1000 * stretch);
   if (dur <= 0 || reduced()) return;
   running?.();
   const ov = Overlay.make();
   if (!ov) return;
-  const o = at ?? origin();
   const src: Rect = { x: o.x - SOURCE / 2, y: o.y - SOURCE / 2, w: SOURCE, h: SOURCE };
   ov.canvas.className = "fx-wave";
 
