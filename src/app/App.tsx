@@ -162,13 +162,14 @@ export default function App() {
   type PvMode = "split" | "preview"; // 表示の切り替え: なし = テキストだけ / split = 両方 / preview = プレビューだけ
   const pvSeen = useRef(new Set<string>()); // 一度プレビューを開いたファイル(閉じる動きの間も中身を残す)
   const [pvR, setPvR] = useState(0.5); // エディタとプレビューを並べたときの、エディタの幅の割合
-  const [pv, setPv] = useState<Record<string, PvMode | undefined>>({}); // プレビュー形式のファイルの表示(パス → 表示)
+  const [pvMode, setPvMode] = useState<PvMode | undefined>(); // プレビューの表示(全体で1つ)。オンの間は、ほかのタブへ移っても、そのファイルのプレビューを出す
+  const pv = (path: string) => (previewKind(path) ? pvMode : undefined);
   const [pvPin, setPvPin] = useState<string | null>(null); // 固定したプレビュー(パス)。同じ画面でほかのファイルを開いている間も横に出し続ける(CSS・JS を直しながら見るため)
-  useEffect(() => { if (pvPin && (!pv[pvPin] || !tabs.some((t) => t.node.path === pvPin))) setPvPin(null); }, [pvPin, pv, tabs]);
+  useEffect(() => { if (pvPin && (!pvMode || !tabs.some((t) => t.node.path === pvPin))) setPvPin(null); }, [pvPin, pvMode, tabs]);
   useEffect(() => { if (IS_TAURI) void listShells(); }, []); // 右クリックのメニューで、シェルの一覧を待たずに出せるように
   const pvTools = (path: string) => {
-    const cur = pv[path], on = cur !== undefined, wide = cur === "preview", key = chips(K("togglePreview")).join(" ");
-    const set = (m: PvMode | undefined) => setPv((p) => ({ ...p, [path]: m }));
+    const cur = pv(path), on = cur !== undefined, wide = cur === "preview", key = chips(K("togglePreview")).join(" ");
+    const set = (m: PvMode | undefined) => setPvMode(m);
     return (
       <span className="pv-tools" data-open={on}>
         {on && <button className="icon-btn bc-btn" data-on={pvPin === path} aria-pressed={pvPin === path} aria-label={pvPin === path ? i18next.t("プレビューの固定を外す") : i18next.t("プレビューを固定")} data-tip={pvPin === path ? i18next.t("プレビューの固定を外す") : i18next.t("プレビューを固定")} data-tip-sub={pvPin === path ? undefined : i18next.t("ほかのファイルを開いている間も、このプレビューを横に出し続けます")} onClick={() => { setPvPin((q) => (q === path ? null : path)); setPreview((q) => (q === path ? null : q)); }}><Pin /></button>}
@@ -1008,7 +1009,7 @@ export default function App() {
   };
   const fileExtras = (n: Node) => [
     ...(isImageName(n.name) ? [{ label: i18next.t("画像をコピー"), icon: ic(ImageIcon), run: () => void copyImg(n) }] : []),
-    ...(previewKind(n.name) ? [{ label: i18next.t("プレビューで開く"), icon: ic(Eye), run: () => { openOrFocus(n); setPv((p) => ({ ...p, [n.path]: "preview" })); } }] : []),
+    ...(previewKind(n.name) ? [{ label: i18next.t("プレビューで開く"), icon: ic(Eye), run: () => { openOrFocus(n); setPvMode("preview"); } }] : []),
     ...(!isImageName(n.name) && !/\.(pdf|mp3|wav|ogg|m4a|flac|aac|mp4|webm|mov|m4v|docx)$/i.test(n.name) ? [{ label: i18next.t("中身をコピー"), icon: ic(ClipboardCopy), run: () => void copyBody(n) }] : []),
   ];
 
@@ -1238,7 +1239,7 @@ export default function App() {
       newTerm: () => addTerm(), runFile, closeTerm: () => alive().length && endTerm(actT), nextTerm: () => stepTerm(1), prevTerm: () => stepTerm(-1),
       renameTerm: () => { if (alive().length) { showTerm(true); setRenaming(actT); } }, clearTerm: () => apis.current.get(actT)?.clear(),
       aiQuote: () => { const v = views.current[fp]; if (v) quoteToAi(v); },
-      toggleSide: () => setSide((v) => !v), themePanel: () => setTp((v) => !v), stats: () => setStatsOpen(true), toggleTerm: () => showTerm(), toggleBrowser: () => setBr((v) => !v), toggleAi: () => setAi((v) => !v), togglePreview: () => { if (tab && previewKind(tab.node.name)) setPv((p) => ({ ...p, [tab.node.path]: p[tab.node.path] === undefined ? "split" : p[tab.node.path] === "split" ? "preview" : undefined })); }, toggleSplit,
+      toggleSide: () => setSide((v) => !v), themePanel: () => setTp((v) => !v), stats: () => setStatsOpen(true), toggleTerm: () => showTerm(), toggleBrowser: () => setBr((v) => !v), toggleAi: () => setAi((v) => !v), togglePreview: () => { if (tab && previewKind(tab.node.name)) setPvMode((m) => (m === undefined ? "split" : m === "split" ? "preview" : undefined)); }, toggleSplit,
       otherPane: () => { if (split) { const n = otherOf(); setFp(n); setTimeout(() => views.current[n]?.focus(), 0); } },
       swapPanes, splitDir: flipDir, closePane,
       moveTab: () => { if (tab) sendTo(tab.node, otherOf(), true); },
@@ -1684,8 +1685,8 @@ export default function App() {
   };
   const pane = (i: number) => {
     const t = tabOf(act[i]);
-    // 固定したプレビュー: そのファイルがこの画面にあり、いま開いているファイル自身のプレビューを出していないときに、横に出す
-    const pin = t && t.view.kind === "text" && pvPin && pvPin !== t.node.path && mem(i, pvPin) && !(previewKind(t.node.name) && pv[t.node.path]) ? tabOf(pvPin) : null;
+    // 固定したプレビュー: そのファイルがこの画面にあれば、ほかのファイルを開いている間も横に出す(固定していないときは、開いたファイル自身のプレビューを出す)
+    const pin = t && t.view.kind === "text" && pvPin && pvPin !== t.node.path && mem(i, pvPin) ? tabOf(pvPin) : null;
     const pvt = pin ?? (t && previewKind(t.node.name) ? t : null); // 横に出すプレビューのファイル
     return (
       <div className={onTop(lay, i) ? "paper" : "paper has-strip"} data-focus={fp === i} onMouseDown={() => setFp(i)} onContextMenu={(e) => { if (!t) stageMenu(e); }}>
@@ -1703,7 +1704,7 @@ export default function App() {
             )}
           </div>
         ) : t.view.kind === "text" ? (
-          <div className="ed-pv" data-pv={pin ? "split" : previewKind(t.node.name) ? pv[t.node.path] ?? "text" : "text"} style={{ "--pv-r": pvR, "--pv-a": `${pvR}fr`, "--pv-b": `${1 - pvR}fr` } as React.CSSProperties}>
+          <div className="ed-pv" data-pv={pin ? "split" : previewKind(t.node.name) ? pv(t.node.path) ?? "text" : "text"} style={{ "--pv-r": pvR, "--pv-a": `${pvR}fr`, "--pv-b": `${1 - pvR}fr` } as React.CSSProperties}>
           <Editor
           crumbExtra={pin ? (
               <span className="pv-tools" data-open>
@@ -1715,11 +1716,11 @@ export default function App() {
             onCursor={(c) => setCur((p) => ({ ...p, [i]: c }))}
             onFocus={() => setFp(i)} onReady={(v) => { views.current[i] = v; }} onContext={editorMenu} gitBase={bases[t.node.path]}
           />
-          {previewKind(t.node.name) && pv[t.node.path] === "preview" && <div className="pv-float">{pvTools(t.node.path)}</div>}
-          {(pin || (previewKind(t.node.name) && pv[t.node.path] === "split")) && <RatioGrip ratio={pvR} onChange={setPvR} />}
+          {previewKind(t.node.name) && pv(t.node.path) === "preview" && <div className="pv-float">{pvTools(t.node.path)}</div>}
+          {(pin || (previewKind(t.node.name) && pv(t.node.path) === "split")) && <RatioGrip ratio={pvR} onChange={setPvR} />}
           {pvt && (
-            <div className="pv-pane" inert={!pin && !pv[t.node.path]}>
-              {(pin || pv[pvt.node.path] || pvSeen.current.has(pvt.node.path)) && (pvSeen.current.add(pvt.node.path), <Preview key={pvt.node.path} kind={previewKind(pvt.node.name)!} text={pvt.text} name={pvt.node.name} source={previewSource(pvt)} />)}
+            <div className="pv-pane" inert={!pin && !pv(t.node.path)}>
+              {(pin || pv(pvt.node.path) || pvSeen.current.has(pvt.node.path)) && (pvSeen.current.add(pvt.node.path), <Preview key={pvt.node.path} kind={previewKind(pvt.node.name)!} text={pvt.text} name={pvt.node.name} source={previewSource(pvt)} />)}
             </div>
           )}
           </div>

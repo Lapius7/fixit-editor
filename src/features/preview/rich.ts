@@ -1,12 +1,34 @@
 // Markdown のプレビューで、数式(LaTeX)と Mermaid の図を描く。重いので、使う文書のときだけ読み込む。
 // 数式は KaTeX で MathML にする(フォントや CSS を iframe に渡さなくてよい)。図は mermaid で SVG にしてから埋め込む
 import { Marked, type Tokens } from "marked";
-import markedKatex from "marked-katex-extension";
 import katex from "katex";
 import DOMPurify from "dompurify";
 
 const KATEX = { throwOnError: false, output: "mathml" as const };
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+
+// $…$ と $$…$$ の数式。pandoc と同じく、開きの $ の直後と閉じの $ の直前は空白でなく、閉じの直後は数字でないものだけを数式にする。
+// 「$5 と $10」は数式にせず、「$x$、」のように日本語の句読点が続いても数式にする
+const INLINE = /^(\${1,2})(?![\s$])((?:\\.|[^\\\n$])*?(?:\\.|[^\\\n$\s]))\1(?!\d)/;
+const BLOCK = /^\$\$[ \t]*\n((?:\\[^]|[^\\])+?)\n[ \t]*\$\$[ \t]*(?:\n|$)/;
+const tex = (src: string, display: boolean) => katex.renderToString(src, { ...KATEX, displayMode: display });
+const mathExt = {
+  extensions: [
+    {
+      name: "mathBlock", level: "block" as const,
+      tokenizer(src: string) { const m = BLOCK.exec(src); if (m) return { type: "mathBlock", raw: m[0], text: m[1].trim() }; },
+      renderer: (t: Tokens.Generic) => `<div class="math-block">${tex(t.text as string, true)}</div>`,
+    },
+    {
+      name: "mathInline", level: "inline" as const,
+      start(src: string) {
+        for (let i = src.indexOf("$"); i > -1; i = src.indexOf("$", i + 1)) if (src[i - 1] !== "\\" && INLINE.test(src.slice(i))) return i;
+      },
+      tokenizer(src: string) { const m = INLINE.exec(src); if (m) return { type: "mathInline", raw: m[0], text: m[2].trim(), display: m[1].length === 2 }; },
+      renderer: (t: Tokens.Generic) => tex(t.text as string, t.display as boolean),
+    },
+  ],
+};
 
 let seq = 0;
 // mermaid の図を SVG にする。書きかけで描けないときは、理由を出す
@@ -27,13 +49,13 @@ async function diagram(src: string, dark: boolean): Promise<string> {
 export async function richMarkdown(text: string, dark: boolean): Promise<string> {
   const charts: string[] = [];
   const md = new Marked();
-  md.use(markedKatex(KATEX));
+  md.use(mathExt);
   md.use({
     renderer: {
       code({ text: src, lang }: Tokens.Code) {
         const l = (lang ?? "").trim().split(/\s/)[0].toLowerCase();
         if (l === "mermaid") { charts.push(src); return `<div class="mmd-slot" data-i="${charts.length - 1}"></div>`; }
-        if (l === "math" || l === "latex" || l === "tex") return `<div class="math-block">${katex.renderToString(src, { ...KATEX, displayMode: true })}</div>`;
+        if (l === "math" || l === "latex" || l === "tex") return `<div class="math-block">${tex(src, true)}</div>`;
         return false;
       },
     },
