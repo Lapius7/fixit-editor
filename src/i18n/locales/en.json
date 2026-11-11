@@ -1113,5 +1113,9 @@
   "複製しています…": "Cloning…",
   "「{{name}}」フォルダに複製します": "Clones into the “{{name}}” folder",
   "中のリポジトリを探しています…": "Looking for repositories inside…",
-  "このフォルダの中のリポジトリ": "Repositories in this folder"
+  "このフォルダの中のリポジトリ": "Repositories in this folder",
+  "ドラッグで高さを変える・ダブルクリックで元の高さに戻す": "Drag to resize · double-click to reset",
+  "Git パネルの幅": "Git panel width",
+  "Git の履歴の詳細の高さ": "Git history details height",
+  "一覧との境目をドラッグしても変えられます": "You can also drag the edge next to the list"
 }

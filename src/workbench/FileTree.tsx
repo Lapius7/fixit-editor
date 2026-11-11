@@ -1,9 +1,10 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
+import i18next from "i18next";
 import { ChevronRight, FileText, FileCode2, FileJson, FileType, Folder, FolderOpen, Image as ImageIcon, Film, Music } from "lucide-react";
 import { readDir, type Node } from "@/platform/fs";
 import { useSettings } from "@/features/settings/settings";
 import { drag, dragEnd, extFiles, setDragSrc, setDropTarget, useDnd } from "@/workbench/dnd";
-import { dirOf } from "@/workbench/treeops"; import { isOpen, setOpenPath, takePrefetched } from "@/workbench/treeOpen";
+import { dirOf } from "@/workbench/treeops"; import { dropWarm, isOpen, readWarm, setOpenPath, takePrefetched, warmDir, warmKids } from "@/workbench/treeOpen";
 
 // ドラッグ中のものを、このフォルダへ移せるか(自分の中・今いる場所へは移せない)
 export const canDrop = (dest: Node) => {
@@ -37,6 +38,8 @@ export const dragChip = (e: React.DragEvent, row: HTMLElement, name: string) => 
   setTimeout(() => c.remove(), 0);
 };
 
+const SKEL = [46, 34, 40]; // 中身を読んでいる間に出す行(名前の幅 %)
+
 export type GitMark = "M" | "A" | "D" | "U" | "R" | "C" | "dir";
 export const GitMarks = createContext<(n: Node) => GitMark | undefined>(() => undefined);
 
@@ -45,6 +48,9 @@ type Props = { nodes: Node[]; activePath: string | null; ctxPath: string | null;
 export default function FileTree({ nodes: all, activePath, ctxPath, rev, onOpen, onContext, onMove, onDropFiles, depth = 0 }: Props) {
   const { showHidden, treeIndent } = useSettings();
   const nodes = showHidden ? all : all.filter((n) => !n.name.startsWith("."));
+  // いちばん上の一覧では、中のフォルダを先読みしておく。作成・削除のあとは先読みを捨てる
+  useEffect(() => { if (!depth) dropWarm(); }, [rev]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!depth) warmKids(nodes); }, [all]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <ul role={depth ? "group" : "tree"} className="m-0 list-none p-0" style={depth ? { ["--guide" as string]: `${16 + (depth - 1) * treeIndent}px` } : undefined}>
       {nodes.map((n, i) => <Item key={n.path} idx={i} n={n} activePath={activePath} ctxPath={ctxPath} rev={rev} onOpen={onOpen} onContext={onContext} onMove={onMove} onDropFiles={onDropFiles} depth={depth} />)}
@@ -76,6 +82,9 @@ function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, onDropFi
   // 開いた状態で戻ったフォルダは、中身を読み直す
   useEffect(() => { if (restored && n.handle && !pre) readDir(n.handle as FileSystemDirectoryHandle, n.path).then(setLoaded).catch(() => setOpen(false)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 開いたフォルダの中のフォルダを先読みして、次に開くときにすぐ出せるようにする
+  useEffect(() => { if (open && kids && n.handle) warmKids(kids); }, [open, kids]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 作成・削除のあとに、開いているフォルダの中身を読み直す
   useEffect(() => {
     if (isDir && n.handle && loaded) readDir(n.handle as FileSystemDirectoryHandle, n.path).then(setLoaded);
@@ -83,8 +92,10 @@ function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, onDropFi
 
   const click = async () => {
     if (!isDir) return onOpen(n);
-    if (!open && !kids && n.handle) setLoaded(await readDir(n.handle as FileSystemDirectoryHandle, n.path));
-    setOpen(!open);
+    if (open) return setOpen(false);
+    // すぐに開いた形にし、中身を読む間はフォルダの中に読み込み中の行を出す
+    setOpen(true);
+    if (!kids && n.handle) await readWarm(n).then(setLoaded, () => setOpen(false));
   };
 
   // 印は消えるときも、直前の文字のまま薄れていく(中身が空になって一瞬ちらつかないように)
@@ -123,7 +134,7 @@ function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, onDropFi
     <li role="treeitem" aria-expanded={isDir ? open : undefined} data-drop={over || undefined} {...dropProps}>
       <button className="tree-row" data-git={git} data-active={!isDir && activePath === n.path} data-ctx={ctxPath === n.path} data-src={!!(dnd & 2) || undefined} draggable
         onDragStart={(e) => { drag.node = n; e.dataTransfer.effectAllowed = "copyMove"; e.dataTransfer.setData("text/plain", n.name); dragChip(e, e.currentTarget, n.name); setTimeout(() => setDragSrc(n.path), 0); }}
-        onDragEnd={() => dragEnd()} onClick={click} onDoubleClick={() => { if (!isDir) onOpen(n, true); }}
+        onDragEnd={() => dragEnd()} onClick={click} onPointerEnter={isDir && !open && !kids ? () => void warmDir(n) : undefined} onDoubleClick={() => { if (!isDir) onOpen(n, true); }}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContext(e, n); }}
         style={{ paddingLeft: 10 + depth * indent, ["--i" as string]: idx }}>
         <ChevronRight className="chev" data-open={open} data-hidden={!isDir} />
@@ -131,6 +142,11 @@ function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, onDropFi
         <span className="truncate">{n.name}</span>
         {(git || lastGit.current) && <span className="git-badge" data-on={!!git} data-g={shownGit}>{shownGit === "dir" ? "" : shownGit}</span>}
       </button>
+      {isDir && open && !kids && n.handle && (
+        <div className="tree-skel" role="status" aria-label={i18next.t("読み込み中…")}>
+          {SKEL.map((w, i) => <div key={i} className="tree-skel-row" style={{ paddingLeft: 10 + (depth + 1) * indent, ["--i" as string]: i, ["--w" as string]: `${w}%` }}><i /><i /><b /></div>)}
+        </div>
+      )}
       {isDir && kids && (
         <div className="collapse" data-open={open && armed}>
           <div className="collapse-inner"><FileTree nodes={kids} activePath={activePath} ctxPath={ctxPath} rev={rev} onOpen={onOpen} onContext={onContext} onMove={onMove} onDropFiles={onDropFiles} depth={depth + 1} /></div>

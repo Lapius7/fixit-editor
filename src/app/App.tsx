@@ -1875,6 +1875,7 @@ export default function App() {
             {br && <BrowserDock onClose={() => setBr(false)} />}
             {ai && <ColGrip width={st.aiW} def={440} min={280} max={900} dir={-1} onChange={(w) => update({ aiW: w })} />}
             <AiDock open={ai} job={aiJob} quote={aiQuote} resolve={aiSource} onClose={() => setAi(false)} onSettings={() => setSetts("ai")} />
+            {gitOpen && <ColGrip width={st.gitW} def={440} min={280} max={900} dir={-1} onChange={(w) => update({ gitW: w })} />}
             <GitPanel open={gitOpen} conn={gitView?.conn ?? null} root={gitView?.root} dir={gitView?.dir}
               title={gitAt ? (gitAt.root ?? gitAt.dir).replace(/\/+$/, "").split("/").pop() || "/" : undefined} onBack={gitAt ? () => setGitAt(null) : undefined}
               onRepo={(d) => { void gitHere(gitView!.conn, d); setGitTick((n) => n + 1); void reload(); }} rev={gitTick} onClose={() => setGitOpen(false)} onChanged={() => { setGitTick((n) => n + 1); void syncTabs(); }} guard={() => !dirtyList.length || ask({ message: i18next.t("保存していない変更が {{length}} 件あります。ファイルが書き換わると失われることがあります。続けますか?", { length: dirtyList.length }), danger: true })} />

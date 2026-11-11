@@ -7,7 +7,7 @@ import { commitPrompt, commitSystem } from "@/features/ai/prompts";
 import { useAi } from "@/features/ai/store";
 import i18next from "i18next";
 import type { Conn } from "@/platform/remote";
-import { ms } from "@/features/settings/settings";
+import { ms, update, useSettings } from "@/features/settings/settings";
 import {
   buildGraph, gitRead, gitWrite, GitError, parseBranches, parseChanges, parseDiff, parseFiles, parseLog, remoteNames,
   type Branch, type Change, type Commit, type DiffLine, type FileChange, type GraphRow, type Status,
@@ -305,6 +305,25 @@ function CommitList({ conn, root, commits, graph, sel, onSel, loading }: { conn:
     gitRead(conn, root, { cmd: "show", hash: cur.hash }).then((o) => live && setFiles(parseFiles(o))).catch(() => live && setFiles([]));
     return () => { live = false; };
   }, [conn, root, cur?.hash]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { gitLogH } = useSettings();
+  const [drag, setDrag] = useState(false);
+  // 一覧と詳細の境目。上へ動かすと詳細が高くなる。一覧が少し残るように、パネルの 8 割までにする
+  const fit = (el: HTMLElement, h: number) => Math.round(Math.min(Math.max(96, (el.parentElement?.clientHeight ?? 600) * 0.8), Math.max(96, h)));
+  const grip = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const el = e.currentTarget;
+    el.setPointerCapture(e.pointerId);
+    const y0 = e.clientY, h0 = (el.nextElementSibling as HTMLElement | null)?.offsetHeight ?? gitLogH;
+    setDrag(true);
+    const mv = (ev: PointerEvent) => update({ gitLogH: fit(el, h0 + y0 - ev.clientY) });
+    const up = () => { el.removeEventListener("pointermove", mv); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up); setDrag(false); };
+    el.addEventListener("pointermove", mv); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+  };
+  const key = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const d = e.key === "ArrowUp" ? 1 : e.key === "ArrowDown" ? -1 : 0;
+    if (d) { e.preventDefault(); update({ gitLogH: fit(e.currentTarget, gitLogH + d * (e.shiftKey ? 40 : 10)) }); }
+  };
   if (!commits.length) return <p className="git-empty">{loading ? i18next.t("読み込み中…") : i18next.t("コミットはまだありません")}</p>;
   return (
     <>
@@ -318,8 +337,10 @@ function CommitList({ conn, root, commits, graph, sel, onSel, loading }: { conn:
           </button>
         ))}
       </div>
+      {cur && <div className="git-vgrip" role="separator" aria-orientation="horizontal" tabIndex={0} data-drag={drag} aria-valuenow={gitLogH}
+        title={i18next.t("ドラッグで高さを変える・ダブルクリックで元の高さに戻す")} onPointerDown={grip} onKeyDown={key} onDoubleClick={() => update({ gitLogH: 260 })} />}
       {cur && (
-        <div className="git-detail scroll">
+        <div className="git-detail scroll" style={{ flexBasis: gitLogH }}>
           <p className="git-detail-sub">{cur.subject}</p>
           <p className="git-detail-meta">{cur.author} · {new Date(cur.at).toLocaleString(i18next.language)} · <code>{cur.hash.slice(0, 7)}</code></p>
           {!files ? <p className="git-diff-note">{i18next.t("読み込み中…")}</p> : files.map((f) => (

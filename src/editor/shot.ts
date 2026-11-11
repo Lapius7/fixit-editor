@@ -1,7 +1,7 @@
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { LanguageDescription } from "@codemirror/language";
-import { languages } from "@codemirror/language-data";
+import { languages } from "@/editor/lang";
 import { fixitTheme } from "@/editor/theme";
 import { get, isDark } from "@/features/settings/settings";
 

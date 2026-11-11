@@ -117,6 +117,9 @@ fn pty_open(app: AppHandle, state: State<Ptys>, id: String, host: Option<String>
         if cwd.starts_with('/') { cmd.args(["--cd", &cwd]); }
         else if !cwd.is_empty() && std::path::Path::new(&win).is_dir() { cmd.args(["--cd", &win]); }
         else { cmd.args(["--cd", "~"]); }
+        // 開いたフォルダで始めたことをシェルに知らせる(起動時に cd ~ する設定を飛ばせるように)。WSLENV に足すと WSL へ渡る
+        cmd.env("FIXIT_CWD", "1");
+        cmd.env("WSLENV", wslenv());
     } else {
         let home = std::env::var_os("USERPROFILE");
         let (prog, args) = win_shell(&shell)?;
@@ -374,17 +377,24 @@ fn os_open_impl(kind: &str, host: &str, path: &str, dir: bool, what: &str, sh: &
                 (p, a, Some(winpath(&d)?))
             };
             let mut wt = Command::new("wt.exe");
+            wt.env("FIXIT_CWD", "1").env("WSLENV", wslenv());
             wt.arg("-w").arg("new");
             if let Some(c) = &cwd { wt.arg("-d").arg(c); }
             wt.arg(&shell).args(&args).creation_flags(NO_WINDOW);
             if wt.spawn().is_ok() { return Ok(()); }
             let mut c = Command::new(&shell);
             c.args(&args).creation_flags(NEW_CONSOLE);
+            c.env("FIXIT_CWD", "1").env("WSLENV", wslenv());
             if let Some(d) = &cwd { c.current_dir(d); }
             c.spawn().map(|_| ()).map_err(|e| e.to_string())
         }
         _ => Err("not allowed".into()),
     }
+}
+
+// 今の WSLENV に FIXIT_CWD を足したもの
+fn wslenv() -> String {
+    match std::env::var("WSLENV") { Ok(v) if !v.is_empty() => format!("{v}:FIXIT_CWD"), _ => "FIXIT_CWD".into() }
 }
 
 #[cfg(not(windows))]

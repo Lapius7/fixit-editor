@@ -1,7 +1,7 @@
 // ファイル一覧で開いているフォルダの記録。タブの切り替えや再起動でも、開閉の状態を保つ。
 import { kvGet, kvSet } from "@/platform/appdata";
 import { readDir, type Node } from "@/platform/fs";
-import { TREE_PREFETCH_MS } from "@/shared/config";
+import { TREE_PREFETCH_MS, TREE_WARM_MAX, TREE_WARM_MS } from "@/shared/config";
 
 const KEY = "fixit:tree-open:v1";
 const MAX = 1000;
@@ -61,4 +61,42 @@ export function shownOpen(prefix: string): string[] {
     for (let i = p.lastIndexOf("/"); i > prefix.length; i = p.lastIndexOf("/", i - 1)) if (!open.has(p.slice(0, i))) return false;
     return true;
   });
+}
+
+// 閉じたフォルダの中身を、開かれる前に読んでおく(行に指を載せたとき・親のフォルダを開いたとき)。
+// 開いたときにすぐ中身を出せるようにする。古くなった中身は使わず読み直す
+const warm = new Map<string, { at: number; p: Promise<Node[]> }>();
+const fresh = (path: string) => { const w = warm.get(path); return !!w && Date.now() - w.at < TREE_WARM_MS; };
+export function warmDir(n: Node): Promise<unknown> {
+  if (n.kind !== "dir" || !n.handle || fresh(n.path)) return Promise.resolve();
+  const p = readDir(n.handle as FileSystemDirectoryHandle, n.path);
+  p.catch(() => warm.delete(n.path));
+  warm.set(n.path, { at: Date.now(), p });
+  if (warm.size > 400) warm.delete(warm.keys().next().value as string);
+  return p.catch(() => undefined);
+}
+// 先読みした中身があればそれを、なければ読んで返す
+export function readWarm(n: Node): Promise<Node[]> {
+  const w = fresh(n.path) ? warm.get(n.path) : undefined;
+  warm.delete(n.path);
+  return w?.p ?? readDir(n.handle as FileSystemDirectoryHandle, n.path);
+}
+// 作成・削除などで中身が変わったら、先読みを捨てる
+export const dropWarm = () => { warm.clear(); queue.length = 0; };
+
+// 中のフォルダをまとめて先読みする。読む先(SSH など)に負担をかけないよう、同時に読むのは 3 つまで
+const SKIP = new Set([".git", "node_modules"]);
+const queue: Node[] = [];
+let running = 0;
+const pump = () => {
+  while (running < 3 && queue.length) {
+    const n = queue.shift()!;
+    if (fresh(n.path)) continue;
+    running++;
+    void warmDir(n).finally(() => { running--; pump(); });
+  }
+};
+export function warmKids(list: Node[]) {
+  for (const n of list.filter((x) => x.kind === "dir" && x.handle && !SKIP.has(x.name) && !isOpen(x.path)).slice(0, TREE_WARM_MAX)) queue.push(n);
+  pump();
 }

@@ -72,6 +72,8 @@ const RAW = [
   /* レイアウト */
   n("sideW", "layout", "サイドバーの幅", 280, { sec: "サイドバー", min: 200, max: 640, step: 10, unit: "px", css: "--side-w", hint: "エディタとの境目をドラッグしても変えられます" }),
   n("aiW", "layout", "AI パネルの幅", 440, { sec: "右のパネル", min: 280, max: 900, step: 10, unit: "px", css: "--ai-w", hint: "エディタとの境目をドラッグしても変えられます" }),
+  n("gitW", "layout", "Git パネルの幅", 440, { sec: "右のパネル", min: 280, max: 900, step: 10, unit: "px", css: "--git-w", hint: "エディタとの境目をドラッグしても変えられます" }),
+  n("gitLogH", "layout", "Git の履歴の詳細の高さ", 260, { sec: "右のパネル", min: 96, max: 800, step: 10, unit: "px", hint: "一覧との境目をドラッグしても変えられます" }),
   n("brW", "layout", "ブラウザの幅", 560, { sec: "右のパネル", min: 280, max: 1000, step: 10, unit: "px", css: "--br-w", hint: "エディタとの境目をドラッグしても変えられます" }),
   n("rowH", "layout", "ファイルの行の高さ", 28, { min: 22, max: 40, step: 2, unit: "px", css: "--row-h" }),
   n("treeIndent", "layout", "フォルダの字下げ", 16, { min: 8, max: 32, step: 2, unit: "px" }),

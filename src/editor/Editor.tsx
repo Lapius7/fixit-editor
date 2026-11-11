@@ -4,7 +4,7 @@ import { EditorState, Compartment } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { LanguageDescription } from "@codemirror/language";
-import { languages } from "@codemirror/language-data";
+import { languages } from "@/editor/lang";
 import { searchKeymap } from "@codemirror/search";
 import { fixitTheme } from "@/editor/theme";
 import { fixitSearch } from "@/editor/search-panel";
