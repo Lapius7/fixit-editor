@@ -24,11 +24,11 @@ const base = EditorView.theme({
   "&": { height: "100%", backgroundColor: "transparent", color: "var(--editor-ink)", fontSize: "var(--fs)" },
   ".cm-scroller": { fontFamily: "var(--font-mono)", fontWeight: "var(--code-w, 400)", letterSpacing: "var(--ls, 0)", lineHeight: "var(--lh, 22px)", overscrollBehavior: "contain" },
   ".cm-content": { padding: "var(--pad-y, 14px) 0", caretColor: "var(--accent)" },
-  ".cm-line": { padding: "0 24px 0 var(--pad-x, 8px)" },
+  ".cm-line": { padding: "0 24px 0 var(--pad-x, 2px)" },
   ".cm-gutters": { backgroundColor: "transparent", border: "none", color: "var(--gutter)" },
   // 横にスクロールしたとき、行番号とミニマップの下を通る字は、字のほうを隠す(背景と同じ色のまま、固定に見せる)
   "&[data-hmask] .cm-content": { maskImage: "linear-gradient(to right, #0000 var(--cm-l), #000 calc(var(--cm-l) + var(--cm-lf, 0px)), #000 calc(var(--cm-r) - var(--cm-rf, 0px)), #0000 var(--cm-r))", WebkitMaskImage: "linear-gradient(to right, #0000 var(--cm-l), #000 calc(var(--cm-l) + var(--cm-lf, 0px)), #000 calc(var(--cm-r) - var(--cm-rf, 0px)), #0000 var(--cm-r))" },
-  ".cm-lineNumbers .cm-gutterElement": { padding: "0 8px 0 22px", minWidth: "44px" },
+  ".cm-lineNumbers .cm-gutterElement": { padding: "0 14px 0 22px", minWidth: "50px" },
   ".cm-git-gutter": { width: "6px" },
   ".cm-git-gutter .cm-gutterElement": { padding: "0" },
   ".cm-git-mark": { width: "3px", height: "100%", borderRadius: "2px" },

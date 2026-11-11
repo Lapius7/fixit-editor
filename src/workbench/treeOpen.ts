@@ -1,7 +1,7 @@
 // ファイル一覧で開いているフォルダの記録。タブの切り替えや再起動でも、開閉の状態を保つ。
 import { kvGet, kvSet } from "@/platform/appdata";
 import { readDir, type Node } from "@/platform/fs";
-import { TREE_PREFETCH_MS, TREE_WARM_MAX, TREE_WARM_MS } from "@/shared/config";
+import { TREE_EXPAND_MAX, TREE_EXPAND_MS, TREE_PREFETCH_MS, TREE_WARM_MAX, TREE_WARM_MS } from "@/shared/config";
 
 const KEY = "fixit:tree-open:v1";
 const MAX = 1000;
@@ -100,3 +100,31 @@ export function warmKids(list: Node[]) {
   for (const n of list.filter((x) => x.kind === "dir" && x.handle && !SKIP.has(x.name) && !isOpen(x.path)).slice(0, TREE_WARM_MAX)) queue.push(n);
   pump();
 }
+
+// 右クリックの「中の階層をすべて開く・閉じる」。開くときは、このあと現れる中のフォルダも順に開く
+// (中身を読むまで下の階層が分からないため)。重いフォルダは除き、数と時間に上限を置く
+type Bulk = { path: string; on: boolean; until: number; left: number };
+let bulk: Bulk | null = null;
+const bulkSubs = new Set<() => void>();
+const under = (p: string, root: string) => p === root || p.startsWith(root + "/");
+export const subBulk = (f: () => void) => { bulkSubs.add(f); return () => { bulkSubs.delete(f); }; };
+export function setAllOpen(path: string, on: boolean) {
+  if (!on) {
+    const open = get();
+    for (const p of [...open]) if (under(p, path)) open.delete(p);
+    clearTimeout(timer);
+    timer = setTimeout(() => kvSet(KEY, JSON.stringify([...open])), 300);
+  }
+  bulk = { path, on, until: Date.now() + TREE_EXPAND_MS, left: TREE_EXPAND_MAX };
+  bulkSubs.forEach((f) => f());
+}
+// このフォルダを一括の操作で開く(true)・閉じる(false)か。対象外は undefined
+export function bulkFor(path: string, name: string): boolean | undefined {
+  const b = bulk;
+  if (!b || Date.now() > b.until || !under(path, b.path)) return undefined;
+  if (!b.on) return false;
+  if (path !== b.path && SKIP.has(name)) return undefined;
+  if (b.left <= 0) return undefined;
+  return true;
+}
+export const bulkTake = () => { if (bulk) bulk.left--; };

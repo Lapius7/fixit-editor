@@ -98,7 +98,7 @@ const RAW = [
   b("wrap", "editor", "長い行を折り返す", true),
   e("ruler", "editor", "右端の目安線", "off", [["off", "なし"], ["80", "80 桁"], ["100", "100 桁"], ["120", "120 桁"]], { css: "--ruler", fmt: (v) => (v === "off" ? "0" : v), attr: "ruler" }),
   n("padY", "editor", "本文の上下の余白", 14, { sec: "余白と色", min: 0, max: 48, step: 2, unit: "px", css: "--pad-y" }),
-  n("padX", "editor", "本文の左の余白", 8, { min: 0, max: 48, step: 2, unit: "px", css: "--pad-x" }),
+  n("padX", "editor", "本文の左の余白", 2, { min: 0, max: 48, step: 2, unit: "px", css: "--pad-x" }),
   e("syntax", "editor", "構文の色", "color", [["color", "鮮やか"], ["muted", "くすんだ色"], ["mono", "モノクロ"]], { css: "--syn-k", fmt: map({ color: "100%", muted: "55%", mono: "0%" }) }),
   b("commentItalic", "editor", "コメントを斜体にする", true, { css: "--com-style", fmt: (v) => (v ? "italic" : "normal") }),
   b("scrollPastEnd", "editor", "最後の行の下にも余白を取る", false),

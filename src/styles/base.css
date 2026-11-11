@@ -95,6 +95,8 @@ kbd { font: 500 11px/18px var(--font-sans); padding: 0 6px; border-radius: 5px; 
 .u-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--ink); text-wrap: balance; }
 .u-name { margin: 0; font-family: var(--font-mono); font-size: 12px; color: var(--ink-3); }
 .u-hint { margin: 6px 0 0; font-size: 12px; text-wrap: pretty; max-width: 320px; }
+.unsupported[data-big] .u-hint { max-width: 420px; }
+.u-load { margin-top: 12px; }
 
 /* ターミナル */
 .term-body .xterm-viewport { background: transparent !important; overscroll-behavior: contain; scrollbar-width: none !important; }
@@ -297,3 +299,5 @@ button.sb:active { transform: scale(var(--ps)); }
 .tree-skel-row b { width: var(--w); max-width: calc(100% - 40px); height: 10px; border-radius: 5px; background: var(--hair); }
 @keyframes tree-skel { from { opacity: .4; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .tree-skel-row { animation: none; opacity: .7; } }
+/* ファイル一覧のフォルダを Git パネルに落とすとき */
+.git-dock[data-over] { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 60%, transparent); }

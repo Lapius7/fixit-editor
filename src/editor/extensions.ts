@@ -142,7 +142,7 @@ const hangingIndent = ViewPlugin.fromClass(class {
         const line = v.state.doc.lineAt(pos);
         const ws = /^[ \t]*/.exec(line.text)![0];
         const cols = countColumn(ws, ts);
-        if (cols) ranges.push(Decoration.line({ attributes: { style: `padding-left:calc(var(--pad-x, 8px) + ${cols}ch);text-indent:-${cols}ch` } }).range(line.from));
+        if (cols) ranges.push(Decoration.line({ attributes: { style: `padding-left:calc(var(--pad-x, 2px) + ${cols}ch);text-indent:-${cols}ch` } }).range(line.from));
         pos = line.to + 1;
       }
     }

@@ -43,14 +43,14 @@ import Dialog from "@/workbench/Dialog";
 import Connect from "@/features/workspaces/Connect";
 import Workspaces from "@/features/workspaces/Workspaces";
 import { GitBranch, Pin, History, MessageSquareText, RefreshCw, ArrowUpCircle } from "lucide-react";
-import { Play, FolderSearch, AppWindow, FolderGit2 } from "lucide-react";
+import { Play, FolderSearch, AppWindow, FolderGit2, ChevronsUpDown } from "lucide-react";
 import { runnerFor, buildCommand, shq } from "@/features/run/runners";
 import { Sparkles, Server, FolderKanban, Eye, Maximize2, Minimize2, ImageIcon, ClipboardCopy, ChevronUp } from "lucide-react";
 import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, patchWs, rootLabel, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
 import { displayPath, setRootNames, splitRoot } from "@/workbench/rootpath";
 import { getProfiles, switchProfile, useProfiles } from "@/features/settings/profiles";
 import { copyWithNotice } from "@/platform/clipboard";
-import { prefetchOpen, shownOpen } from "@/workbench/treeOpen";
+import { prefetchOpen, setAllOpen, shownOpen } from "@/workbench/treeOpen";
 import { listShells, type ShellOpt } from "@/platform/pty";
 import { RemoteFile, checkDir, connKey, isRemote, remoteSig, connLabel, lastDir, normConn, showPath, pushRecent, rootHandle, sshUrl, type Conn, type RemoteDir } from "@/platform/remote";
 import { DEMO_NAME, DEMO_TREE } from "@/shared/demo";
@@ -279,6 +279,14 @@ export default function App() {
   const dirtyList = tabs.filter((t) => isText(t) && t.text !== t.saved);
 
   /* ---------- ファイル ---------- */
+  // 大きくて止めていたファイルを、「読み込む」で読む
+  const forceLoad = async (n: Node) => {
+    try {
+      const { view, info } = await load(n, true);
+      const text = view.kind === "text" ? view.text : "";
+      setTabs((p) => p.map((t) => (t.node.path === n.path && t.view.kind === "unsupported" ? { ...t, view, info, text, saved: text, eol: view.kind === "text" ? view.eol ?? "lf" : "lf" } : t)));
+    } catch (e) { flash(String(e), "error"); }
+  };
   const open = useCallback(async (n: Node, pane: number = fp, pin = true) => {
     if (!tabs.some((t) => t.node.path === n.path)) {
       try {
@@ -1484,6 +1492,11 @@ export default function App() {
         ] : []),
         { label: i18next.t("新規ファイル"), icon: ic(FilePlus), keys: K("newFile"), run: () => create("file", dir ? n : null) },
         { label: i18next.t("新規フォルダ"), icon: ic(FolderPlus), run: () => create("dir", dir ? n : null) },
+        ...(n && dir && !head ? [
+          { type: "sep" as const },
+          { label: i18next.t("中の階層をすべて開く"), icon: ic(ChevronsUpDown), run: () => setAllOpen(n.path, true) },
+          { label: i18next.t("中の階層をすべて閉じる"), icon: ic(ChevronsDownUp), run: () => setAllOpen(n.path, false) },
+        ] : []),
         ...(n && head ? [
           { type: "sep" as const },
           ...(rr.conn ? [
@@ -1731,7 +1744,7 @@ export default function App() {
           )}
           </div>
         ) : (
-          <Viewer view={t.view} name={t.node.name} path={t.node.path} onSaveImage={t.node.handle ? (b, n) => saveImage(t, b, n) : undefined} />
+          <Viewer view={t.view} name={t.node.name} path={t.node.path} onSaveImage={t.node.handle ? (b, n) => saveImage(t, b, n) : undefined} onForce={() => void forceLoad(t.node)} />
         )}
       </div>
     );
@@ -1884,6 +1897,8 @@ export default function App() {
             <AiDock open={ai} job={aiJob} quote={aiQuote} resolve={aiSource} onClose={() => setAi(false)} onSettings={() => setSetts("ai")} />
             {gitOpen && <ColGrip width={st.gitW} def={440} min={280} max={900} dir={-1} onChange={(w) => update({ gitW: w })} />}
             <GitPanel open={gitOpen} conn={gitView?.conn ?? null} root={gitView?.root} dir={gitView?.dir}
+              canDrop={() => drag.node?.kind === "dir" && !!rootOf(drag.node).conn}
+              onDropDir={() => { const n = drag.node; dragEnd(); if (n?.kind === "dir" && rootOf(n).conn) void gitHere(rootOf(n).conn!, abs(n)); }}
               title={gitAt ? (gitAt.root ?? gitAt.dir).replace(/\/+$/, "").split("/").pop() || "/" : undefined} onBack={gitAt ? () => setGitAt(null) : undefined}
               onRepo={(d) => { void gitHere(gitView!.conn, d); setGitTick((n) => n + 1); void reload(); }} rev={gitTick} onClose={() => setGitOpen(false)} onChanged={() => { setGitTick((n) => n + 1); void syncTabs(); }} guard={() => !dirtyList.length || ask({ message: i18next.t("保存していない変更が {{length}} 件あります。ファイルが書き換わると失われることがあります。続けますか?", { length: dirtyList.length }), danger: true })} />
             </div>

@@ -20,6 +20,8 @@ type Side = "staged" | "unstaged" | "conflict";
 // title・onBack: 右クリックで別のフォルダを選んでいるとき、その名前と、開いているフォルダに戻すボタン
 type Props = {
   open: boolean; conn: Conn | null; root: string | null | undefined; dir?: string; title?: string; rev: number;
+  // ファイル一覧からフォルダを落としたとき。受け取れるフォルダなら true(canDrop)
+  canDrop?: () => boolean; onDropDir?: () => void;
   onClose: () => void; onChanged: () => void; onRepo?: (dir: string) => void; onBack?: () => void; guard?: () => boolean | Promise<boolean>;
 };
 
@@ -41,7 +43,8 @@ function ago(at: number) {
 // 作業フォルダのファイルを書き換える操作
 const REWRITES = new Set(["checkout", "discard", "clean", "pull"]);
 
-export function GitPanel({ open, conn, root, dir, title, rev, onClose, onChanged, onRepo, onBack, guard }: Props) {
+export function GitPanel({ open, conn, root, dir, title, rev, onClose, onChanged, onRepo, onBack, guard, canDrop, onDropDir }: Props) {
+  const [over, setOver] = useState(false);
   const [tab, setTab] = useState<Tab>("changes");
   const [st, setSt] = useState<Status | null>(null);
   const [commits, setCommits] = useState<Commit[]>([]);
@@ -142,7 +145,11 @@ export function GitPanel({ open, conn, root, dir, title, rev, onClose, onChanged
   ];
 
   return (
-    <aside className="ai-dock git-dock" data-closing={!open} aria-label="Git" onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } }}>
+    <aside className="ai-dock git-dock" data-closing={!open} data-over={over || undefined} aria-label="Git"
+      onDragOver={(e) => { if (!canDrop?.()) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setOver(true); }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as globalThis.Node | null)) setOver(false); }}
+      onDrop={(e) => { setOver(false); if (!canDrop?.()) return; e.preventDefault(); onDropDir?.(); }}
+      onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } }}>
       <div className="ai-bar git-bar">
         {onBack && <button className="icon-btn" aria-label={i18next.t("開いているフォルダに戻す")} title={i18next.t("開いているフォルダに戻す")} onClick={onBack}><ArrowLeft /></button>}
         <span className="ai-title"><GitBranch size={15} />
@@ -263,7 +270,7 @@ function DiffView({ conn, root, file, staged, untracked, hash }: { conn: Conn; r
     let live = true;
     setLines(null); setErr("");
     gitRead(conn, root, hash ? { cmd: "diff", file, hash } : { cmd: "diff", file, staged: !!staged, untracked: !!untracked })
-      .then((o) => live && setLines(parseDiff(o))).catch((e) => live && setErr(msg(e)));
+      .then((o) => live && setLines(untracked ? parseDiff(o).filter((l) => !(l.t === "meta" && l.text.startsWith("new file"))) : parseDiff(o))).catch((e) => live && setErr(msg(e)));
     return () => { live = false; };
   }, [conn, root, file, staged, untracked, hash]);
   if (err) return <p className="git-diff-note">{err}</p>;

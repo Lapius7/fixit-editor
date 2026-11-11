@@ -6,7 +6,7 @@ export type View =
   | { kind: "text"; text: string; eol?: "lf" | "crlf" }
   | { kind: "image" | "pdf" | "audio" | "video"; url: string }
   | { kind: "docx"; html: string }
-  | { kind: "unsupported"; reason: string; hint?: string };
+  | { kind: "unsupported"; reason: string; hint?: string; big?: boolean };
 
 const ext = (n: string) => (n.includes(".") ? n.split(".").pop()!.toLowerCase() : "");
 const IMAGE = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "avif"]);
@@ -31,7 +31,7 @@ export async function getFile(n: Node): Promise<File> {
   return (n.handle as FileSystemFileHandle).getFile();
 }
 
-export async function load(n: Node): Promise<{ view: View; info: string }> {
+export async function load(n: Node, force = false): Promise<{ view: View; info: string }> {
   const f = await getFile(n);
   const e = ext(n.name);
   const info = `${e ? e.toUpperCase() + " · " : ""}${size(f.size)}`;
@@ -51,7 +51,8 @@ export async function load(n: Node): Promise<{ view: View; info: string }> {
   // 拡張子から分からないものは、先頭を見て文字かどうかを判断する
   const head = new Uint8Array(await f.slice(0, 8192).arrayBuffer());
   if (head.includes(0)) return { info, view: { kind: "unsupported", reason: i18next.t("バイナリファイルのため開けません。") } };
-  if (f.size > MAX_OPEN_BYTES) return { info, view: { kind: "unsupported", reason: i18next.t("ファイルが大きすぎて開けません。"), hint: i18next.t("上限は {{arg0}} です。", { arg0: size(MAX_OPEN_BYTES) }) } };
+  // 大きいファイルは、すぐには読まず注意を出す。「読み込む」を押したら force で読む
+  if (f.size > MAX_OPEN_BYTES && !force) return { info, view: { kind: "unsupported", big: true, reason: i18next.t("大きいファイルです（{{arg0}}）", { arg0: size(f.size) }), hint: i18next.t("{{arg0}} を超えるファイルは、読み込むとエディタが重くなることがあります。", { arg0: size(MAX_OPEN_BYTES) }) } };
   const raw = await f.text();
   const crlf = /\r\n/.test(raw) && !/(^|[^\r])\n/.test(raw); // すべての行が CRLF のときだけ。混ざっているときは LF にそろえる
   return { info, view: { kind: "text", text: crlf ? raw.replace(/\r\n/g, "\n") : raw, eol: crlf ? "crlf" : "lf" } };

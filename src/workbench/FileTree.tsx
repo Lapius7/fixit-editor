@@ -4,7 +4,7 @@ import { ChevronRight, FileText, FileCode2, FileJson, FileType, Folder, FolderOp
 import { readDir, type Node } from "@/platform/fs";
 import { useSettings } from "@/features/settings/settings";
 import { drag, dragEnd, extFiles, setDragSrc, setDropTarget, useDnd } from "@/workbench/dnd";
-import { dirOf } from "@/workbench/treeops"; import { dropWarm, isOpen, readWarm, setOpenPath, takePrefetched, warmDir, warmKids } from "@/workbench/treeOpen";
+import { dirOf } from "@/workbench/treeops"; import { bulkFor, bulkTake, dropWarm, isOpen, readWarm, setOpenPath, subBulk, takePrefetched, warmDir, warmKids } from "@/workbench/treeOpen";
 
 // ドラッグ中のものを、このフォルダへ移せるか(自分の中・今いる場所へは移せない)
 export const canDrop = (dest: Node) => {
@@ -98,6 +98,18 @@ function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, onDropFi
     if (!kids && n.handle) await readWarm(n).then(setLoaded, () => setOpen(false));
   };
 
+  // 右クリックの「中の階層をすべて開く・閉じる」。あとから現れた中のフォルダも、描いたときに従う
+  const live = useRef({ open, click }); live.current = { open, click };
+  useEffect(() => {
+    if (!isDir) return;
+    const go = () => {
+      const v = bulkFor(n.path, n.name);
+      if (v === true && !live.current.open) { bulkTake(); void live.current.click(); }
+      else if (v === false && live.current.open) setOpen(false);
+    };
+    go();
+    return subBulk(go);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // 印は消えるときも、直前の文字のまま薄れていく(中身が空になって一瞬ちらつかないように)
   const lastGit = useRef<string | undefined>(git);
   if (git) lastGit.current = git;
