@@ -1088,5 +1088,7 @@
   "自動で消す": "Delete automatically",
   "一覧に出さない": "Hide from lists",
   "そのまま出す": "Show as is",
-  "Windows のエクスプローラーで WSL に写すと、ファイルごとに「名前:Zone.Identifier」というファイルができます。WSL の中では使われないファイルです": "Copying files into WSL with Windows Explorer leaves a \"name:Zone.Identifier\" file next to each one. WSL does not use these files."
+  "Windows のエクスプローラーで WSL に写すと、ファイルごとに「名前:Zone.Identifier」というファイルができます。WSL の中では使われないファイルです": "Copying files into WSL with Windows Explorer leaves a \"name:Zone.Identifier\" file next to each one. WSL does not use these files.",
+  "外部のターミナルで開く": "Open in External Terminal",
+  "エクスプローラーで表示": "Reveal in File Explorer"
 }

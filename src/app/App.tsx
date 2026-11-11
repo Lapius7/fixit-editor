@@ -43,7 +43,7 @@ import Dialog from "@/workbench/Dialog";
 import Connect from "@/features/workspaces/Connect";
 import Workspaces from "@/features/workspaces/Workspaces";
 import { GitBranch, Pin, History, MessageSquareText, RefreshCw, ArrowUpCircle } from "lucide-react";
-import { Play } from "lucide-react";
+import { Play, FolderSearch, AppWindow } from "lucide-react";
 import { runnerFor, buildCommand } from "@/features/run/runners";
 import { Sparkles, Server, FolderKanban, Eye, Maximize2, Minimize2, ImageIcon, ClipboardCopy, ChevronUp } from "lucide-react";
 import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, patchWs, rootLabel, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
@@ -1395,12 +1395,21 @@ export default function App() {
     ...(root.handle ? [{ type: "sep" as const }, { type: "title" as const, label: i18next.t("ワークスペースに追加") }, ...addItems(),
       { type: "sep" as const }, { label: roots.length > 1 ? i18next.t("すべてのフォルダを閉じる") : i18next.t("フォルダを閉じる"), icon: ic(FolderX), keys: K("closeFolder"), run: closeFolder }] : []),
   ];
+  const osOpen = async (c: Conn, path: string, dir: boolean, what: "reveal" | "term") => {
+    try { const { invoke } = await import("@tauri-apps/api/core"); await invoke("os_open", { kind: c.kind, host: c.host ?? null, path, dir, what }); }
+    catch (err) { notify(String(err), "error"); }
+  };
   const treeMenu = (e: React.MouseEvent, n: Node | null) => {
     e.preventDefault();
     const dir = n?.kind === "dir";
     const head = !!n && isRootNode(n); // 複数のフォルダを開いているときの、フォルダの見出し
     const rr = n ? rootOf(n) : root;
     const here = (p: string) => addTerm(p, undefined, rr.conn?.kind === "ssh" ? rr.conn.host : null);
+    // exe だけ: Windows のエクスプローラーで表示する・別のウィンドウのターミナルで開く
+    const osItems = (c: Conn | undefined, p: string, isDir: boolean) => !IS_TAURI || !c ? [] : [
+      { label: i18next.t("外部のターミナルで開く"), icon: ic(AppWindow), run: () => void osOpen(c, p, isDir, "term") },
+      ...(c.kind !== "ssh" ? [{ label: i18next.t("エクスプローラーで表示"), icon: ic(FolderSearch), run: () => void osOpen(c, p, isDir, "reveal") }] : []),
+    ];
     setMenu({
       x: e.clientX, y: e.clientY, path: n?.path,
       items: [
@@ -1419,6 +1428,7 @@ export default function App() {
           ...(rr.conn ? [
             { label: i18next.t("絶対パスをコピー"), icon: ic(Link), run: () => copyText(rr.conn!.path) },
             { label: i18next.t("ここでターミナルを開く"), icon: ic(SquareTerminal), run: () => here(rr.conn!.path) },
+            ...osItems(rr.conn, rr.conn.path, true),
           ] : []),
           { label: i18next.t("ファイル一覧を更新"), icon: ic(RotateCw), run: reload },
           { type: "sep" as const },
@@ -1434,6 +1444,7 @@ export default function App() {
             { label: i18next.t("絶対パスをコピー"), icon: ic(Link), run: () => copyText(abs(n)) },
             ...(rr.conn.kind === "ssh" ? [{ label: "ssh:// のパスをコピー", icon: ic(Link), run: () => copyText(sshUrl(rr.conn!, abs(n))) }] : []),
             { label: i18next.t("ここでターミナルを開く"), icon: ic(SquareTerminal), run: () => here(dir ? abs(n) : abs(n).replace(/\/[^/]*$/, "") || "/") },
+            ...osItems(rr.conn, abs(n), dir),
           ] : []),
           { label: i18next.t("名前をコピー"), icon: ic(Copy), run: () => copyText(n.name) },
           { type: "sep" as const },
@@ -1441,7 +1452,7 @@ export default function App() {
         ] : [
           { type: "sep" as const },
           { label: i18next.t("ファイル一覧を更新"), icon: ic(RotateCw), run: reload },
-          ...(root.conn ? [{ label: i18next.t("ここでターミナルを開く"), icon: ic(SquareTerminal), run: () => addTerm(root.conn!.path, undefined, root.conn!.kind === "ssh" ? root.conn!.host : null) }] : []),
+          ...(root.conn ? [{ label: i18next.t("ここでターミナルを開く"), icon: ic(SquareTerminal), run: () => addTerm(root.conn!.path, undefined, root.conn!.kind === "ssh" ? root.conn!.host : null) }, ...osItems(root.conn, root.conn.path, true)] : []),
           { label: i18next.t("WSL・SSH に接続"), icon: ic(Server), keys: K("connect"), run: () => { setCnAdd(false); setCn(true); } },
           { label: i18next.t("フォルダを開く"), icon: ic(FolderOpen), keys: K("openFolder"), run: openFolder, disabled: !supportsFs() },
           { label: i18next.t("フォルダをワークスペースに追加"), icon: ic(FolderPlus), keys: K("addFolder"), run: addFolder, disabled: !supportsFs() || !root.handle },

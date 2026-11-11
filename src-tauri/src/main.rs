@@ -299,6 +299,68 @@ fn open_url(url: String) -> Result<(), String> {
     c.spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
+// エクスプローラーのメニュー「エクスプローラーで表示」「外部のターミナルで開く」。what = "reveal" | "term"
+// pc は C:/... の形、wsl は WSL の中の絶対パス、ssh は接続先の絶対パス(表示はできないのでターミナルだけ)
+#[tauri::command(async)]
+fn os_open(kind: String, host: Option<String>, path: String, dir: bool, what: String) -> Result<(), String> {
+    if path.is_empty() || path.starts_with('-') || path.chars().any(|c| c.is_control() || c == '"') { return Err("パスが正しくありません".into()); }
+    let host = host.unwrap_or_default();
+    if kind == "ssh" && (host.is_empty() || host.starts_with('-') || !host.chars().all(|c| c.is_ascii_alphanumeric() || "-_.@:".contains(c))) {
+        return Err("接続先の名前が正しくありません".into());
+    }
+    os_open_impl(&kind, &host, &path, dir, &what)
+}
+
+#[cfg(windows)]
+fn os_open_impl(kind: &str, host: &str, path: &str, dir: bool, what: &str) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    use std::process::Command;
+    const NO_WINDOW: u32 = 0x08000000;
+    const NEW_CONSOLE: u32 = 0x00000010;
+    // WSL のパスを Windows の \\wsl.localhost\... に直す
+    let winpath = |p: &str| -> Result<String, String> {
+        if kind == "pc" { return Ok(p.replace('/', "\\")); }
+        let o = Command::new("wsl.exe").args(["-e", "wslpath", "-w", p]).creation_flags(NO_WINDOW).output().map_err(|e| e.to_string())?;
+        let w = String::from_utf8_lossy(&o.stdout).trim().to_string();
+        if !o.status.success() || w.is_empty() { return Err("Windows のパスに直せませんでした".into()); }
+        Ok(w)
+    };
+    let parent = |p: &str| -> String { let t = p.trim_end_matches('/'); match t.rfind('/') { Some(0) => "/".into(), Some(i) if t[..i].ends_with(':') => format!("{}/", &t[..i]), Some(i) => t[..i].into(), None => t.into() } };
+    match what {
+        "reveal" => {
+            if kind == "ssh" { return Err("SSH のフォルダは表示できません".into()); }
+            let w = winpath(path)?;
+            let mut c = Command::new("explorer.exe");
+            if dir { c.raw_arg(format!("\"{w}\"")); } else { c.raw_arg(format!("/select,\"{w}\"")); }
+            c.spawn().map(|_| ()).map_err(|e| e.to_string())
+        }
+        "term" => {
+            let d = if dir { path.to_string() } else { parent(path) };
+            // Windows Terminal があれば新しいウィンドウで。なければ新しいコンソールで開く
+            let (prog, args): (&str, Vec<String>) = match kind {
+                "pc" => ("", vec![]),
+                "wsl" => ("wsl.exe", vec!["--cd".into(), d.clone()]),
+                _ => ("ssh.exe", vec!["-t".into(), "--".into(), host.into(), format!("cd {} 2>/dev/null || true && exec $SHELL -l", sq(&d))]),
+            };
+            let shell = if prog.is_empty() { if which("pwsh.exe") { "pwsh.exe" } else { "powershell.exe" } } else { prog };
+            let cwd = if kind == "pc" { Some(d.replace('/', "\\")) } else { None };
+            let mut wt = Command::new("wt.exe");
+            wt.arg("-w").arg("new");
+            if let Some(c) = &cwd { wt.arg("-d").arg(c); }
+            wt.arg(shell).args(&args).creation_flags(NO_WINDOW);
+            if wt.spawn().is_ok() { return Ok(()); }
+            let mut c = Command::new(shell);
+            c.args(&args).creation_flags(NEW_CONSOLE);
+            if let Some(d) = &cwd { c.current_dir(d); }
+            c.spawn().map(|_| ()).map_err(|e| e.to_string())
+        }
+        _ => Err("not allowed".into()),
+    }
+}
+
+#[cfg(not(windows))]
+fn os_open_impl(_kind: &str, _host: &str, _path: &str, _dir: bool, _what: &str) -> Result<(), String> { Err("Windows の exe でだけ使えます".into()) }
+
 // この PC に入っているフォントの家族名(設定の書体の選択肢)。読み込みに時間がかかるので別スレッドで行う
 #[tauri::command]
 async fn list_fonts() -> Result<Vec<fonts::FontFamily>, String> {
@@ -353,7 +415,7 @@ fn main() {
             tauri::webview::PermissionKind::ClipboardRead => tauri::webview::PermissionResponse::Allow,
             _ => tauri::webview::PermissionResponse::Default,
         })
-        .invoke_handler(tauri::generate_handler![clip_read, clip_write, pty_open, pty_shells, pty_write, pty_resize, pty_close, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_login, claude_cancel, store_load, store_read, store_stamps, store_save, apply_update, list_fonts, open_url])
+        .invoke_handler(tauri::generate_handler![clip_read, clip_write, pty_open, pty_shells, pty_write, pty_resize, pty_close, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_login, claude_cancel, store_load, store_read, store_stamps, store_save, apply_update, list_fonts, open_url, os_open])
         .run(tauri::generate_context!())
         .expect("フィクシットエディタを起動できませんでした");
 }
