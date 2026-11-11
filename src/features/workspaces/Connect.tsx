@@ -72,7 +72,28 @@ export default function Connect({ current, adding, onConnect, onClose, out }: Pr
     }, 300);
     return () => { live = false; clearTimeout(t); };
   }, [kind, sshHost, path, tick]);
-  const enter = (p: string) => { setPath(p); setErr(""); };
+  // 一覧で移動した場所の履歴。マウスの戻る・進むボタンでたどる(入力欄に打った移動は積まない)
+  const hist = useRef<{ back: string[]; fwd: string[] }>({ back: [], fwd: [] });
+  const enter = (p: string) => {
+    const h = hist.current;
+    if (dir && p !== dir && h.back.at(-1) !== dir) { h.back.push(dir); h.fwd = []; }
+    setPath(p); setErr("");
+  };
+  const step = (by: "back" | "fwd") => {
+    const h = hist.current, to = h[by].pop();
+    if (to === undefined) return;
+    if (dir) (by === "back" ? h.fwd : h.back).push(dir);
+    setPath(to); setErr("");
+  };
+  const stepRef = useRef(step); stepRef.current = step;
+  useEffect(() => { hist.current = { back: [], fwd: [] }; }, [kind, sshHost]);
+  useEffect(() => {
+    // 3 = 戻る、4 = 進む。押したときに既定の動き(ページの戻る)を止め、離したときに動かす
+    const stop = (e: MouseEvent) => { if (e.button === 3 || e.button === 4) e.preventDefault(); };
+    const up = (e: MouseEvent) => { if (e.button !== 3 && e.button !== 4) return; e.preventDefault(); stepRef.current(e.button === 3 ? "back" : "fwd"); };
+    window.addEventListener("mousedown", stop, true); window.addEventListener("mouseup", up, true);
+    return () => { window.removeEventListener("mousedown", stop, true); window.removeEventListener("mouseup", up, true); };
+  }, []);
   // 別の接続先(このPC→SSH、ホストの切り替え)を読んでいる間は、前の一覧を出さず、読み込み中の行を出す
   const stale = loading && rowsOf !== `${kind}|${kind === "ssh" ? sshHost : ""}`;
   // 初期値の "~" は、ホームの絶対パスに置き換える(階層を移動したときの表示とそろえる)。接続先を変えたら、また "~" から解決し直す
