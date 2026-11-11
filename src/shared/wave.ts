@@ -1,40 +1,38 @@
-// 画面全体に、押した所から波が広がる演出。ワークスペースを切り替えたときに出す。
+// 画面全体に、下の中央から波が広がる演出。ワークスペースを切り替えたときに出す。
 // 波の形・色・縁に残る色・細い線・粒は、原作(libraries.dev/waves、MIT)の式をそのまま使う(./waves)。
 // 画面の写しは読めないので、原作の「ぼかし」は波の帯の所だけ backdrop-filter をかけて近づける
 import { ms } from "@/features/settings/settings";
 import { defaultStyle, duration, makeParticles, particleAt, PALETTES, rimLumps, waveFront, type Rect, type WaveStyle } from "./waves/model";
 import { Overlay } from "./waves/overlay";
 
-type Pt = { x: number; y: number };
-
-// 直前に押した位置。キーボードやコマンドから開いたときは、画面の中央から出す
-let last: (Pt & { at: number }) | null = null;
-if (typeof window !== "undefined") addEventListener("pointerdown", (e) => { last = { x: e.clientX, y: e.clientY, at: performance.now() }; }, true);
-const RECENT = 4000; // ms。これより前に押した位置は使わない
 const SOURCE = 56; // 波の出る所の大きさ(CSS px)。原作の「中央から」の型の丸ボタンに合わせる
+const BOTTOM = 40; // 波の出る所の中心から、窓の下端までの距離(CSS px)
 export const WINDOW_CORNER = 12; // 窓の角の丸み(CSS px)。縁の色はこの形に沿う
-// 原作の見本は 375×509 の枠の中で、ボタンから一番遠い角まで約 500px を広がる。
-// 窓は広いので、同じ時間だと波が速く見える。一番遠い角までの距離に合わせて時間を伸ばし、進む速さを原作に近づける
-const REF_REACH = 500; // CSS px
-const MAX_STRETCH = 2.2; // 伸ばすのはここまで(1920×1080 の中央からで約 9 秒)
 
-// 原作の「中央から」の型。色だけ、原作の見本の虹色(colorful)にする
-export const WAVE_STYLE: WaveStyle = { ...defaultStyle("center"), palette: PALETTES.colorful, cornerRadius: WINDOW_CORNER };
+// 原作の「中央から」の型。色は原作の見本の虹色(colorful)にする。
+// 広がる速さは原作のまま、縁の色は長く残し、太く強くする
+export const WAVE_STYLE: WaveStyle = {
+  ...defaultStyle("center"),
+  palette: PALETTES.colorful,
+  cornerRadius: WINDOW_CORNER,
+  linger: 4, // 秒。広がり始めてから縁の色が消え始めるまで(原作 -0.35)
+  rimFade: 3.5, // 秒。消えるのにかける時間(原作 2.51)
+  rimWidth: 34, // 原作 14
+  rimUnevenness: 0.5, // 縁の太さのむら。下げて全周を光らせる(原作 1)
+  rimStrength: 1, // 原作 0.6
+  hairlineWidth: 2, // 原作 1.5
+  hairlineOpacity: 1, // 原作 0.9
+};
 
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 let running: (() => void) | null = null;
 
-// 直前に押した位置(古ければ画面の中央)。読み込みを待つ前に取っておくのに使う
-export const origin = (): Pt => (last && performance.now() - last.at < RECENT ? { x: last.x, y: last.y } : { x: innerWidth / 2, y: innerHeight / 2 });
-
-// 波を出す。at を省くと、直前に押した位置(なければ画面の中央)から出す
-export function wave(at?: Pt) {
+// 波を出す。画面の下の中央から広がる
+export function wave() {
   const s = WAVE_STYLE;
-  const o = at ?? origin();
-  const reach = Math.max(Math.hypot(o.x, o.y), Math.hypot(innerWidth - o.x, o.y), Math.hypot(o.x, innerHeight - o.y), Math.hypot(innerWidth - o.x, innerHeight - o.y));
-  const stretch = Math.min(Math.max(reach / REF_REACH, 1), MAX_STRETCH);
-  const dur = ms(duration(s) * 1000 * stretch);
+  const o = { x: innerWidth / 2, y: innerHeight - BOTTOM };
+  const dur = ms(duration(s) * 1000);
   if (dur <= 0 || reduced()) return;
   running?.();
   const ov = Overlay.make();

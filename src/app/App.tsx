@@ -6,7 +6,7 @@ import {
 import type { EditorView } from "@codemirror/view";
 import WinControls from "@/app/WinControls";
 import FolderCards from "@/workbench/FolderCards";
-import { origin, wave } from "@/shared/wave";
+import { wave } from "@/shared/wave";
 import { CHROME } from "@/shared/chrome";
 import { notify, type NoticeKind } from "@/shared/notify";
 import { OUTLINE_EVENT } from "@/editor/Crumbs";
@@ -683,11 +683,10 @@ export default function App() {
     if (ok) flash(skipped ? i18next.t("ワークスペース「{{name}}」を開きました(開けないフォルダが {{n}} 件あります)", { name: w.name, n: skipped }) : i18next.t("ワークスペース「{{name}}」を開きました", { name: w.name }));
     return ok;
   };
-  // 一覧・コマンド・スタート画面から切り替えたときは、押した所から波を出す(起動時の復元では出さない)
-  const switchWs = async (w: Workspace, at?: { x: number; y: number }) => {
-    const from = at ?? origin();
+  // 一覧・コマンド・スタート画面から切り替えたときは、画面の下の中央から波を出す(起動時の復元では出さない)
+  const switchWs = async (w: Workspace) => {
     const ok = await openWs(w);
-    if (ok && st.wsWave) wave(from);
+    if (ok && st.wsWave) wave();
     return ok;
   };
   const saveNew = async (name: string) => {
@@ -1789,7 +1788,7 @@ export default function App() {
           <div className="empty">
             <p className="empty-title">{APP_NAME}</p>
             <p className="empty-sub">{roots.every((r) => r.ref.kind === "demo") ? i18next.t("左下の「フォルダを開く」から始めます。") : <Trans i18nKey="左のファイルを選ぶと、ここで開きます。" />}</p>
-            <FolderCards list={wsStore.list} current={ws?.id ?? null} canNew={supportsFs()} onNew={openFolder} onOpen={(w, at) => void switchWs(w, at).catch((e) => flash((e as Error).message, "error"))} />
+            <FolderCards list={wsStore.list} current={ws?.id ?? null} canNew={supportsFs()} onNew={openFolder} onOpen={(w) => void switchWs(w).catch((e) => flash((e as Error).message, "error"))} />
             {st.emptyHint && (
               <ul className="empty-acts">
                 {([["quickOpen", i18next.t("ファイルを開く"), () => setQo(true)], ["palette", i18next.t("コマンドを探す"), () => setPal(true)], ["searchAll", i18next.t("全文検索"), () => run("searchAll")], ["toggleTerm", i18next.t("ターミナル"), () => showTerm()]] as const).map(([id, label, go]) => (

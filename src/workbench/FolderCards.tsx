@@ -75,20 +75,15 @@ function Card({ id, color, label, sub, onClick, corner, aria, faint }: { id: str
   );
 }
 
-function FolderCards({ list, current, onOpen, onNew, canNew }: { list: Workspace[]; current: string | null; onOpen: (w: Workspace, at: { x: number; y: number }) => void; onNew: () => void; canNew: boolean }) {
+function FolderCards({ list, current, onOpen, onNew, canNew }: { list: Workspace[]; current: string | null; onOpen: (w: Workspace) => void; onNew: () => void; canNew: boolean }) {
   // ピン留めを先に、あとは最近使った順。いま開いているものは出さない
   const rows = list.filter((w) => w.id !== current && w.root.kind !== "demo")
     .sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || b.updated - a.updated).slice(0, 3);
   if (!rows.length && !canNew) return null;
-  const from = (e: React.MouseEvent<HTMLElement>) => {
-    const b = e.currentTarget.getBoundingClientRect();
-    // キーボードで押したとき(座標が 0)は、カードの中央から
-    return e.clientX || e.clientY ? { x: e.clientX, y: e.clientY } : { x: b.left + b.width / 2, y: b.top + b.height / 2 };
-  };
   return (
     <ul className="fcards" aria-label={i18next.t("最近のワークスペース")}>
       {rows.map((w) => (
-        <Card key={w.id} id={w.id} color={w.color} label={w.name} sub={day(w.updated)} aria={i18next.t("ワークスペース「{{name}}」を開く", { name: w.name }) + ` · ${wsLabel(w)}`} onClick={(e) => onOpen(w, from(e))} />
+        <Card key={w.id} id={w.id} color={w.color} label={w.name} sub={day(w.updated)} aria={i18next.t("ワークスペース「{{name}}」を開く", { name: w.name }) + ` · ${wsLabel(w)}`} onClick={() => onOpen(w)} />
       ))}
       {canNew && <Card id="new" color="var(--accent)" faint label={i18next.t("フォルダを開く")} aria={i18next.t("フォルダを開く")} onClick={onNew} corner={<Plus />} />}
     </ul>

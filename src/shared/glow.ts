@@ -6,7 +6,7 @@ import { WAVE_STYLE } from "./wave";
 import { get, subscribe } from "@/features/settings/settings";
 
 // 縁の色。波よりも長く出し続けるので、少し太く、少し控えめにする
-const STYLE = { ...WAVE_STYLE, rimWidth: 18, rimStrength: 0.75, hairlineOpacity: 0.7 };
+const STYLE = { ...WAVE_STYLE, rimWidth: 18, rimStrength: 0.75, rimUnevenness: 1, hairlineWidth: 1.5, hairlineOpacity: 0.7 };
 const FADE_IN = 450; // ms
 const FADE_OUT = 700; // ms
 const FAR = 1e5; // 波の輪をこれより大きくして、縁の色が画面の全周で消えずに残るようにする
