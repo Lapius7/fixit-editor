@@ -16,7 +16,8 @@ function globs(src: string): ((rel: string) => boolean)[] {
   return src.split(/[,\n]/).map((x) => x.trim()).filter(Boolean).map((g) => {
     const anchored = g.includes("/") && !g.startsWith("**/");
     const body = g.replace(/^\.?\//, "").replace(/^\*\*\//, "").replace(/\/+$/, "");
-    const re = new RegExp("^" + body.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\u0000").replace(/\*/g, "[^/]*").replace(/\?/g, "[^/]").replace(/\u0000/g, ".*") + "$", "i");
+    // eslint-disable-next-line no-control-regex -- \u0000 は「**」の一時的な印
+  const re = new RegExp("^" + body.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\u0000").replace(/\*/g, "[^/]*").replace(/\?/g, "[^/]").replace(/\u0000/g, ".*") + "$", "i");
     if (!anchored && !body.includes("/")) return (rel: string) => rel.split("/").some((seg) => re.test(seg));
     if (!anchored) { const fl = new RegExp("(?:^|/)" + re.source.slice(1, -1) + "(?:/|$)", "i"); return (rel: string) => fl.test(rel); }
     return (rel: string) => { const parts = rel.split("/"); for (let i = 1; i <= parts.length; i++) if (re.test(parts.slice(0, i).join("/"))) return true; return false; };

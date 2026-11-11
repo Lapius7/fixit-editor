@@ -1123,5 +1123,10 @@
   "{{name}} をリポジトリにする": "Make “{{name}}” a repository",
   "git init を実行し、このフォルダに .git を作ります。": "Runs git init and creates .git in this folder.",
   "または": "or",
-  "「{{dir}}」の中に「{{name}}」フォルダを作って複製します。": "Clones into a new “{{name}}” folder inside “{{dir}}”."
+  "「{{dir}}」の中に「{{name}}」フォルダを作って複製します。": "Clones into a new “{{name}}” folder inside “{{dir}}”.",
+  "保存していない変更が {{n}} 件あります。閉じると失われます。閉じますか?": "You have {{n}} unsaved changes. They will be lost if you close. Close anyway?",
+  "{{name}} は外で変更されたため、自動では保存しません。保存すると上書きします": "{{name}} was changed outside, so it will not be saved automatically. Saving will overwrite it",
+  "{{name}} は、開いたあとに外で変更されています。上書きして保存しますか?": "{{name}} was changed outside after you opened it. Overwrite and save?",
+  "上書きして保存": "Overwrite",
+  "{{name}} は外で変更されました。保存すると上書きします": "{{name}} was changed outside. Saving will overwrite it"
 }

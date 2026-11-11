@@ -47,7 +47,7 @@ export function Select({ value, options, onChange, label, title, disabled, class
     const bye = () => close(false);
     addEventListener("pointerdown", away, true); addEventListener("resize", bye); addEventListener("blur", bye);
     return () => { removeEventListener("pointerdown", away, true); removeEventListener("resize", bye); removeEventListener("blur", bye); };
-  }); // eslint-disable-line react-hooks/exhaustive-deps
+  });
 
   useEffect(() => { if (open && sel >= 0) list.current?.children[sel]?.scrollIntoView({ block: "nearest" }); }, [sel, open]);
 

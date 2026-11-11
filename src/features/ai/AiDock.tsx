@@ -1,11 +1,12 @@
 // AI チャットのパネル。右側に出す(アプリ内ブラウザと同じ置き場所)。
 // 送るのは「利用者が操作したとき」だけ。送る前に、相手と送る範囲を画面に出し、初回は同意を取る。
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, Check, Copy, Replace, Settings as Cog, Square, Trash2, X, History, SquarePen, ChevronLeft, FileText, Quote as QuoteIcon, FileDown, ImagePlus } from "lucide-react";
 import i18next from "i18next";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { toUrl } from "@/features/browser/BrowserDock";
+import { openExternal } from "@/features/account/auth";
 import { AI_MAX_HISTORY_CHARS, AI_MAX_HISTORY_IMAGES, AI_MAX_IMAGES } from "@/shared/config";
 import { AiError, isAbort, streamChat, type AiErrorKind, type Img, type Msg, type Stop } from "@/features/ai/providers";
 import { isImageFile, toAiImage, type AiImage, type ImgFail } from "@/features/ai/images";
@@ -29,17 +30,20 @@ type M = { id: number; role: "user" | "assistant"; content: string; label?: stri
 const SAFE = { ALLOWED_TAGS: ["p", "br", "hr", "pre", "code", "strong", "em", "del", "ul", "ol", "li", "blockquote", "h1", "h2", "h3", "h4", "a", "table", "thead", "tbody", "tr", "th", "td"], ALLOWED_ATTR: ["href"], ALLOW_DATA_ATTR: false };
 const md = (s: string) => DOMPurify.sanitize(marked.parse(s, { async: false }) as string, SAFE);
 
-function Reply({ m, onReplace, onCopy }: { m: M; onReplace: (m: M) => void; onCopy: (m: M) => void }) {
+// 返答の変換は、その返答の中身が変わったときだけやり直す(流れてくる最中も、ほかの返答は変換し直さない)。
+// 置き換え・コピーは渡した m だけを使うので、m が同じなら描き直さなくてよい
+const Reply = memo(function Reply({ m, onReplace, onCopy }: { m: M; onReplace: (m: M) => void; onCopy: (m: M) => void }) {
+  const html = useMemo(() => (m.content ? md(m.content) : ""), [m.content]);
   const click = (e: React.MouseEvent) => {
     const a = (e.target as HTMLElement).closest("a");
     if (!a) return;
     e.preventDefault();
     const u = toUrl(a.getAttribute("href") ?? "");
-    if (u) window.open(u.href, "_blank", "noopener,noreferrer");
+    if (u) void openExternal(u.href); // デスクトップ版でも、PC の既定のブラウザで開く
   };
   return (
     <div className="ai-a">
-      {m.content && <div className="ai-md" onClick={click} dangerouslySetInnerHTML={{ __html: md(m.content) }} />}
+      {m.content && <div className="ai-md" onClick={click} dangerouslySetInnerHTML={{ __html: html }} />}
       {m.busy && !m.content && <p className="ai-wait">{i18next.t("考え中…")}</p>}
       {m.note === "refusal" && <p className="ai-warn">{i18next.t("モデルが応答を断りました")}</p>}
       {m.note === "length" && <p className="ai-warn">{i18next.t("長さの上限で途中で切れました")}</p>}
@@ -54,7 +58,7 @@ function Reply({ m, onReplace, onCopy }: { m: M; onReplace: (m: M) => void; onCo
       )}
     </div>
   );
-}
+}, (a, b) => a.m === b.m);
 
 const MAX_CLIPS = 8;
 const imgFail = (r: ImgFail, name: string) => (r === "big" ? i18next.t("{{name}} は大きすぎて添えられません", { name }) : i18next.t("{{name}} は画像として読めないため、添えられません", { name }));
@@ -127,7 +131,6 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
     if (!quote || quote.id === quoted.current) return;
     quoted.current = quote.id;
     if ("blob" in quote) void addImage(quote.blob, quote.name); else addClip(quote);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quote]);
   // ファイル・タブ・OS のファイルを、パネルへドロップして添える
   const hasFiles = (e: React.DragEvent) => !!(drag.node || drag.tab) || e.dataTransfer.types.includes("Files");
@@ -156,7 +159,9 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
   const msgsRef = useRef(msgs); msgsRef.current = msgs;
 
   useEffect(() => { if (open) { box.current?.focus(); void refreshLink(); } }, [open]);
-  useEffect(() => { const el = list.current; if (el) el.scrollTop = el.scrollHeight; }, [msgs]);
+  // 一番下を見ているときだけ、新しい返答に合わせて下へ送る。上を読んでいる間は動かさない(送信したときは下へ戻す)
+  const stick = useRef(true);
+  useEffect(() => { const el = list.current; if (el && stick.current) el.scrollTop = el.scrollHeight; }, [msgs]);
   useEffect(() => () => abort.current?.abort(), []);
 
   const patch = (id: number, f: (m: M) => M) => setMsgs((a) => a.map((x) => (x.id === id ? f(x) : x)));
@@ -185,6 +190,7 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
     const pat = (id: number, f: (m: M) => M) => { if (gen.current === g) patch(id, f); };
     const images = pics.map(({ type, data }) => ({ type, data }));
     const messages = history({ role: "user", content, ...(images.length ? { images } : {}) });
+    stick.current = true;
     setMsgs((a) => [...a, { id: uid, role: "user", content, label: shown, ctx, ...(pics.length ? { imgs: pics.map(({ type, data, name }) => ({ type, data, name })) } : {}) }, { id: aid, role: "assistant", content: "", busy: true, job: j }]);
     const ac = new AbortController(); abort.current = ac; setBusy(true);
     let acc = "", raf = 0;
@@ -213,7 +219,6 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
     const q = actionPrompt(job.action, job.lang), ctx: Ctx = { name: job.name, text: job.text, scope: job.scope };
     const { content, cut } = withCode(q, ctx);
     gate(() => run(content, actionLabel(job.action, job.lang), ctxLabel(ctx, cut), job));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [job, open]);
 
   const send = () => {
@@ -247,7 +252,7 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
   const openChat = (c: Chat) => {
     if (c.id === chatId) { setHist(false); return; }
     stopAll(); const m = c.msgs as M[]; loaded.current = m; seq.current = m.reduce((n, x) => Math.max(n, x.id), 0);
-    setMsgs(m); setChatId(c.id); setCurChat(c.id); setHist(false);
+    stick.current = true; setMsgs(m); setChatId(c.id); setCurChat(c.id); setHist(false);
   };
   const dropChat = (c: Chat) => { if (c.id === chatId) startNew(); deleteChat(c.id); notify(i18next.t("会話を消しました"), "success"); };
   const when = (t: number) => new Date(t).toLocaleTimeString(i18next.language, { hour: "2-digit", minute: "2-digit" });
@@ -302,7 +307,7 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
           )}
         </section>
       )}
-      <div className="ai-list scroll" ref={list} aria-live="polite">
+      <div className="ai-list scroll" ref={list} aria-live="polite" onScroll={(e) => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48; }}>
         {!ready(cfg, link) ? (
           <div className="ai-empty">
             <p>{!cfg.enabled[cfg.provider] ? i18next.t("使うプロバイダーが、設定の「AI」でオフになっています。スイッチをオンにして、連携を設定してください")

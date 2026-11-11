@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
 import i18next from "i18next";
 import { Trans } from "react-i18next";
 import { ms } from "@/features/settings/settings";

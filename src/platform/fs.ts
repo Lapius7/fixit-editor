@@ -138,9 +138,16 @@ export const createFile = (dir: FileSystemDirectoryHandle, name: string) => dir.
 export const createDir = (dir: FileSystemDirectoryHandle, name: string) => dir.getDirectoryHandle(name, { create: true });
 export const removeEntry = (dir: FileSystemDirectoryHandle, name: string) => (dir as any).removeEntry(name, { recursive: true }) as Promise<void>;
 
-// 名前の変更: 新しい名前で書き出してから元を消す(ファイルのみ)
-export async function renameFile(dir: FileSystemDirectoryHandle, h: FileSystemFileHandle, to: string) {
-  const f = await h.getFile();
+// ブラウザが move() を持つか(Chromium の新しい版)。あれば写さずにその場で動かせる
+type Movable = { move?: (a: FileSystemDirectoryHandle | string, b?: string) => Promise<void> };
+export const canMove = () => typeof FileSystemHandle !== "undefined" && typeof (FileSystemHandle.prototype as Movable).move === "function";
+// 名前の変更。move() があればそれで(フォルダも可)、なければ新しい名前で書き出してから元を消す(ファイルのみ)
+export async function renameFile(dir: FileSystemDirectoryHandle, h: FileSystemHandle, to: string): Promise<FileSystemHandle> {
+  if (canMove()) {
+    try { await (h as Movable).move!(to); return h; } catch (e) { if (h.kind !== "file") throw e; }
+  }
+  if (h.kind !== "file") throw new Error(i18next.t("フォルダの名前の変更は、まだできません"));
+  const f = await (h as FileSystemFileHandle).getFile();
   const nh = await dir.getFileHandle(to, { create: true });
   const w = await (nh as any).createWritable();
   await w.write(await f.arrayBuffer());
@@ -163,6 +170,10 @@ export async function copyInto(src: FileSystemHandle, dest: FileSystemDirectoryH
 }
 export async function moveEntry(from: FileSystemDirectoryHandle, h: FileSystemHandle, dest: FileSystemDirectoryHandle): Promise<FileSystemHandle> {
   if (await dest.getFileHandle(h.name).then(() => true, () => false) || await dest.getDirectoryHandle(h.name).then(() => true, () => false)) throw new Error(i18next.t("同じ名前があります"));
+  // 同じ種類のハンドルどうしで move() があれば、写さずに動かす(大きなフォルダでも速く、途中で失敗しても半端に残らない)
+  if (canMove() && !isRemote(h) && !isRemote(dest)) {
+    try { await (h as Movable).move!(dest); return h; } catch { /* 使えなければ写す */ }
+  }
   await copyInto(h, dest, h.name);
   await removeEntry(from, h.name);
   return h.kind === "file" ? dest.getFileHandle(h.name) : dest.getDirectoryHandle(h.name);

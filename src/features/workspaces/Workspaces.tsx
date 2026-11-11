@@ -84,7 +84,7 @@ export default function Workspaces({ initial, curId, saveName, max, onOpen, onSa
   const nameCell = (id: string, label: string) =>
     ren?.id === id ? (
       <input className="field ws-ren inline-edit" data-closing={!!ren.out} autoFocus onFocus={(e) => e.currentTarget.select()} value={ren.v} spellCheck={false} onChange={(e) => setRen({ id, v: e.target.value })} onBlur={commitRen}
-        onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") commitRen(); else if (e.key === "Escape") setRen({ ...ren, out: true }), setTimeout(() => setRen(null), ms(120)); }} />
+        onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") commitRen(); else if (e.key === "Escape") { setRen({ ...ren, out: true }); setTimeout(() => setRen(null), ms(120)); } }} />
     ) : (
       <b className="truncate label-in" onDoubleClick={() => setRen({ id, v: label })}>{label}</b>
     );

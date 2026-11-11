@@ -13,7 +13,7 @@ type Props = {
 };
 
 // 下の情報バー(VS Code の状態バーに相当)。出す項目は設定で選べる
-export default function StatusBar({ tab, cur, info, lang, dirtyCount, termCount, term, conn, connFull, connKind, onConn, ws, wsColor, onWs, onPop, onTerm, git, onGit }: Props) {
+export default function StatusBar({ tab, cur, info, lang, dirtyCount, term, conn, connFull, connKind, onConn, ws, wsColor, onWs, onPop, onTerm, git, onGit }: Props) {
   const s = useSettings();
   const text = tab?.view.kind === "text";
   return (

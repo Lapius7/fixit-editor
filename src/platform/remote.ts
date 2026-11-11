@@ -149,7 +149,7 @@ export const lastDir = (p: string): string => { const s = showPath(p).replace(/[
 export const normConn = (c: Conn): Conn => { const w = c.kind === "pc" ? wslUncPath(c.path) : null; return w ? { kind: "wsl", path: w } : c; };
 
 // Windows のパスを WSL のパスにする。C:\x → /mnt/c/x、\\wsl$\Distro\x → /x
-function toWslPath(input: string): string {
+export function toWslPath(input: string): string {
   let s = input.trim().replace(/^["']|["']$/g, "");
   const unc = wslUncPath(s);
   if (unc) return unc;

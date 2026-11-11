@@ -1,6 +1,6 @@
 {
   "name": "fixit-editor",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "private": true,
   "type": "module",
   "description": "軽くて見た目のいいコードエディタ(フィクシットエディタ)",
@@ -9,7 +9,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "oxlint --report-unused-disable-directives src",
+    "test": "vitest run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.6.0",
@@ -58,8 +60,11 @@
     "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "*",
     "@x18n/cli": "^0.1.13",
+    "happy-dom": "^21.0.4",
+    "oxlint": "^1.93.0",
     "typescript": "*",
     "vite": "*",
+    "vitest": "^5.1.0",
     "ws": "^8.22.1"
   }
 }

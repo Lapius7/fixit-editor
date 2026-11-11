@@ -6,6 +6,7 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import i18next from "i18next";
 import { PREVIEW_DELAY_MS, PREVIEW_FIRST_MS, PREVIEW_REFOCUS_MS } from "@/shared/config";
+import { IS_TAURI } from "@/shared/chrome";
 
 export type PreviewKind = "md" | "html" | "mermaid";
 
@@ -48,6 +49,19 @@ export default function Preview({ kind, text, name, source }: { kind: PreviewKin
   const [nonce, setNonce] = useState(0); // 読み直しの番号
   const [doc, setDoc] = useState("");
   const frame = useRef<HTMLIFrameElement>(null);
+  // アプリ版は srcdoc ではなく fixitpv:// から読む。srcdoc は親画面の CSP を受け継ぎ、利用者の HTML のスクリプトが止まるため
+  const pvId = useRef(Math.random().toString(36).slice(2)), ver = useRef(0);
+  const [src, setSrc] = useState<string>();
+  useEffect(() => {
+    if (!IS_TAURI) return;
+    let dead = false;
+    void import("@tauri-apps/api/core").then(async ({ invoke, convertFileSrc }) => {
+      await invoke("pv_put", { id: pvId.current, html: doc });
+      if (!dead) setSrc(`${convertFileSrc(pvId.current, "fixitpv")}?v=${++ver.current}`);
+    }).catch(() => {});
+    return () => { dead = true; };
+  }, [doc]);
+  useEffect(() => () => { if (IS_TAURI) void import("@tauri-apps/api/core").then(({ invoke }) => invoke("pv_drop", { id: pvId.current })).catch(() => {}); }, []);
   const y = useRef(0);
   useEffect(() => { const t = setTimeout(() => setShown(text), PREVIEW_DELAY_MS); return () => clearTimeout(t); }, [text]);
   // 参照しているファイルを開いているタブの中身(未保存を含む)が変わったら、作り直す
@@ -91,7 +105,7 @@ export default function Preview({ kind, text, name, source }: { kind: PreviewKin
   // HTML は JS を動かせるが、allow-same-origin は付けない(エディタの localStorage などに届かせない)
   return (
     <div className="pv-wrap">
-      <iframe ref={frame} className="pv-frame" title={i18next.t("プレビュー") + ": " + name} sandbox={kind === "html" ? "allow-scripts allow-forms allow-modals" : ""} srcDoc={doc} />
+      <iframe ref={frame} className="pv-frame" title={i18next.t("プレビュー") + ": " + name} sandbox={kind === "html" ? "allow-scripts allow-forms allow-modals" : ""} {...(IS_TAURI ? { src } : { srcDoc: doc })} />
       <button className="icon-btn pv-reload" aria-label={i18next.t("プレビューを更新")} title={i18next.t("プレビューを更新")} onClick={() => { y.current = 0; setNonce((n) => n + 1); }}><RotateCw /></button>
     </div>
   );

@@ -1,6 +1,6 @@
 import { langService } from "@/editor/langsvc";
 import { rainbowBrackets, tagSync, diagnostics, minimap } from "@/editor/intel";
-import { EditorSelection, EditorState, countColumn, type Extension } from "@codemirror/state";
+import { EditorSelection, EditorState, countColumn, type Extension, type Text } from "@codemirror/state";
 import { gitGutter } from "./gitgutter";
 import { Decoration, ViewPlugin, type DecorationSet, type ViewUpdate, EditorView, RectangleMarker, layer, crosshairCursor, drawSelection, dropCursor, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, highlightTrailingWhitespace, highlightWhitespace, lineNumbers, rectangularSelection, scrollPastEnd } from "@codemirror/view";
 import { highlightSelectionMatches } from "@codemirror/search";
@@ -29,18 +29,28 @@ const tabKey = (v: EditorView): boolean => {
 
 // 文書内の単語を候補にする(言語ごとの補完に加えて、どの言語でも効く)
 const WORD = /[\p{L}\p{N}_$]{3,}/gu;
+const SPAN = 200_000; // 大きい文書は、カーソルの前後この文字数だけから集める(1 打鍵ごとに全体を走査しない)
+type Counted = { doc: Text; from: number; to: number; words: Map<string, number> };
+// 結果はエディタ(view)ごとに持つ。別のファイルの単語が混ざらないように
+const countedBy = new WeakMap<object, Counted>();
+function wordsNear(doc: Text, pos: number, owner?: object) {
+  const counted = owner ? countedBy.get(owner) : undefined;
+  const from = Math.max(0, Math.min(pos - SPAN / 2, doc.length - SPAN)), to = Math.min(doc.length, from + SPAN);
+  // 同じ文書なら前の結果を使う。大きい文書で範囲が重なるあいだは、打った字の分の古さは気にしない
+  if (counted && (counted.doc === doc || (doc.length > SPAN && Math.abs(counted.from - from) < SPAN / 4 && Math.abs(counted.doc.length - doc.length) < 4096))) return counted.words;
+  const words = new Map<string, number>();
+  for (const m of doc.sliceString(from, to).matchAll(WORD)) words.set(m[0], (words.get(m[0]) ?? 0) + 1);
+  if (owner) countedBy.set(owner, { doc, from, to, words });
+  return words;
+}
 function wordSource(ctx: CompletionContext): CompletionResult | null {
   const w = ctx.matchBefore(/[\p{L}\p{N}_$]{2,}/u);
   if (!w || (w.from === w.to && !ctx.explicit)) return null;
-  const text = ctx.state.doc.toString();
-  const seen = new Map<string, number>();
-  for (const m of text.matchAll(WORD)) {
-    if (m.index === w.from) continue;
-    seen.set(m[0], (seen.get(m[0]) ?? 0) + 1);
-  }
-  const typed = w.text;
-  const options = [...seen.entries()]
-    .filter(([s]) => s !== typed && s.toLowerCase().startsWith(typed.toLowerCase()))
+  const typed = w.text, low = typed.toLowerCase();
+  // カーソルのある単語そのものは候補に出さない(1 回しか出てこない単語だけを除く)
+  const line = ctx.state.doc.lineAt(w.from), here = /^[\p{L}\p{N}_$]*/u.exec(line.text.slice(w.from - line.from))?.[0] ?? typed;
+  const options = [...wordsNear(ctx.state.doc, ctx.pos, ctx.view).entries()]
+    .filter(([s, n]) => s !== typed && !(s === here && n < 2) && s.toLowerCase().startsWith(low))
     .sort((a, b) => b[1] - a[1] || a[0].length - b[0].length)
     .slice(0, 30)
     .map(([label]) => ({ label, type: "text", boost: -1 }));

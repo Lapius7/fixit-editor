@@ -20,6 +20,53 @@ fn key_of(name: &str) -> Option<String> {
     if valid(&k) { Some(k) } else { None }
 }
 
+// API キーやログインのトークンを含むキー。Windows では DPAPI でユーザーごとに暗号化して書く
+const SECRET: &[&str] = &["fixit:ai:v1", "fixit:account:v1"];
+const SEALED: &str = "dpapi:";
+fn secret(key: &str) -> bool { SECRET.contains(&key) }
+
+// 書く前に暗号化する。Windows 以外ではそのまま
+fn seal(key: &str, v: &str) -> Result<String, String> {
+    if !secret(key) { return Ok(v.to_owned()); }
+    #[cfg(windows)]
+    { use base64::Engine; return Ok(format!("{SEALED}{}", base64::engine::general_purpose::STANDARD.encode(dpapi::protect(v.as_bytes())?))); }
+    #[cfg(not(windows))]
+    Ok(v.to_owned())
+}
+
+// 読んだ中身を戻す。暗号化したものが戻せない(別のユーザー・別の PC で書いたなど)ときは、無いものとして扱う
+fn unseal(raw: String) -> Option<String> {
+    let Some(b) = raw.strip_prefix(SEALED) else { return Some(raw) };
+    #[cfg(windows)]
+    { use base64::Engine; let d = base64::engine::general_purpose::STANDARD.decode(b.trim()).ok()?; return String::from_utf8(dpapi::unprotect(&d).ok()?).ok(); }
+    #[cfg(not(windows))]
+    { let _ = b; None }
+}
+
+#[cfg(windows)]
+mod dpapi {
+    use windows_sys::Win32::Foundation::LocalFree;
+    use windows_sys::Win32::Security::Cryptography::{CryptProtectData, CryptUnprotectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB};
+    fn run(data: &[u8], seal: bool) -> Result<Vec<u8>, String> {
+        let inp = CRYPT_INTEGER_BLOB { cbData: data.len() as u32, pbData: data.as_ptr() as *mut u8 };
+        let mut out = CRYPT_INTEGER_BLOB { cbData: 0, pbData: std::ptr::null_mut() };
+        // SAFETY: inp は data を指し、呼び出しの間だけ使われる。out は成功時に LocalAlloc された領域を受け取り、写したあとで LocalFree する
+        unsafe {
+            let ok = if seal {
+                CryptProtectData(&inp, std::ptr::null(), std::ptr::null(), std::ptr::null(), std::ptr::null(), CRYPTPROTECT_UI_FORBIDDEN, &mut out)
+            } else {
+                CryptUnprotectData(&inp, std::ptr::null_mut(), std::ptr::null(), std::ptr::null(), std::ptr::null(), CRYPTPROTECT_UI_FORBIDDEN, &mut out)
+            };
+            if ok == 0 { return Err(format!("DPAPI に失敗しました({})", std::io::Error::last_os_error())); }
+            let v = std::slice::from_raw_parts(out.pbData, out.cbData as usize).to_vec();
+            LocalFree(out.pbData as _);
+            Ok(v)
+        }
+    }
+    pub fn protect(d: &[u8]) -> Result<Vec<u8>, String> { run(d, true) }
+    pub fn unprotect(d: &[u8]) -> Result<Vec<u8>, String> { run(d, false) }
+}
+
 // フォルダの中のデータを全部読む。読めないファイルは飛ばす
 pub fn load(dir: &Path) -> HashMap<String, String> {
     let mut m = HashMap::new();
@@ -27,7 +74,10 @@ pub fn load(dir: &Path) -> HashMap<String, String> {
     for e in rd.flatten() {
         let Some(name) = e.file_name().to_str().and_then(key_of) else { continue };
         if let Ok(md) = e.metadata() { if !md.is_file() || md.len() as usize > MAX_VALUE { continue; } }
-        if let Ok(s) = fs::read_to_string(e.path()) { m.insert(name, s); }
+        let Ok(s) = fs::read_to_string(e.path()) else { continue };
+        // 前の版が平文で残したものは、ここで暗号化して書き直す
+        if cfg!(windows) && secret(&name) && !s.starts_with(SEALED) { let _ = save(dir, &name, Some(&s)); }
+        if let Some(v) = unseal(s) { m.insert(name, v); }
     }
     m
 }
@@ -36,7 +86,7 @@ pub fn load(dir: &Path) -> HashMap<String, String> {
 pub fn read(dir: &Path, key: &str) -> Option<String> {
     let p = file_of(dir, key).ok()?;
     if fs::metadata(&p).ok()?.len() as usize > MAX_VALUE { return None; }
-    fs::read_to_string(p).ok()
+    unseal(fs::read_to_string(p).ok()?)
 }
 
 // 各ファイルの「更新の目印」(更新時刻と大きさ)。ほかのウィンドウが書き換えたかを、中身を読まずに調べるために使う
@@ -67,6 +117,8 @@ pub fn save(dir: &Path, key: &str, value: Option<&str>) -> Result<(), String> {
         None => match fs::remove_file(&p) { Ok(()) => Ok(()), Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()), Err(e) => Err(e.to_string()) },
         Some(v) => {
             if v.len() > MAX_VALUE { return Err("データが大きすぎます".into()); }
+            let sealed = seal(key, v)?;
+            let v = sealed.as_str();
             fs::create_dir_all(dir).map_err(|e| e.to_string())?;
             let tmp = tmp_of(&p);
             let mut f = fs::File::create(&tmp).map_err(|e| e.to_string())?;
@@ -139,6 +191,21 @@ mod tests {
         let v = read(&d, "fixit:stats:v1").unwrap();
         assert!(v.starts_with("{\"v\":") && v.ends_with('}'));
         assert!(fs::read_dir(&d).unwrap().flatten().all(|e| !e.file_name().to_string_lossy().ends_with(".tmp")));
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn secret_keys_roundtrip() {
+        let d = tmp("sec");
+        save(&d, "fixit:ai:v1", Some("{\"key\":\"sk-1\"}")).unwrap();
+        assert_eq!(read(&d, "fixit:ai:v1").as_deref(), Some("{\"key\":\"sk-1\"}"));
+        assert_eq!(load(&d)["fixit:ai:v1"], "{\"key\":\"sk-1\"}");
+        let raw = fs::read_to_string(d.join("fixit_ai_v1.json")).unwrap();
+        assert_eq!(raw.starts_with(SEALED), cfg!(windows));
+        // 戻せない暗号文は、無いものとして扱う
+        fs::write(d.join("fixit_account_v1.json"), "dpapi:@@@").unwrap();
+        assert_eq!(read(&d, "fixit:account:v1"), None);
+        assert!(!load(&d).contains_key("fixit:account:v1"));
         let _ = fs::remove_dir_all(&d);
     }
 }

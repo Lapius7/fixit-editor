@@ -164,7 +164,11 @@ fn pty_resize(state: State<Ptys>, id: String, cols: u16, rows: u16) {
 
 #[tauri::command]
 fn pty_close(state: State<Ptys>, id: String) {
-    if let Some(mut p) = state.0.lock().unwrap().remove(&id) { let _ = p.child.kill(); }
+    // 止めたあと終わるのを待ち、プロセスの残骸を残さない。待つあいだ画面を止めないよう別のスレッドで待つ
+    if let Some(mut p) = state.0.lock().unwrap().remove(&id) {
+        let _ = p.child.kill();
+        std::thread::spawn(move || { let _ = p.child.wait(); });
+    }
 }
 
 
@@ -444,17 +448,42 @@ async fn clip_write(text: String) -> Result<(), String> {
         .map_err(|e| e.to_string())?
 }
 
+// ---- プレビュー(HTML・Markdown)の配信 ----
+// srcdoc の iframe は親画面の CSP を受け継ぐので、利用者の HTML(インラインのスクリプトや外部の読み込み)が止まる。
+// 別の配信元 fixitpv:// から出して、親画面には厳しい CSP をかけたままにする
+#[derive(Default)]
+struct Pv(Mutex<HashMap<String, String>>);
+
+#[tauri::command]
+fn pv_put(state: State<Pv>, id: String, html: String) { state.0.lock().unwrap().insert(id, html); }
+#[tauri::command]
+fn pv_drop(state: State<Pv>, id: String) { state.0.lock().unwrap().remove(&id); }
+
+fn pv_serve<R: tauri::Runtime>(ctx: tauri::UriSchemeContext<'_, R>, req: tauri::http::Request<Vec<u8>>) -> tauri::http::Response<std::borrow::Cow<'static, [u8]>> {
+    use tauri::Manager;
+    let id = req.uri().path().trim_start_matches('/').to_string();
+    let html = ctx.app_handle().state::<Pv>().0.lock().unwrap().get(&id).cloned();
+    let b = tauri::http::Response::builder().header("Cache-Control", "no-store");
+    match html {
+        Some(h) => b.header("Content-Type", "text/html; charset=utf-8").body(h.into_bytes().into()),
+        None => b.status(404).body(Vec::new().into()),
+    }
+    .unwrap()
+}
+
 fn main() {
     if let Some(l) = std::env::var_os("FIXIT_LAUNCHER") { update::sweep_old(std::path::Path::new(&l)); }
     tauri::Builder::default()
         .manage(Ptys::default())
         .manage(Jobs::default())
+        .manage(Pv::default())
+        .register_uri_scheme_protocol("fixitpv", pv_serve)
         // 念のため: 画面側から読み取りの許可を求められても、ブラウザの確認を出さずに許可する(アプリ自身の画面だけを表示するため)
         .on_permission_request(|_, kind| match kind {
             tauri::webview::PermissionKind::ClipboardRead => tauri::webview::PermissionResponse::Allow,
             _ => tauri::webview::PermissionResponse::Default,
         })
-        .invoke_handler(tauri::generate_handler![clip_read, clip_write, pty_open, pty_shells, pty_write, pty_resize, pty_close, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_login, claude_cancel, store_load, store_read, store_stamps, store_save, apply_update, list_fonts, open_url, os_open])
+        .invoke_handler(tauri::generate_handler![pv_put, pv_drop, clip_read, clip_write, pty_open, pty_shells, pty_write, pty_resize, pty_close, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_login, claude_cancel, store_load, store_read, store_stamps, store_save, apply_update, list_fonts, open_url, os_open])
         .run(tauri::generate_context!())
         .expect("フィクシットエディタを起動できませんでした");
 }

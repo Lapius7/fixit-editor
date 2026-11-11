@@ -41,6 +41,8 @@ export default function TerminalSession({ id, active, open, focusKey, host: sshH
   cb.current = { onExit, register };
   const copyOnSelect = useRef(s.termCopyOnSelect);
   copyOnSelect.current = s.termCopyOnSelect;
+  const autoClose = useRef(s.termAutoClose);
+  autoClose.current = s.termAutoClose;
   const rightPaste = useRef(s.termRightClick === "paste");
   rightPaste.current = s.termRightClick === "paste";
 
@@ -76,7 +78,7 @@ export default function TerminalSession({ id, active, open, focusKey, host: sshH
     sock.onopen = () => { size(); arm(4000); };
     sock.onmessage = (e) => { t.write(typeof e.data === "string" ? e.data : new Uint8Array(e.data as ArrayBuffer)); if (!ready) arm(300); };
     sock.onclose = () => {
-      if (s.termAutoClose) cb.current.onExit(id);
+      if (autoClose.current) cb.current.onExit(id); // 開いたあとに設定を変えても効くように、いまの値を見る
       else t.write(i18next.t("\r\n\u001b[2m[終了しました。Enter で閉じます]\u001b[0m"));
     };
     sock.onerror = () => t.write(i18next.t("\r\n\u001b[31mターミナルに接続できません。\u001b[0m\r\nこの機能は開発サーバー(pnpm dev)かデスクトップ版で使えます。"));
@@ -108,19 +110,21 @@ export default function TerminalSession({ id, active, open, focusKey, host: sshH
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 見た目の設定は、作り直さず、動いている画面にそのまま反映する
-  useEffect(() => { if (term.current) term.current.options.theme = isDark(s) ? DARK : LIGHT; }, [s.mode]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 「自動」のときは、OS のライト・ダークの切り替えにも合わせる(mode は "auto" のまま変わらないので、明暗そのものを見る)
+  const dark = isDark(s);
+  useEffect(() => { if (term.current) term.current.options.theme = dark ? DARK : LIGHT; }, [dark]);
   useEffect(() => {
     const t = term.current; if (!t) return;
     t.options.fontFamily = FONT(); t.options.fontSize = s.termFontSize; t.options.lineHeight = s.termLineHeight;
     t.options.cursorBlink = s.termBlink; t.options.cursorWidth = s.termCursorWidth; t.options.cursorInactiveStyle = s.termCursorInactive as "outline" | "block" | "none"; t.options.cursorStyle = s.termCursor as "bar" | "block" | "underline"; t.options.scrollback = s.termScrollback;
     t.options.scrollSensitivity = s.termScrollSens; t.options.minimumContrastRatio = s.termMinContrast;
     requestAnimationFrame(size);
-  }, [s.fontFamily, s.termFontSize, s.termLineHeight, s.termBlink, s.termCursorWidth, s.termCursorInactive, s.termCursor, s.termScrollback, s.termScrollSens, s.termMinContrast, s.termPad]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [s.fontFamily, s.termFontSize, s.termLineHeight, s.termBlink, s.termCursorWidth, s.termCursorInactive, s.termCursor, s.termScrollback, s.termScrollSens, s.termMinContrast, s.termPad]);
   useEffect(() => {
     if (!active || !open) return;
     const r = requestAnimationFrame(() => { size(); if (!document.activeElement?.closest(".term-head")) term.current?.focus(); }); // 名前を変えている間は、入力欄から焦点を奪わない
     return () => cancelAnimationFrame(r);
-  }, [active, open, focusKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [active, open, focusKey]);
 
   return (
     <div

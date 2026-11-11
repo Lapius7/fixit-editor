@@ -55,15 +55,15 @@ import { listShells, type ShellOpt } from "@/platform/pty";
 import { RemoteFile, checkDir, connKey, isRemote, remoteSig, connLabel, lastDir, normConn, showPath, pushRecent, rootHandle, sshUrl, type Conn, type RemoteDir } from "@/platform/remote";
 import { DEMO_NAME, DEMO_TREE } from "@/shared/demo";
 import { IS_TAURI } from "@/shared/chrome";
-import { copyInto, createDir, createFile, freeEntryName, moveEntry, pickFolder, pickPcFolder, readDir, removeEntry, renameFile, supportsFs, writeFile, writeBlob, freeName, type Node } from "@/platform/fs";
-import { getFile, isImageName, load } from "@/platform/load";
+import { canMove, copyInto, createDir, createFile, freeEntryName, moveEntry, pickFolder, pickPcFolder, readDir, removeEntry, renameFile, supportsFs, writeFile, writeBlob, freeName, type Node } from "@/platform/fs";
+import { diskText, getFile, isImageName, load } from "@/platform/load";
 import { copyImage } from "@/shared/clipimage";
 import { langName } from "@/editor/lang";
 import { APP_NAME } from "@/shared/config";
 import BrowserDock from "@/features/browser/BrowserDock";
 import { AiDock, type AiPic, type AiQuote } from "@/features/ai/AiDock";
 import { GitPanel } from "@/features/git/GitPanel";
-import type { AiAction, AiJob, Clip, Ctx } from "@/features/ai/prompts";
+import type { AiAction, AiJob, Ctx } from "@/features/ai/prompts";
 import Preview, { previewKind } from "@/features/preview/Preview";
 import { KEYS, DEF, chips, comboOf, keyOf, rec, table } from "@/features/settings/keys";
 import { EDIT } from "@/editor/edit-cmds";
@@ -308,7 +308,7 @@ export default function App() {
     setAct((a) => ({ ...a, [pane]: n.path }));
     setGrp((g) => (g[pane]?.has(n.path) ? g : grpAdd(g, pane, n.path)));
     setFp(pane);
-  }, [tabs, fp, preview, act, lay]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tabs, fp, preview, act, lay]);
 
   // 一覧・クイックオープンから開くとき: すでに別の画面で開いていれば、その画面のタブへ移るだけにする(重複して開かない)
   const openOrFocus = (n: Node, pin = true) => {
@@ -371,6 +371,7 @@ export default function App() {
     }, ms(220));
   };
   // 一時表示(斜体)のタブは、どの画面でも選ばれなくなったら閉じる。未保存の変更があれば固定して残す(編集した時点でも固定される)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!preview || closing.has(preview) || Object.values(act).includes(preview)) return;
     const t = tabs.find((x) => x.node.path === preview);
@@ -378,7 +379,7 @@ export default function App() {
     if (isText(t) && t.text !== t.saved) { setPreview(null); return; }
     setPreview(null);
     closeMany([preview], true);
-  }); // eslint-disable-line react-hooks/exhaustive-deps
+  });
   const close = async (path: string) => {
     if (pinned.has(path)) return;
     const t = tabOf(path);
@@ -393,6 +394,11 @@ export default function App() {
     setAct((a) => (a[i] === path ? { ...a, [i]: nearIn(i, path) } : a));
   };
 
+  // 外で変更されたファイル(自動保存を止めたもの)。保存し直すか、読み直すと外す
+  const conflicts = useRef(new Set<string>());
+  // 最後に読んだ・保存したときの中身(改行コードの切り替えの印 \u0000 は除く)
+  // eslint-disable-next-line no-control-regex
+  const baseOf = (t: Tab) => t.saved.replace(/\u0000+$/, "");
   // 保存。設定に応じて、行末の空白を削り、末尾に改行を入れる
   const saveTab = useCallback(async (t: Tab, quiet = false) => {
     if (!isText(t)) { if (t.view.kind === "image") window.dispatchEvent(new CustomEvent(IMAGE_SAVE, { detail: t.node.path })); return; }
@@ -401,9 +407,19 @@ export default function App() {
     if (st.finalNewline && text && !text.endsWith("\n")) text += "\n";
     const mark = () => { setTabs((p) => p.map((x) => (x.node.path === t.node.path ? { ...x, text: x.text === t.text ? text : x.text, saved: text } : x))); setPreview((v) => (v === t.node.path ? null : v)); };
     if (!t.node.handle) { mark(); return quiet ? undefined : flash(i18next.t("デモのファイルは、保存先がありません")); }
+    // 開いた(前に保存した)あとに、外(端末・ほかのアプリ)で書き換わっていないか確かめる。気づかずに上書きしないため
+    const disk = await diskText(t.node);
+    if (disk !== null && disk !== baseOf(t) && disk !== text) {
+      if (quiet) {
+        if (!conflicts.current.has(t.node.path)) { conflicts.current.add(t.node.path); flash(i18next.t("{{name}} は外で変更されたため、自動では保存しません。保存すると上書きします", { name: t.node.name }), "error"); }
+        return;
+      }
+      if (!(await ask({ message: i18next.t("{{name}} は、開いたあとに外で変更されています。上書きして保存しますか?", { name: t.node.name }), ok: i18next.t("上書きして保存"), danger: true }))) return;
+    }
+    conflicts.current.delete(t.node.path);
     try { await writeFile(t.node.handle as FileSystemFileHandle, t.eol === "crlf" && st.remoteKeepEol ? text.replace(/\n/g, "\r\n") : text); mark(); noteSave(); recordSave(t.node.path, text, t.saved); setGitTick((n) => n + 1); if (!quiet) flash(i18next.t("保存しました")); }
     catch (e) { flash(i18next.t("保存できませんでした: {{m}}", { m: (e as Error).message }), "error"); }
-  }, [st.trimOnSave, st.finalNewline, st.remoteKeepEol]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [st.trimOnSave, st.finalNewline, st.remoteKeepEol]);
   // 改行コードの切り替え。保存し直すまでは、ファイルは変わらない(未保存の印をつける)
   const toggleEol = () => { if (!tab || !isText(tab)) return; const eol = tab.eol === "crlf" ? "lf" : "crlf"; setTabs((p) => p.map((x) => (x.node.path === tab.node.path ? { ...x, eol, saved: x.saved + "\u0000" } : x))); flash(i18next.t("改行コードを {{arg0}} にしました。保存すると反映されます", { arg0: eol === "crlf" ? "CRLF" : "LF" })); };
   const save = useCallback(async () => { if (tab) await saveTab(tab); }, [tab, saveTab]);
@@ -549,7 +565,7 @@ export default function App() {
     clearTimeout(wsTimer.current);
     wsTimer.current = setTimeout(() => flushRef.current(), st.wsDelay);
     return () => clearTimeout(wsTimer.current);
-  }, [tabs, act, fp, lay, grp, side, panel, term, sess, pvMode, pvPin, pvR, cur, st.wsDelay, st.wsTerms]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tabs, act, fp, lay, grp, side, panel, term, sess, pvMode, pvPin, pvR, cur, st.wsDelay, st.wsTerms]);
   useEffect(() => {
     const f = () => flushRef.current();
     addEventListener("pagehide", f);
@@ -847,7 +863,36 @@ export default function App() {
     };
     addEventListener("focus", f);
     return () => removeEventListener("focus", f);
-  }); // eslint-disable-line react-hooks/exhaustive-deps
+  });
+
+  // 開いているファイルが外で書き換わっていたら、未編集のタブは読み直す。編集中のタブは保存のときに確かめる
+  // sshToo: SSH は読むたびに通信するので、設定で切れるようにする(この PC と WSL はいつも確かめる)
+  const checkDisk = async (sshToo: boolean) => {
+    for (const t of tabs) {
+      if (!isText(t) || !t.node.handle || (!sshToo && rootOf(t.node).conn?.kind === "ssh")) continue;
+      const disk = await diskText(t.node);
+      if (disk === null || disk === baseOf(t)) continue;
+      if (t.text === t.saved) {
+        conflicts.current.delete(t.node.path);
+        setTabs((p) => p.map((x) => (x.node.path === t.node.path && isText(x) && x.text === x.saved ? { ...x, text: disk, saved: disk } : x)));
+      } else if (!conflicts.current.has(t.node.path)) {
+        conflicts.current.add(t.node.path);
+        flash(i18next.t("{{name}} は外で変更されました。保存すると上書きします", { name: t.node.name }), "error");
+      }
+    }
+  };
+  const diskRef = useRef(checkDisk);
+  diskRef.current = checkDisk;
+  useEffect(() => {
+    let busy = false;
+    const f = async () => {
+      if (busy || document.visibilityState === "hidden") return;
+      busy = true;
+      try { await diskRef.current(st.remoteFocusReload); } finally { busy = false; }
+    };
+    addEventListener("focus", f);
+    return () => removeEventListener("focus", f);
+  }, [st.remoteFocusReload]);
 
   // 外(エクスプローラーや端末など)での追加・削除・改名に追従する。画面に出ているフォルダの更新日時(ブラウザ版の PC のフォルダは名前の一覧)を数秒ごとに確かめ、変わっていたら読み直す
   const watchRef = useRef({ roots, reload });
@@ -888,7 +933,7 @@ export default function App() {
         // 前に見たフォルダの値が変わったときだけ読み直す(フォルダを開いて見る対象が増えただけでは読み直さない)
         let changed = false;
         for (const [k, v] of got.flat()) { if (prev.has(k) && prev.get(k) !== v) changed = true; prev.set(k, v); }
-        if (changed) await reload();
+        if (changed) { await reload(); await diskRef.current(true); } // 保存のしかたによっては(一時ファイルからの置き換え)、フォルダの更新日時も変わる
       } catch { /* 読めないときは次の回に */ } finally { busy = false; }
     };
     const id = setInterval(tick, 2500);
@@ -920,7 +965,7 @@ export default function App() {
   };
   const rename = (n: Node) => {
     const rr = rootOf(n);
-    if (n.kind === "dir" && rr.handle && !rr.conn) return flash(i18next.t("フォルダの名前の変更は、まだできません"));
+    if (n.kind === "dir" && rr.handle && !rr.conn && !canMove()) return flash(i18next.t("フォルダの名前の変更は、まだできません"));
     setDlg({
       title: i18next.t("名前の変更"), input: n.name, ok: i18next.t("変更"),
       validate: (v) => (/[\\/]/.test(v) ? i18next.t("「/」は使えません") : v.trim() !== n.name && exists(rr.nodes, `${dirOf(n.path)}/${v.trim()}`) ? i18next.t("同じ名前があります") : null),
@@ -934,7 +979,10 @@ export default function App() {
             await parent.rename(n.name, name);
             handle = n.kind === "file" ? new RemoteFile(rr.conn, `${parent.path === "/" ? "" : parent.path}/${name}`, name) as unknown as FileSystemHandle : undefined;
             if (n.kind === "dir") closeMany(tabs.filter((t) => t.node.path.startsWith(n.path + "/")).map((t) => t.node.path), true);
-          } else if (rr.handle && n.kind === "file") handle = await renameFile((n.parent ?? rr.handle) as FileSystemDirectoryHandle, n.handle as FileSystemFileHandle, name);
+          } else if (rr.handle && n.handle) {
+            handle = await renameFile((n.parent ?? rr.handle) as FileSystemDirectoryHandle, n.handle, name);
+            if (n.kind === "dir") closeMany(tabs.filter((t) => t.node.path.startsWith(n.path + "/")).map((t) => t.node.path), true);
+          }
           else updRoot(rr.prefix, (r) => ({ ...r, nodes: renameNode(r.nodes, n.path, name) }));
           setTabs((p) => p.map((t) => (t.node.path === n.path ? { ...t, node: { ...t.node, name, path: np, handle } } : t)));
           setGrp((g) => Object.fromEntries(Object.entries(g).map(([k, x]) => [k, x.has(n.path) ? new Set([...x].map((q) => (q === n.path ? np : q))) : x])) as Pm<Set<string>>);
@@ -1311,6 +1359,24 @@ export default function App() {
     addEventListener("beforeunload", h);
     return () => removeEventListener("beforeunload", h);
   });
+  // デスクトップ版: ×ボタン・Alt+F4 で閉じるときも確かめる(beforeunload は、ウィンドウを閉じる操作では働かない)。
+  // 受け取る側を 1 度だけ登録し、未保存の数と設定は ref で最新を見る
+  const exitRef = useRef({ dirty: 0, on: true });
+  exitRef.current = { dirty: dirtyList.length, on: st.confirmExit };
+  useEffect(() => {
+    if (!IS_TAURI) return;
+    let off: (() => void) | undefined, dead = false;
+    void import("@tauri-apps/api/window")
+      .then(({ getCurrentWindow }) => getCurrentWindow().onCloseRequested(async (e) => {
+        const { dirty, on } = exitRef.current;
+        if (!on || !dirty) return;
+        const ok = await ask({ message: i18next.t("保存していない変更が {{n}} 件あります。閉じると失われます。閉じますか?", { n: dirty }), ok: i18next.t("保存せずに閉じる"), danger: true });
+        if (!ok) e.preventDefault();
+      }))
+      .then((f) => { if (dead) f(); else off = f; })
+      .catch(() => { /* 受け取れなければ、確かめずに閉じる(これまでどおり) */ });
+    return () => { dead = true; off?.(); };
+  }, []);
 
   const cmds: Cmd[] = useMemo(() => [
     ...KEYS.map((k) => ({ id: k.id, label: i18next.t(k.label), group: i18next.t(k.group), keys: keyOf(k.id, st.keys), run: () => run(k.id) })),
@@ -1752,6 +1818,16 @@ export default function App() {
 
   const goHit = (n: Node, h: { line: number; from: number; to: number }) => goto(n, h.line, h.from, h.to);
 
+  // ツリーに渡す関数は毎回同じものにする(FileTree は memo なので、打鍵のたびに描き直さない)
+  const treeRef = useRef({ openOrFocus, treeMenu, moveTo, dropInto });
+  treeRef.current = { openOrFocus, treeMenu, moveTo, dropInto };
+  const treeFn = useMemo(() => ({
+    open: (n: Node, pin?: boolean) => treeRef.current.openOrFocus(n, !!pin),
+    ctx: (e: React.MouseEvent, n: Node | null) => void treeRef.current.treeMenu(e, n),
+    move: (n: Node, dest: Node | null) => treeRef.current.moveTo(n, dest),
+    drop: (e: React.DragEvent, n: Node | null) => void treeRef.current.dropInto(e, n),
+  }), []);
+
   return (
     <GitMarks.Provider value={gitMark}>
     <div className="stage" onContextMenu={stageMenu}>
@@ -1822,7 +1898,7 @@ export default function App() {
                       </button>
                       <div className="collapse" data-open={!shut} inert={shut}>
                         <div className="collapse-inner">
-                          <FileTree nodes={r.nodes} activePath={act[fp]} ctxPath={menu?.path ?? null} rev={rev} onOpen={(n, pin) => openOrFocus(n, !!pin)} onContext={(e, n) => treeMenu(e, n)} onMove={moveTo} onDropFiles={r.handle ? (e, n) => void dropInto(e, n) : undefined} />
+                          <FileTree nodes={r.nodes} activePath={act[fp]} ctxPath={menu?.path ?? null} rev={rev} onOpen={treeFn.open} onContext={treeFn.ctx} onMove={treeFn.move} onDropFiles={r.handle ? treeFn.drop : undefined} />
                         </div>
                       </div>
                     </section>
@@ -1833,7 +1909,7 @@ export default function App() {
                     <p><Trans i18nKey="フォルダやファイルをここへドラッグ&ドロップするか、下のボタンから選んでください。" /></p>
                   </div>
                 ) : (
-                  <FileTree nodes={root.nodes} activePath={act[fp]} ctxPath={menu?.path ?? null} rev={rev} onOpen={(n, pin) => openOrFocus(n, !!pin)} onContext={(e, n) => treeMenu(e, n)} onMove={moveTo} />
+                  <FileTree nodes={root.nodes} activePath={act[fp]} ctxPath={menu?.path ?? null} rev={rev} onOpen={treeFn.open} onContext={treeFn.ctx} onMove={treeFn.move} />
                 )}
               </nav>
               <div className="side-foot" ref={footRef}>

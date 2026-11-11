@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, memo, useContext, useEffect, useRef, useState } from "react";
 import i18next from "i18next";
 import { ChevronRight, FileText, FileCode2, FileJson, FileType, Folder, FolderOpen, Image as ImageIcon, Film, Music } from "lucide-react";
 import { readDir, type Node } from "@/platform/fs";
@@ -45,7 +45,7 @@ export const GitMarks = createContext<(n: Node) => GitMark | undefined>(() => un
 
 type Props = { nodes: Node[]; activePath: string | null; ctxPath: string | null; rev: number; onOpen: (n: Node, pin?: boolean) => void; onContext: (e: React.MouseEvent, n: Node) => void; onMove: (n: Node, dest: Node) => void; onDropFiles?: (e: React.DragEvent, dest: Node) => void; depth?: number };
 
-export default function FileTree({ nodes: all, activePath, ctxPath, rev, onOpen, onContext, onMove, onDropFiles, depth = 0 }: Props) {
+function FileTree({ nodes: all, activePath, ctxPath, rev, onOpen, onContext, onMove, onDropFiles, depth = 0 }: Props) {
   const { showHidden, treeIndent } = useSettings();
   const nodes = showHidden ? all : all.filter((n) => !n.name.startsWith("."));
   // いちばん上の一覧では、中のフォルダを先読みしておく。作成・削除のあとは先読みを捨てる
@@ -167,3 +167,6 @@ function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, onDropFi
     </li>
   );
 }
+
+// 親(App)は打鍵のたびに描き直すので、ツリーは props が変わったときだけ描く
+export default memo(FileTree);

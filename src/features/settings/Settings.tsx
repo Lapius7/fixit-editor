@@ -40,7 +40,7 @@ export default function Settings({ onClose, first, out, onTheme, onCheckUpdate }
     const on = (e: KeyboardEvent) => { if (e.key === "Escape" && !rec.on) close(); };
     addEventListener("keydown", on);
     return () => removeEventListener("keydown", on);
-  }); // eslint-disable-line react-hooks/exhaustive-deps
+  });
   useEffect(() => { body.current?.scrollTo({ top: 0 }); }, [cat, q, only]);
 
   const count = useMemo(() => {

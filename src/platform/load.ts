@@ -31,6 +31,23 @@ export async function getFile(n: Node): Promise<File> {
   return (n.handle as FileSystemFileHandle).getFile();
 }
 
+// 改行をエディタと同じ形にそろえる(すべての行が CRLF のときだけ LF に直す)
+export const norm = (raw: string) => {
+  const crlf = /\r\n/.test(raw) && !/(^|[^\r])\n/.test(raw); // すべての行が CRLF のときだけ。混ざっているときは LF にそろえる
+  return { text: crlf ? raw.replace(/\r\n/g, "\n") : raw, crlf };
+};
+
+// いまディスクにある中身を、エディタで持つ形で読む(外での変更を見つけるため)。読めない・大きすぎる・文字でないときは null
+export async function diskText(n: Node): Promise<string | null> {
+  if (n.demo !== undefined || !n.handle) return null;
+  try {
+    const f = await getFile(n);
+    if (f.size > MAX_OPEN_BYTES) return null;
+    const raw = await f.text();
+    return raw.includes("\u0000") ? null : norm(raw).text;
+  } catch { return null; }
+}
+
 export async function load(n: Node, force = false): Promise<{ view: View; info: string }> {
   const f = await getFile(n);
   const e = ext(n.name);
@@ -54,6 +71,6 @@ export async function load(n: Node, force = false): Promise<{ view: View; info: 
   // 大きいファイルは、すぐには読まず注意を出す。「読み込む」を押したら force で読む
   if (f.size > MAX_OPEN_BYTES && !force) return { info, view: { kind: "unsupported", big: true, reason: i18next.t("大きいファイルです（{{arg0}}）", { arg0: size(f.size) }), hint: i18next.t("{{arg0}} を超えるファイルは、読み込むとエディタが重くなることがあります。", { arg0: size(MAX_OPEN_BYTES) }) } };
   const raw = await f.text();
-  const crlf = /\r\n/.test(raw) && !/(^|[^\r])\n/.test(raw); // すべての行が CRLF のときだけ。混ざっているときは LF にそろえる
-  return { info, view: { kind: "text", text: crlf ? raw.replace(/\r\n/g, "\n") : raw, eol: crlf ? "crlf" : "lf" } };
+  const { text, crlf } = norm(raw);
+  return { info, view: { kind: "text", text, eol: crlf ? "crlf" : "lf" } };
 }
