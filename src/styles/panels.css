@@ -382,11 +382,11 @@ body:has(.col-grip[data-drag="true"]) iframe, body:has(.col-grip[data-drag="true
 .ai-pic-x { position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 6px; background: var(--pop); box-shadow: 0 0 0 1px var(--hair); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
 .ai-pic-x svg { width: 12px; height: 12px; }
 /* 画像を大きく見る窓 */
-.dlg.peek { width: min(960px, calc(100vw - 32px)); }
+.dlg.peek { width: fit-content; min-width: min(320px, calc(100vw - 32px)); max-width: min(960px, calc(100vw - 32px)); }
 .dlg.peek .st-head { gap: 12px; }
-.dlg.peek .st-head h2 { min-width: 0; }
-.peek-body { display: grid; place-items: center; max-height: calc(100vh - 160px); overflow: auto; overscroll-behavior: contain; border-radius: 8px; background: var(--s1); }
-.peek-body img { display: block; max-width: 100%; max-height: calc(100vh - 160px); object-fit: contain; }
+.dlg.peek .st-head h2 { min-width: 0; flex: 1; contain: inline-size; }
+.peek-body { display: grid; place-items: center; max-height: calc(100vh - 160px); overflow: auto; overscroll-behavior: contain; border-radius: 8px; }
+.peek-body img { display: block; max-width: 100%; border-radius: 8px; max-height: calc(100vh - 160px); }
 .dlg .peek-meta { margin: 8px 0 0; font-size: 12px; line-height: 16px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .ai-clip .icon-btn { width: 20px; height: 20px; flex: none; }
 .ai-clip .icon-btn svg { width: 12px; height: 12px; }

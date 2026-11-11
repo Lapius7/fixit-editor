@@ -535,7 +535,7 @@ export default function App() {
       setRev((r) => r + 1);
       // ワークスペースへの登録
       let w = hit;
-      if (!w && st.wsRegister && main.ref.kind !== "demo") {
+      if (!w && st.wsAutoAdd && main.ref.kind !== "demo") {
         w = createWs(main.name, main.ref, { tabs: [], act: [null, null], fp: 0, split: false, side: true, panel: "files", term: false, terms: [], actTerm: 0 }, st.wsMax);
         if (specs.length > 1) setWsRoots(w.id, specs.map((x) => ({ ref: x.ref, prefix: x.prefix })));
       }
@@ -1142,7 +1142,6 @@ export default function App() {
     setAi(true);
     setAiJob({ id: ++aiSeq.current, action, lang, view: v, ...r });
   };
-  const aiCtx = (): Ctx | null => { const v = views.current[fp]; if (!v) return null; const r = aiRange(v); return r.text ? { name: r.name, text: r.text, scope: r.scope } : null; };
   // 選んだ文(なければ、いまの行)を、行番号つきで AI パネルへ引用する
   const quoteToAi = (v: EditorView) => {
     const sel = v.state.selection.main, d = v.state.doc;
@@ -1585,7 +1584,7 @@ export default function App() {
             {br && <ColGrip width={st.brW} def={560} min={280} max={1000} dir={-1} onChange={(w) => update({ brW: w })} />}
             {br && <BrowserDock onClose={() => setBr(false)} />}
             {ai && <ColGrip width={st.aiW} def={440} min={280} max={900} dir={-1} onChange={(w) => update({ aiW: w })} />}
-            <AiDock open={ai} job={aiJob} quote={aiQuote} resolve={aiSource} getCtx={aiCtx} onClose={() => setAi(false)} onSettings={() => setSetts("ai")} />
+            <AiDock open={ai} job={aiJob} quote={aiQuote} resolve={aiSource} onClose={() => setAi(false)} onSettings={() => setSetts("ai")} />
             <GitPanel open={gitOpen} conn={root.conn ?? null} root={gits[root.prefix]?.root ?? null} rev={gitTick} onClose={() => setGitOpen(false)} onChanged={() => { setGitTick((n) => n + 1); void syncTabs(); }} guard={() => !dirtyList.length || ask({ message: i18next.t("保存していない変更が {{length}} 件あります。ファイルが書き換わると失われることがあります。続けますか?", { length: dirtyList.length }), danger: true })} />
             </div>
             {sess.length > 0 && (
