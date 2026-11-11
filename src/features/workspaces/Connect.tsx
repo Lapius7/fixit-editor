@@ -17,9 +17,10 @@ const RECENT_SHOWN = 3; // 最近開いた場所を、たたんだ状態で出�
 export default function Connect({ current, adding, onConnect, onClose, out }: Props) {
   const [kind, setKind] = useState<"wsl" | "ssh">(current?.kind === "ssh" ? "ssh" : "wsl");
   const [host, setHost] = useState(current?.host ?? "");
-  const [path, setPath] = useState(current?.path ?? "~");
+  // パスは、開いているフォルダに関係なく、いつもホーム("~" → /home/<ユーザー>)から始める
+  const [path, setPath] = useState("~");
   // フォルダの入力は種類(このPC / SSH)ごとに持つ。このPCのパスを SSH 先で開こうとしないように
-  const kindPaths = useRef<Record<"wsl" | "ssh", string>>({ wsl: current?.kind === "ssh" ? "~" : current?.path ?? "~", ssh: current?.kind === "ssh" ? current.path : "~" });
+  const kindPaths = useRef<Record<"wsl" | "ssh", string>>({ wsl: "~", ssh: "~" });
   const switchKind = (k: "wsl" | "ssh") => {
     if (k === kind) return;
     kindPaths.current[kind] = path;

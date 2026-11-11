@@ -171,7 +171,9 @@ button.sb:active { transform: scale(var(--ps)); }
 .ctx-item[data-sel="true"] { background: var(--accent); color: #fff; }
 .ctx-item[data-danger="true"] { color: #d93b3b; }
 .ctx-item[data-danger="true"][data-sel="true"] { background: #d93b3b; color: #fff; }
-.ctx-item[data-disabled="true"] { opacity: .38; pointer-events: none; }
+/* 不透明度は子に付ける(項目そのものの opacity は、出てくるときの動き item-in が 1 に戻してしまう) */
+.ctx-item[data-disabled="true"] { pointer-events: none; }
+.ctx-item[data-disabled="true"] > * { opacity: .38; }
 .ctx-item svg { width: 15px; height: 15px; stroke-width: 1.7; flex: none; opacity: .85; }
 .ctx-ph { width: 15px; flex: none; }
 .ctx-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }

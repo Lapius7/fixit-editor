@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Palette as PaletteIcon, Quote, FolderOpen, PanelLeft, PanelRight, PanelTop, PanelBottom, RotateCw, X, Files, Search as SearchIcon, FilePlus, FolderPlus, Pencil, Trash2, Copy, Scissors, ClipboardPaste,
-  Columns2, Rows2, ArrowLeftRight, SquareTerminal, Settings as Cog, Plus, TextCursorInput, Terminal as TermIcon, Undo2, Redo2, MousePointerClick, CaseUpper, ArrowDownAZ, WrapText, ChevronsDownUp, Link, Eraser, SunMoon, Command, ChevronDown, ChevronRight, Folder, FolderMinus,
+  Columns2, Rows2, ArrowLeftRight, SquareTerminal, Settings as Cog, Plus, TextCursorInput, Terminal as TermIcon, Undo2, Redo2, MousePointerClick, CaseUpper, ArrowDownAZ, WrapText, ChevronsDownUp, Link, Eraser, SunMoon, Command, ChevronDown, ChevronRight, Folder, FolderMinus, FolderX,
 } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 import WinControls from "@/app/WinControls";
@@ -730,6 +730,11 @@ export default function App() {
     } catch (e) { flash((e as Error).message, "error"); }
   };
   const addConn = async (conn: Conn) => { const t = connTarget(conn); await addRoot(t.name, t.handle, t.ref, conn); };
+  // 開いているフォルダ(複数なら全部)を閉じて、起動直後の空の状態に戻す。保存したワークスペースは消さない
+  const closeFolder = async () => {
+    if (!root.handle) return;
+    if (await enter(DEMO_NAME, undefined, { kind: "demo" })) flash(i18next.t("フォルダを閉じました"));
+  };
   // フォルダをワークスペースから外す(ディスク上のフォルダは消さない)
   const removeRoot = async (prefix: string) => {
     const r = roots.find((x) => x.prefix === prefix);
@@ -1091,7 +1096,7 @@ export default function App() {
   const ev = () => views.current[fp];
   const run = (id: string) => {
     const f: Record<string, () => unknown> = {
-      palette: () => setPal(true), quickOpen: () => setQo(true), save, openFolder, addFolder, addRemote: () => { if (root.handle) { setCnAdd(true); setCn(true); } }, connect: () => { setCnAdd(false); setCn(true); }, workspaces: () => setWsDlg("ws"), profiles: () => setWsDlg("profile"), saveWorkspace: quickSave, newFile: () => create("file", null), settings: () => setSetts("look"), shortcuts: () => setSetts("keys"),
+      palette: () => setPal(true), quickOpen: () => setQo(true), save, openFolder, closeFolder, addFolder, addRemote: () => { if (root.handle) { setCnAdd(true); setCn(true); } }, connect: () => { setCnAdd(false); setCn(true); }, workspaces: () => setWsDlg("ws"), profiles: () => setWsDlg("profile"), saveWorkspace: quickSave, newFile: () => create("file", null), settings: () => setSetts("look"), shortcuts: () => setSetts("keys"),
       newTerm: () => addTerm(), runFile, closeTerm: () => alive().length && endTerm(actT), nextTerm: () => stepTerm(1), prevTerm: () => stepTerm(-1),
       renameTerm: () => { if (alive().length) { showTerm(true); setRenaming(actT); } }, clearTerm: () => apis.current.get(actT)?.clear(),
       aiQuote: () => { const v = views.current[fp]; if (v) quoteToAi(v); },
@@ -1285,7 +1290,8 @@ export default function App() {
     { type: "title", label: i18next.t("フォルダを開く") },
     { label: i18next.t("この PC のフォルダ"), icon: ic(FolderOpen), keys: K("openFolder"), run: openFolder, disabled: !supportsFs() },
     { label: i18next.t("WSL・SSH のフォルダ"), icon: ic(Server), keys: K("connect"), run: () => { setCnAdd(false); setCn(true); } },
-    ...(root.handle ? [{ type: "sep" as const }, { type: "title" as const, label: i18next.t("ワークスペースに追加") }, ...addItems()] : []),
+    ...(root.handle ? [{ type: "sep" as const }, { type: "title" as const, label: i18next.t("ワークスペースに追加") }, ...addItems(),
+      { type: "sep" as const }, { label: i18next.t("フォルダを閉じる"), icon: ic(FolderX), keys: K("closeFolder"), run: closeFolder }] : []),
   ];
   const treeMenu = (e: React.MouseEvent, n: Node | null) => {
     e.preventDefault();
@@ -1316,6 +1322,7 @@ export default function App() {
           { type: "sep" as const },
           { label: i18next.t("ワークスペースに追加"), icon: ic(FolderPlus), sub: addItems() },
           { label: i18next.t("ワークスペースから外す"), icon: ic(FolderMinus), run: () => removeRoot(rr.prefix), disabled: roots.length < 2 },
+          { label: i18next.t("フォルダを閉じる"), icon: ic(FolderX), keys: K("closeFolder"), run: closeFolder },
         ] : n ? [
           { type: "sep" as const },
           { label: i18next.t("名前の変更"), icon: ic(Pencil), run: () => rename(n) },

@@ -1064,5 +1064,7 @@
   "ワークスペースとして保存": "Save as workspace",
   "ワークスペースの名前": "Workspace name",
   "ダブルクリックで名前を変更": "Double-click to rename",
-  "まだワークスペースとして保存していません": "Not saved as a workspace yet"
+  "まだワークスペースとして保存していません": "Not saved as a workspace yet",
+  "フォルダを閉じる": "Close folder",
+  "フォルダを閉じました": "Closed the folder"
 }
