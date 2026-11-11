@@ -45,8 +45,8 @@ import Workspaces from "@/features/workspaces/Workspaces";
 import { GitBranch, Pin, History, MessageSquareText, RefreshCw, ArrowUpCircle } from "lucide-react";
 import { Play } from "lucide-react";
 import { runnerFor, buildCommand } from "@/features/run/runners";
-import { Sparkles, Server, FolderKanban, Eye, Maximize2, Minimize2, ImageIcon, ClipboardCopy, Save, ChevronUp } from "lucide-react";
-import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, rootLabel, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
+import { Sparkles, Server, FolderKanban, Eye, Maximize2, Minimize2, ImageIcon, ClipboardCopy, ChevronUp } from "lucide-react";
+import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, patchWs, rootLabel, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
 import { displayPath, setRootNames, splitRoot } from "@/workbench/rootpath";
 import { getProfiles, switchProfile, useProfiles } from "@/features/settings/profiles";
 import { listShells, type ShellOpt } from "@/platform/pty";
@@ -218,6 +218,9 @@ export default function App() {
   const [menu, setMenu] = useState<null | { x: number; y: number; items: Item[]; path?: string }>(null);
   // 左下の「フォルダ」の項目を広げているか。外をクリックするか Esc で畳む
   const [footOpen, setFootOpen] = useState(false);
+  const [wsName, setWsName] = useState(""); // 左下で新しく作るワークスペースの名前
+  const [freshRoot, setFreshRoot] = useState<string | null>(null); // いま足したフォルダ。見出しと中身を順に出す
+  const [wsRen, setWsRen] = useState<string | null>(null); // ツリーの上で名前を変えている途中の値
   const footRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!footOpen) return;
@@ -603,6 +606,17 @@ export default function App() {
     flash(i18next.t("ワークスペース「{{name}}」を保存しました", { name: w.name }));
     return w.id;
   };
+  const commitWsRen = () => {
+    if (wsRen === null) return;
+    const v = wsRen.trim();
+    if (v && ws && v !== ws.name) patchWs(ws.id, { name: v });
+    setWsRen(null);
+  };
+  const untitled = roots.length > 1 && !ws; // フォルダを並べたが、まだワークスペースとして保存していない
+  const createWsHere = async () => {
+    await saveNew(wsName.trim() || roots.map((r) => r.name).join(" + "));
+    setWsName(""); setFootOpen(false);
+  };
   const quickSave = () => {
     if (activeWs.current) { saveState(activeWs.current, snapshot()); flash(i18next.t("ワークスペース「{{arg0}}」に保存しました", { arg0: findWs(activeWs.current)?.name })); } else setWsDlg("ws");
   };
@@ -689,6 +703,7 @@ export default function App() {
       const next = [...rootsNow.current, { prefix, name, handle, nodes, conn, ref }];
       rootsNow.current = next;
       setRoots(next);
+      setFreshRoot(prefix); setTimeout(() => setFreshRoot((v) => (v === prefix ? null : v)), ms(1200));
       if (activeWs.current) {
         setWsRoots(activeWs.current, next.map((r) => ({ ref: r.ref, prefix: r.prefix })));
         if (ref.kind === "local") await putHandle(handleKey(activeWs.current, prefix), handle);
@@ -1541,10 +1556,15 @@ export default function App() {
           </header>
           {panel === "files" ? (
             <>
-              {roots.length > 1 && (
+              {roots.length > 1 && ws && (
                 <div className="ws-bar">
-                  <span className="ws-bar-name truncate" title={roots.map(rootPath).join("\n")}>{ws ? ws.name : i18next.t("無題のワークスペース")}</span>
-                  {!ws && <button className="chipbtn" onClick={() => void saveNew(roots.map((r) => r.name).join(" + "))} title={i18next.t("開いているフォルダをまとめて、ワークスペースとして保存します")}><Save size={14} />{i18next.t("保存")}</button>}
+                  {wsRen !== null ? (
+                    <input className="field ws-ren inline-edit" autoFocus onFocus={(e) => e.currentTarget.select()} value={wsRen} spellCheck={false} aria-label={i18next.t("ワークスペースの名前")}
+                      onChange={(e) => setWsRen(e.target.value)} onBlur={commitWsRen}
+                      onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") commitWsRen(); else if (e.key === "Escape") setWsRen(null); }} />
+                  ) : (
+                    <span className="ws-bar-name truncate" title={`${roots.map(rootPath).join("\n")}\n\n${i18next.t("ダブルクリックで名前を変更")}`} onDoubleClick={() => setWsRen(ws.name)}>{ws.name}</span>
+                  )}
                 </div>
               )}
               <nav className="tree scroll overscroll-contain" data-drop={rootDrop}
@@ -1555,7 +1575,7 @@ export default function App() {
                 {sectioned ? roots.map((r) => {
                   const h = headNode(r), shut = folded.has(r.prefix);
                   return (
-                    <section key={r.prefix || "main"} className="root-sec" aria-label={r.name}>
+                    <section key={r.prefix || "main"} className="root-sec" data-new={freshRoot === r.prefix} aria-label={r.name}>
                       <button className="tree-row root-head" title={rootPath(r)} data-ctx={menu?.path === r.prefix} data-drop={dropHead === r.prefix} aria-expanded={!shut}
                         onClick={() => setFolded((p) => { const q = new Set(p); if (q.has(r.prefix)) q.delete(r.prefix); else q.add(r.prefix); return q; })}
                         onContextMenu={(e) => { e.stopPropagation(); treeMenu(e, h); }}
@@ -1589,6 +1609,16 @@ export default function App() {
                 <div className="collapse" data-open={footOpen} inert={!footOpen}>
                   <div className="collapse-inner">
                     <div className="foot-menu" role="menu">
+                      {untitled && (
+                        <form className="foot-save" onSubmit={(e) => { e.preventDefault(); void createWsHere(); }}>
+                          <div className="foot-title">{i18next.t("ワークスペースとして保存")}</div>
+                          <div className="foot-save-row">
+                            <input className="field" value={wsName} spellCheck={false} aria-label={i18next.t("ワークスペースの名前")} placeholder={roots.map((r) => r.name).join(" + ")}
+                              onChange={(e) => setWsName(e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
+                            <button type="submit" className="chipbtn">{i18next.t("作成")}</button>
+                          </div>
+                        </form>
+                      )}
                       {folderItems().map((it, i) => it.type === "title" ? <div key={i} className="foot-title">{it.label}</div> : it.type === "sep" ? null : (
                         <button key={i} role="menuitem" className="open-btn foot-item" disabled={it.disabled} onClick={() => { setFootOpen(false); it.run?.(); }}>
                           {it.icon}<span className="truncate">{it.label}</span>{it.keys && <span className="foot-kbd">{chips(it.keys).join(" ")}</span>}
@@ -1598,7 +1628,7 @@ export default function App() {
                   </div>
                 </div>
                 <button className="open-btn" aria-expanded={footOpen} onClick={() => setFootOpen((v) => !v)}>
-                  <FolderOpen /><span className="truncate">{root.handle ? i18next.t("フォルダ") : i18next.t("フォルダを開く")}</span><ChevronUp className="open-btn-chev" />
+                  <FolderOpen /><span className="truncate">{root.handle ? i18next.t("フォルダ") : i18next.t("フォルダを開く")}</span>{untitled && <span className="foot-dot" title={i18next.t("まだワークスペースとして保存していません")} />}<ChevronUp className="open-btn-chev" />
                 </button>
               </div>
             </>

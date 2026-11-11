@@ -1056,10 +1056,12 @@
   "メールアドレス": "Email address",
   "ログインしていないので、匿名で送ります。返事がほしいときは、メールアドレスを書くか、設定の「アカウント」からログインしてください。": "You are not logged in, so this is sent anonymously. If you want a reply, enter your email or log in from Account in Settings.",
   "{{name}} を大きく見る": "View {{name}} larger",
-  "無題のワークスペース": "Untitled workspace",
-  "開いているフォルダをまとめて、ワークスペースとして保存します": "Save the open folders together as a workspace",
   "この PC のフォルダ": "Folder on this PC",
   "WSL・SSH のフォルダ": "WSL or SSH folder",
   "{{n}} フォルダ: {{first}} ほか": "{{n}} folders: {{first}} and more",
-  "ワークスペースに追加": "Add to workspace"
+  "ワークスペースに追加": "Add to workspace",
+  "ワークスペースとして保存": "Save as workspace",
+  "ワークスペースの名前": "Workspace name",
+  "ダブルクリックで名前を変更": "Double-click to rename",
+  "まだワークスペースとして保存していません": "Not saved as a workspace yet"
 }

@@ -124,7 +124,16 @@ html.theme-fade, html.theme-fade * { transition: background-color calc(.45s * va
 .open-btn:hover:not(:disabled) { background: none; color: var(--ink); box-shadow: none; }
 .open-btn .open-btn-chev { width: 14px; height: 14px; margin-left: auto; opacity: .6; transition: transform calc(.26s * var(--sp)) var(--out); }
 .open-btn[aria-expanded="true"] .open-btn-chev { transform: rotate(180deg); }
-.foot-menu { padding: 4px 0 6px; border-bottom: 1px solid var(--hair); }
+/* 項目はツリーに重ねて上へ広げ、ツリーや空の案内の位置を動かさない */
+.side-foot { position: relative; }
+.side-foot > .collapse { position: absolute; left: -12px; right: -12px; bottom: 100%; z-index: 2; padding: 0 12px; background: var(--pop); -webkit-backdrop-filter: blur(30px) saturate(1.8); backdrop-filter: blur(30px) saturate(1.8); }
+.foot-menu { padding: 4px 0 6px; border-top: 1px solid var(--hair); }
+.foot-save { padding-bottom: 6px; }
+.foot-save-row { display: flex; align-items: center; gap: 8px; padding: 4px 0 0 6px; }
+.foot-save-row .field { flex: 1; min-width: 0; height: 32px; font-size: 13px; line-height: 20px; }
+.foot-save-row .chipbtn { flex: none; height: 32px; padding: 0 12px; line-height: 20px; }
+.foot-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; margin-left: auto; background: var(--accent); }
+.foot-dot + .open-btn-chev { margin-left: 8px; }
 .foot-title { padding: 8px 6px 2px; font-size: 11px; line-height: 16px; color: var(--ink-3); }
 .open-btn.foot-item { height: 34px; }
 .foot-kbd { margin-left: auto; font-size: 11px; line-height: 16px; color: var(--ink-3); }
@@ -227,3 +236,10 @@ html.theme-fade, html.theme-fade * { transition: background-color calc(.45s * va
 .up-ver { margin: 4px 0 10px; font-size: 13px; line-height: 20px; color: var(--ink-2); }
 .up-ver b { color: var(--ink); font-weight: 600; }
 .up-notes { margin: 0; padding: 10px 12px; max-height: 180px; overflow-y: auto; overscroll-behavior: contain; white-space: pre-wrap; font: inherit; font-size: 12.5px; line-height: 20px; color: var(--ink-2); background: color-mix(in srgb, var(--ink) 5%, transparent); border-radius: 10px; }
+/* 広げている間は、下のボタンにも同じ背景を敷いて、重ねた項目とひと続きに見せる */
+.side-foot::before { content: ""; position: absolute; inset: 0 -12px; background: var(--pop); -webkit-backdrop-filter: blur(30px) saturate(1.8); backdrop-filter: blur(30px) saturate(1.8); opacity: 0; pointer-events: none; transition: opacity calc(.26s * var(--sp)) var(--out); }
+.side-foot:has(> .collapse[data-open="true"])::before { opacity: 1; }
+.side-foot > .open-btn { position: relative; }
+/* フォルダを足したときは、見出しが下から現れ、続けて中の行が順に入る */
+.root-sec[data-new="true"] > .root-head { animation: slide-up calc(.42s * var(--sp)) var(--out) both; }
+.root-sec[data-new="true"] .collapse-inner > ul > li > .tree-row { animation: row-in calc(.5s * var(--sp)) var(--out) both; animation-delay: calc((min(var(--i, 0), 12) * 32ms + 160ms) * var(--sp)); }

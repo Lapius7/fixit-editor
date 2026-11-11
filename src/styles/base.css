@@ -32,8 +32,6 @@
 /* 複数のフォルダを並べているときの、ワークスペース名と保存ボタンの帯(ツリーと一緒に流れない) */
 .ws-bar { flex: none; height: 41px; display: flex; align-items: center; gap: 8px; margin: 0 12px; padding: 0 0 0 6px; border-bottom: 1px solid var(--hair); }
 .ws-bar-name { flex: 1; min-width: 0; font-size: 12px; line-height: 20px; font-weight: 600; color: var(--ink-2); }
-.ws-bar .chipbtn { height: 28px; padding: 0 10px; line-height: 20px; }
-.ws-bar .chipbtn svg { flex: none; }
 .root-sec + .root-sec { margin-top: 4px; }
 .root-head { font-size: 12px; line-height: 20px; font-weight: 600; letter-spacing: .02em; color: var(--ink-2); padding-left: 6px; }
 .ico { flex: none; width: 16px; height: 16px; stroke-width: 1.6; }
@@ -286,3 +284,4 @@ button.sb:active { transform: scale(var(--ps)); }
 /* 確認ダイアログ(shared/ask.tsx)。ほかのモーダルや右クリックメニューより上に出す */
 .qo-backdrop.ask-layer { z-index: 100; }
 .dlg.ask p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ws-bar .ws-ren { flex: 1; min-width: 0; height: 28px !important; padding: 0 8px; font-size: 12px; line-height: 20px; }
