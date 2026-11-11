@@ -1,19 +1,16 @@
 // AI チャットのパネル。右側に出す(アプリ内ブラウザと同じ置き場所)。
 // 送るのは「利用者が操作したとき」だけ。送る前に、相手と送る範囲を画面に出し、初回は同意を取る。
-import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, Check, Copy, Replace, Settings as Cog, Square, Trash2, X, History, SquarePen, ChevronLeft, FileText, Quote as QuoteIcon, FileDown, ImagePlus } from "lucide-react";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, Check, Copy, MousePointerClick, Replace, RotateCcw, Settings as Cog, Square, Trash2, X, History, SquarePen, ChevronLeft, FileText, Quote as QuoteIcon, FileDown, ImagePlus } from "lucide-react";
 import i18next from "i18next";
-import { marked } from "marked";
-import DOMPurify from "dompurify";
-import { toUrl } from "@/features/browser/BrowserDock";
-import { openExternal } from "@/features/account/auth";
 import { AI_MAX_HISTORY_CHARS, AI_MAX_HISTORY_IMAGES, AI_MAX_IMAGES } from "@/shared/config";
 import { AiError, isAbort, streamChat, type AiErrorKind, type Img, type Msg, type Stop } from "@/features/ai/providers";
 import { isImageFile, toAiImage, type AiImage, type ImgFail } from "@/features/ai/images";
 import { actionLabel, actionPrompt, replaceable, clipLabel, ctxLabel, systemPrompt, withClips, withCode, type AiJob, type Clip, type Ctx } from "@/features/ai/prompts";
 import { drag, dragEnd } from "@/workbench/dnd";
 import { notify } from "@/shared/notify";
-import { copyWithNotice } from "@/platform/clipboard";
+import { Response } from "@/features/ai/Response";
+import { useCopy } from "@/features/ai/CodeBlock";
 import { MAX_OPEN_BYTES } from "@/shared/config";
 import { ms } from "@/features/settings/settings";
 import { getAi, hasEffort, ready, PROVIDER_NAME, setConsent, useAi, useLink, type Provider } from "@/features/ai/store";
@@ -26,41 +23,48 @@ import { deleteChat, getChats, newChatId, saveChat, setCurChat, useChats, type C
 type M = { id: number; role: "user" | "assistant"; content: string; label?: string; ctx?: string; imgs?: (Img & { name: string })[]; busy?: boolean; err?: AiErrorKind; note?: Stop; job?: AiJob; applied?: "ok" | "stale" };
 
 
-// 返答は Markdown で来る。画像・スタイル・フォームは通さない(画像の URL にコードを載せて外へ送る手口を防ぐ)
-const SAFE = { ALLOWED_TAGS: ["p", "br", "hr", "pre", "code", "strong", "em", "del", "ul", "ol", "li", "blockquote", "h1", "h2", "h3", "h4", "a", "table", "thead", "tbody", "tr", "th", "td"], ALLOWED_ATTR: ["href"], ALLOW_DATA_ATTR: false };
-const md = (s: string) => DOMPurify.sanitize(marked.parse(s, { async: false }) as string, SAFE);
-
-// 返答の変換は、その返答の中身が変わったときだけやり直す(流れてくる最中も、ほかの返答は変換し直さない)。
-// 置き換え・コピーは渡した m だけを使うので、m が同じなら描き直さなくてよい
-const Reply = memo(function Reply({ m, onReplace, onCopy }: { m: M; onReplace: (m: M) => void; onCopy: (m: M) => void }) {
-  const html = useMemo(() => (m.content ? md(m.content) : ""), [m.content]);
-  const click = (e: React.MouseEvent) => {
-    const a = (e.target as HTMLElement).closest("a");
-    if (!a) return;
-    e.preventDefault();
-    const u = toUrl(a.getAttribute("href") ?? "");
-    if (u) void openExternal(u.href); // デスクトップ版でも、PC の既定のブラウザで開く
-  };
+// 返答の本文は、その返答の中身が変わったときだけ描き直す(流れてくる最中も、ほかの返答は描き直さない)。
+// 置き換え・やり直しは渡した m と ref だけを使うので、m と retry が同じなら描き直さなくてよい
+const Reply = memo(function Reply({ m, retry, onReplace, onRetry }: { m: M; retry: boolean; onReplace: (m: M) => void; onRetry: (m: M) => void }) {
+  const [copied, copy] = useCopy();
+  const stopped = !m.busy && !m.err && !m.note && !m.content;
   return (
-    <div className="ai-a">
-      {m.content && <div className="ai-md" onClick={click} dangerouslySetInnerHTML={{ __html: html }} />}
+    <div className="ai-a" aria-busy={m.busy || undefined}>
+      {m.content && <Response text={m.content} streaming={!!m.busy} />}
       {m.busy && !m.content && <p className="ai-wait">{i18next.t("考え中…")}</p>}
+      {stopped && <p className="ai-warn">{i18next.t("止めました")}</p>}
       {m.note === "refusal" && <p className="ai-warn">{i18next.t("モデルが応答を断りました")}</p>}
       {m.note === "length" && <p className="ai-warn">{i18next.t("長さの上限で途中で切れました")}</p>}
       {m.err && <p className="ai-err" role="alert">{i18next.t(ERR[m.err])}</p>}
-      {!m.busy && m.content && (
+      {!m.busy && (m.content || retry) && (
         <div className="ai-acts">
-          <button className="ai-act" onClick={() => onCopy(m)}><Copy size={14} />{i18next.t("コピー")}</button>
-          {m.job && replaceable(m.job.action) && m.job.scope === "selection" && !m.applied && <button className="ai-act" onClick={() => onReplace(m)}><Replace size={14} />{i18next.t("選択範囲を置き換える")}</button>}
+          {m.content && <button className="icon-btn ai-act-i" data-done={copied} aria-label={copied ? i18next.t("コピーしました") : i18next.t("コピー")} title={i18next.t("コピー")} onClick={() => copy(m.content)}><Copy className="ai-swap-a" aria-hidden /><Check className="ai-swap-b" aria-hidden /></button>}
+          {retry && <button className="icon-btn ai-act-i" aria-label={i18next.t("もう一度生成")} title={i18next.t("もう一度生成")} onClick={() => onRetry(m)}><RotateCcw /></button>}
+          {m.content && m.job && replaceable(m.job.action) && m.job.scope === "selection" && !m.applied && <button className="ai-act" onClick={() => onReplace(m)}><Replace size={14} />{i18next.t("選択範囲を置き換える")}</button>}
           {m.applied === "ok" && <span className="ai-done"><Check size={14} />{i18next.t("置き換えました")}</span>}
           {m.applied === "stale" && <span className="ai-warn">{i18next.t("元のコードが変わっているため置き換えられません")}</span>}
         </div>
       )}
     </div>
   );
-}, (a, b) => a.m === b.m);
+}, (a, b) => a.m === b.m && a.retry === b.retry);
+
+// 会話がまだ無いときの案内。できることを短く並べる
+function EmptyChat() {
+  return (
+    <div className="ai-start">
+      <h3>{i18next.t("AI に質問")}</h3>
+      <ul>
+        <li><QuoteIcon aria-hidden />{i18next.t("エディタを右クリックして「AI チャットに引用」を選ぶと、コードを添えられます")}</li>
+        <li><ImagePlus aria-hidden />{i18next.t("画像は、貼り付けかドロップで添えられます")}</li>
+        <li><MousePointerClick aria-hidden />{i18next.t("右クリックの「AI」から、要約・翻訳・説明もできます")}</li>
+      </ul>
+    </div>
+  );
+}
 
 const MAX_CLIPS = 8;
+const STICK_PX = 48; // 一番下からこれより近ければ、下に付いていると見る
 const imgFail = (r: ImgFail, name: string) => (r === "big" ? i18next.t("{{name}} は大きすぎて添えられません", { name }) : i18next.t("{{name}} は画像として読めないため、添えられません", { name }));
 const imgSrc = (i: Img) => `data:${i.type};base64,${i.data}`;
 // 画像として添えるもの(ファイルの中身)
@@ -159,9 +163,41 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
   const msgsRef = useRef(msgs); msgsRef.current = msgs;
 
   useEffect(() => { if (open) { box.current?.focus(); void refreshLink(); } }, [open]);
-  // 一番下を見ているときだけ、新しい返答に合わせて下へ送る。上を読んでいる間は動かさない(送信したときは下へ戻す)
-  const stick = useRef(true);
-  useEffect(() => { const el = list.current; if (el && stick.current) el.scrollTop = el.scrollHeight; }, [msgs]);
+  // 一番下を見ているときだけ、新しい返答に合わせて下へ送る。上を読んでいる間は動かさない(送信したときは下へ戻す)。
+  // 入力欄や画像で一覧の高さが変わったときも、下を見ていれば下に合わせる
+  const stick = useRef(true), lastTop = useRef(0), thread = useRef<HTMLDivElement>(null);
+  const [away, setAway] = useState(false);
+  const toEnd = () => { const el = list.current; if (el && stick.current) el.scrollTop = el.scrollHeight; };
+  useLayoutEffect(toEnd, [msgs]);
+  useEffect(() => {
+    const ro = new ResizeObserver(toEnd);
+    if (list.current) ro.observe(list.current);
+    if (thread.current) ro.observe(thread.current);
+    return () => ro.disconnect();
+  }, [open]);
+  // 下へ向かう動き(「最新へ」で滑らせている間など)では、下に付いたままと見る
+  const onListScroll = (el: HTMLDivElement) => {
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_PX;
+    stick.current = near || (stick.current && el.scrollTop >= lastTop.current);
+    lastTop.current = el.scrollTop;
+    setAway(!stick.current);
+  };
+  const toLatest = () => {
+    const el = list.current; if (!el) return;
+    stick.current = true; setAway(false);
+    el.scrollTo({ top: el.scrollHeight, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches || ms(1) === 0 ? "auto" : "smooth" });
+  };
+  // 入力欄は、書いた分だけ高くする(上限は CSS の max-height)。幅が変わったとき(パネルが開く動きの途中など)も測り直す
+  const fitBox = () => { const el = box.current; if (!el) return; el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; };
+  useLayoutEffect(fitBox, [text]);
+  const ready_ = ready(cfg, link);
+  useEffect(() => {
+    const el = box.current; if (!el) return;
+    let w = 0;
+    const ro = new ResizeObserver(([e]) => { if (e.contentRect.width !== w) { w = e.contentRect.width; fitBox(); } });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [open, ready_]);
   useEffect(() => () => abort.current?.abort(), []);
 
   const patch = (id: number, f: (m: M) => M) => setMsgs((a) => a.map((x) => (x.id === id ? f(x) : x)));
@@ -231,7 +267,16 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
     gate(() => run(w.content, q, label, undefined, pics));
   };
 
-  const copy = (m: M) => { void copyWithNotice(m.content); };
+  // 返答を作り直す。その返答と元の質問を外して、同じ質問をもう一度送る(送信中は何もしない)
+  const retry = (m: M) => {
+    const a = msgsRef.current, i = a.findIndex((x) => x.id === m.id), u = a[i - 1];
+    if (abort.current || i < 1 || u.role !== "user" || !ready(getAi())) return;
+    gate(() => {
+      const cut = a.slice(0, i - 1);
+      msgsRef.current = cut; setMsgs(cut);
+      void run(u.content, u.label ?? u.content, u.ctx, m.job, (u.imgs ?? []).map((x, k) => ({ ...x, id: k })));
+    });
+  };
   const replace = (m: M) => {
     const j = m.job; if (!j) return;
     const v = j.view;
@@ -257,6 +302,7 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
   const dropChat = (c: Chat) => { if (c.id === chatId) startNew(); deleteChat(c.id); notify(i18next.t("会話を消しました"), "success"); };
   const when = (t: number) => new Date(t).toLocaleTimeString(i18next.language, { hour: "2-digit", minute: "2-digit" });
 
+  const lastId = msgs.at(-1)?.role === "assistant" ? msgs.at(-1)!.id : -1;
   // 閉じるときは、縮みきってから外す
   const [mounted, setMounted] = useState(open);
   useEffect(() => {
@@ -294,7 +340,7 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
                   {list.map((c) => (
                     <div key={c.id} role="listitem" className="ai-hist-row" data-on={c.id === chatId}>
                       <button className="ai-hist-open" onClick={() => openChat(c)}>
-                        <span className="ai-hist-t truncate">{c.title || i18next.t("(空の会話)")}</span>
+                        <span className="ai-hist-t truncate" title={c.title || undefined}>{c.title || i18next.t("(空の会話)")}</span>
                         {excerpt(c) && <span className="ai-hist-x">{excerpt(c)}</span>}
                         <small>{when(c.at)} · {i18next.t("質問 {{n}} 件", { n: c.msgs.filter((m) => m.role === "user").length })}</small>
                       </button>
@@ -307,7 +353,9 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
           )}
         </section>
       )}
-      <div className="ai-list scroll" ref={list} aria-live="polite" onScroll={(e) => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48; }}>
+      <div className="ai-scroll">
+      <div className="ai-list scroll" ref={list} aria-live="polite" onScroll={(e) => onListScroll(e.currentTarget)}>
+        <div className="ai-thread" ref={thread}>
         {!ready(cfg, link) ? (
           <div className="ai-empty">
             <p>{!cfg.enabled[cfg.provider] ? i18next.t("使うプロバイダーが、設定の「AI」でオフになっています。スイッチをオンにして、連携を設定してください")
@@ -318,10 +366,13 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
             <ModelPicker />
           </div>
         ) : !msgs.length ? (
-          <p className="ai-empty-t">{i18next.t("質問を入力してください。コードは、エディタを右クリックして「AI チャットに引用」で添えられます。画像は、貼り付けやドロップで添えられます。右クリックの「AI」から、要約・翻訳・説明もできます")}</p>
+          <EmptyChat />
         ) : msgs.map((m) => m.role === "user"
           ? <div key={m.id} className="ai-u">{m.imgs && <div className="ai-u-imgs">{m.imgs.map((i, k) => <button key={k} className="ai-pic-open" title={i.name} aria-label={i18next.t("{{name}} を大きく見る", { name: i.name })} onClick={() => setPeek({ src: imgSrc(i), name: i.name })}><img src={imgSrc(i)} alt="" /></button>)}</div>}<p>{m.label}</p>{m.ctx && <small>{m.ctx}</small>}</div>
-          : <Reply key={m.id} m={m} onReplace={replace} onCopy={copy} />)}
+          : <Reply key={m.id} m={m} retry={!busy && m.id === lastId} onReplace={replace} onRetry={retry} />)}
+        </div>
+      </div>
+      <button className="icon-btn ai-latest" data-on={away && msgs.length > 0} tabIndex={away ? 0 : -1} aria-hidden={!away} aria-label={i18next.t("最新のメッセージへ")} title={i18next.t("最新のメッセージへ")} onClick={toLatest}><ArrowDown /></button>
       </div>
       {pending && (
         <div className="ai-consent" role="alertdialog" aria-label={i18next.t("送信の確認")}>
@@ -352,7 +403,7 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
               ))}
             </div>
           )}
-          <textarea ref={box} rows={3} value={text} placeholder={i18next.t("AI に質問(Enter で送信、Shift+Enter で改行)")} aria-label={i18next.t("AI に質問")} onChange={(e) => setText(e.target.value)}
+          <textarea ref={box} rows={2} value={text} placeholder={i18next.t("AI に質問(Enter で送信、Shift+Enter で改行)")} aria-label={i18next.t("AI に質問")} onChange={(e) => setText(e.target.value)}
             onPaste={(e) => {
               // 画像の貼り付け(スクリーンショットなど)。文字も一緒にあるときは、文字の貼り付けはそのまま通す
               const fs = Array.from(e.clipboardData.files).filter((f) => isImageFile(f, f.name));

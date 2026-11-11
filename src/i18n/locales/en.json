@@ -1042,7 +1042,6 @@
   "選んだコード・画像・入力した文章は、この PC の claude コマンドを通して Anthropic のサーバーに送られます。利用は、あなたの Claude の契約の枠に数えられます。このエディタの開発元には送られません": "The code and images you select and the text you type are sent to Anthropic's servers through the claude command on this PC. Usage counts toward your Claude plan. Nothing is sent to the developer of this editor.",
   "選んだコード・画像・入力した文章は、{{name}} のサーバーに送られます。送った内容の扱いは、各社の規約に従います。このエディタの開発元には送られません": "The code and images you choose and the text you type will be sent to {{name}}'s servers and handled under that company's terms. Nothing is sent to this editor's developer.",
   "ファイルの中身や画像を、質問と一緒に送ります": "File contents and images are sent with your question",
-  "質問を入力してください。コードは、エディタを右クリックして「AI チャットに引用」で添えられます。画像は、貼り付けやドロップで添えられます。右クリックの「AI」から、要約・翻訳・説明もできます": "Type a question. To include code, right-click in the editor and choose \"Quote in AI chat\". Paste or drop images to attach them. The right-click \"AI\" menu also offers summarize, translate, and explain.",
   "{{name}} は画像として読めないため、添えられません": "{{name}} can't be read as an image, so it can't be attached",
   "画像を添えられるのは {{n}} 枚までです": "You can attach up to {{n}} images",
   "画像: {{name}}": "Image: {{name}}",
@@ -1132,5 +1131,13 @@
   "最近のワークスペース": "Recent workspaces",
   "ワークスペース「{{name}}」を開く": "Open workspace “{{name}}”",
   "ワークスペースを切り替えたときに波を出す": "Show a wave when switching workspaces",
-  "AI が回答を作っている間、画面の縁を光らせる": "Light up the window edges while AI is writing a reply"
+  "AI が回答を作っている間、画面の縁を光らせる": "Light up the window edges while AI is writing a reply",
+  "コードをコピー": "Copy code",
+  "コード": "Code",
+  "もう一度生成": "Regenerate",
+  "止めました": "Stopped",
+  "最新のメッセージへ": "Jump to latest",
+  "エディタを右クリックして「AI チャットに引用」を選ぶと、コードを添えられます": "Right-click in the editor and choose “Quote in AI chat” to attach code",
+  "画像は、貼り付けかドロップで添えられます": "Paste or drop images to attach them",
+  "右クリックの「AI」から、要約・翻訳・説明もできます": "Use “AI” in the right-click menu to summarize, translate, or explain"
 }

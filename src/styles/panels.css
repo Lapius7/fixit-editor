@@ -148,7 +148,20 @@ body:has(.ratio-grip[data-drag="true"]) .ed-pv { transition: none; }
 .ai-bar { display: flex; align-items: center; gap: 2px; height: 38px; padding: 0 6px 0 12px; box-shadow: 0 1px 0 var(--hair); }
 .ai-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font: 600 13px/20px var(--font-sans); }
 .ai-title small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 11px/16px var(--font-mono); color: var(--ink-3); }
-.ai-list { flex: 1; min-height: 0; padding: 12px; display: flex; flex-direction: column; gap: 14px; }
+/* 会話の一覧。外側の箱に「最新へ」のボタンを重ねる */
+.ai-scroll { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ai-list { flex: 1; min-height: 0; padding: 12px; }
+.ai-thread { min-height: 100%; display: flex; flex-direction: column; gap: 16px; }
+.ai-scroll > .ai-latest { position: absolute; left: 50%; bottom: 10px; width: 32px; height: 32px; margin-left: -16px; border-radius: 999px; background: var(--pop-solid, var(--paper)); color: var(--ink-2); box-shadow: 0 0 0 1px var(--hair), 0 4px 14px rgba(0, 0, 0, .14); opacity: 0; transform: translateY(6px) scale(.9); pointer-events: none; transition: opacity calc(.18s * var(--sp)) var(--out), transform calc(.22s * var(--sp)) var(--out), color calc(.12s * var(--sp)) var(--ease); }
+.ai-scroll > .ai-latest[data-on="true"] { opacity: 1; transform: none; pointer-events: auto; }
+.ai-scroll > .ai-latest:hover { background: var(--pop-solid, var(--paper)); color: var(--ink); }
+.ai-scroll > .ai-latest:active { transform: scale(var(--ps)); }
+/* 会話がまだ無いときの案内 */
+.ai-start { margin: auto 0; padding: 0 8px 24px; display: flex; flex-direction: column; gap: 12px; color: var(--ink-2); animation: fade calc(.2s * var(--sp)) var(--out) both; }
+.ai-start h3 { margin: 0; font: 600 15px/24px var(--font-sans); color: var(--ink); text-wrap: balance; }
+.ai-start ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.ai-start li { display: flex; align-items: flex-start; gap: 10px; font: 12px/20px var(--font-sans); text-wrap: pretty; }
+.ai-start li svg { flex: none; width: 14px; height: 14px; margin-top: 3px; color: var(--ink-3); stroke-width: 1.8; }
 .ai-u { align-self: flex-end; max-width: 92%; padding: 8px 12px; border-radius: 12px; background: var(--accent); color: #fff; }
 .ai-u p { margin: 0; font: 13px/20px var(--font-sans); white-space: pre-wrap; overflow-wrap: anywhere; }
 .ai-u small { display: block; margin-top: 4px; font: 11px/16px var(--font-sans); opacity: .82; overflow-wrap: anywhere; }
@@ -156,10 +169,38 @@ body:has(.ratio-grip[data-drag="true"]) .ed-pv { transition: none; }
 .ai-u-imgs .ai-pic-open { width: 72px; height: 72px; }
 .ai-u-imgs img { display: block; width: 100%; height: 100%; border-radius: 8px; object-fit: contain; background: var(--s1); outline: 1px solid var(--hair); outline-offset: -1px; }
 .ai-a { font: 13px/22px var(--font-sans); color: var(--ink); min-width: 0; }
+/* 返答の本文: Markdown の塊・コードブロック・コードを含むリストを、同じ間隔で積む */
+.ai-resp { min-width: 0; }
+.ai-resp > * + *, .ai-md-list > li > * + * { margin-top: 8px; }
+.ai-md-list { margin: 0; padding-left: 20px; }
+.ai-md-list > li + li { margin-top: 4px; }
+/* コードブロック: 上に言語とコピー、下にエディタと同じ色分けのコード */
+.ai-code { margin: 0; min-width: 0; border-radius: 10px; background: var(--s3); box-shadow: 0 0 0 1px var(--hair); overflow: hidden; }
+.ai-code figcaption { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 4px 0 12px; box-shadow: 0 1px 0 var(--hair); }
+.ai-code-lang { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11px/16px var(--font-mono); color: var(--ink-3); }
+.ai-code .ai-code-copy { width: 26px; height: 26px; }
+.ai-code .ai-code-copy::after { inset: -7px; }
+.ai-code pre { margin: 0; padding: 10px 12px; overflow-x: auto; overscroll-behavior: contain; font: 12px/18px var(--font-mono); color: var(--ink); tab-size: 2; }
+.ai-code pre code { padding: 0; background: none; font: inherit; white-space: pre; }
+.tk-kw { color: color-mix(in srgb, var(--c-kw) var(--syn-k, 100%), var(--ink)); }
+.tk-type { color: color-mix(in srgb, var(--c-type) var(--syn-k, 100%), var(--ink)); }
+.tk-fn { color: color-mix(in srgb, var(--c-fn) var(--syn-k, 100%), var(--ink)); }
+.tk-str { color: color-mix(in srgb, var(--c-str) var(--syn-k, 100%), var(--ink)); }
+.tk-num { color: color-mix(in srgb, var(--c-num) var(--syn-k, 100%), var(--ink)); }
+.tk-com { color: color-mix(in srgb, var(--c-com) var(--syn-k, 100%), var(--ink)); font-style: italic; }
+.tk-prop { color: color-mix(in srgb, var(--c-prop) var(--syn-k, 100%), var(--ink)); }
+.tk-meta { color: color-mix(in srgb, var(--c-meta) var(--syn-k, 100%), var(--ink)); }
+/* コピーしたしるし: コピーのアイコンとチェックを、ぼかしながら入れ替える */
+.ai-swap-a, .ai-swap-b { transition: opacity calc(.2s * var(--sp)) cubic-bezier(.2, 0, 0, 1), transform calc(.2s * var(--sp)) cubic-bezier(.2, 0, 0, 1), filter calc(.2s * var(--sp)) cubic-bezier(.2, 0, 0, 1); }
+.ai-swap-b { position: absolute; inset: 0; margin: auto; opacity: 0; transform: scale(.25); filter: blur(4px); color: var(--accent); }
+[data-done="true"] > .ai-swap-a { opacity: 0; transform: scale(.25); filter: blur(4px); }
+[data-done="true"] > .ai-swap-b { opacity: 1; transform: none; filter: none; }
 .ai-md { overflow-wrap: anywhere; }
 .ai-md > :first-child { margin-top: 0; }
 .ai-md > :last-child { margin-bottom: 0; }
 .ai-md p, .ai-md ul, .ai-md ol, .ai-md blockquote, .ai-md pre, .ai-md table { margin: 0 0 8px; }
+.ai-md table { display: block; max-width: 100%; overflow-x: auto; overscroll-behavior: contain; border-collapse: collapse; }
+.ai-md th { background: var(--s2); font-weight: 600; text-align: left; }
 .ai-md h1, .ai-md h2, .ai-md h3, .ai-md h4 { margin: 12px 0 4px; font: 600 13px/22px var(--font-sans); }
 .ai-md ul, .ai-md ol { padding-left: 20px; }
 .ai-md blockquote { padding-left: 10px; box-shadow: inset 2px 0 0 var(--hair); color: var(--ink-2); }
@@ -167,11 +208,15 @@ body:has(.ratio-grip[data-drag="true"]) .ed-pv { transition: none; }
 .ai-md code { padding: 0 4px; border-radius: 4px; background: var(--s3); font: 12px/18px var(--font-mono); }
 .ai-md pre { overflow-x: auto; overscroll-behavior: contain; padding: 8px 10px; border-radius: 8px; background: var(--s3); }
 .ai-md pre code { padding: 0; background: none; white-space: pre; }
-.ai-md td, .ai-md th { padding: 2px 8px; box-shadow: 0 0 0 .5px var(--hair); }
+.ai-md td, .ai-md th { padding: 4px 10px; box-shadow: 0 0 0 .5px var(--hair); }
 .ai-wait, .ai-warn, .ai-err, .ai-done { margin: 4px 0 0; font: 12px/20px var(--font-sans); color: var(--ink-3); }
+/* 考え中: 文字の上を光が流れる */
+.ai-wait { width: fit-content; background: linear-gradient(90deg, var(--ink-3) 35%, var(--ink) 50%, var(--ink-3) 65%) 0 0 / 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: ai-shimmer calc(1.8s * var(--sp)) linear infinite; }
+@keyframes ai-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
 .ai-err { color: #d64545; }
 .ai-done { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-2); }
-.ai-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 4px; }
+.ai-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin: 6px 0 0 -6px; }
+.ai-act-i svg { width: 14px; height: 14px; }
 .ai-act { height: 28px; padding: 0 8px; display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; font: 12px/20px var(--font-sans); color: var(--ink-2); }
 .ai-act:hover { background: var(--s3); color: var(--ink); }
 .ai-act svg { flex: none; }
@@ -181,7 +226,7 @@ body:has(.ratio-grip[data-drag="true"]) .ed-pv { transition: none; }
 .ai-consent p { margin: 0 0 8px; font: 12px/20px var(--font-sans); }
 .ai-consent div { display: flex; justify-content: flex-end; gap: 8px; }
 .ai-compose { padding: 8px 10px 10px; box-shadow: 0 -1px 0 var(--hair); }
-.ai-compose textarea { display: block; width: 100%; resize: none; padding: 8px 10px; border: 0; border-radius: 10px; outline: none; background: var(--field); box-shadow: 0 0 0 1px var(--hair) inset; color: inherit; font: 13px/20px var(--font-sans); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); transition: background-color calc(.2s * var(--sp)) var(--out), box-shadow calc(.2s * var(--sp)) var(--out); }
+.ai-compose textarea { display: block; box-sizing: border-box; width: 100%; max-height: 208px; overflow-y: auto; overscroll-behavior: contain; resize: none; padding: 8px 10px; border: 0; border-radius: 10px; outline: none; background: var(--field); box-shadow: 0 0 0 1px var(--hair) inset; color: inherit; font: 13px/20px var(--font-sans); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); transition: background-color calc(.2s * var(--sp)) var(--out), box-shadow calc(.2s * var(--sp)) var(--out); }
 .ai-compose textarea:focus-visible { box-shadow: 0 0 0 1.5px var(--accent) inset; }
 .ai-pick { display: flex; gap: 6px; margin-top: 8px; min-width: 0; }
 .ai-pick .sel { height: 28px; font: 12px/20px var(--font-sans); min-width: 0; text-overflow: ellipsis; }
@@ -408,7 +453,7 @@ body:has(.col-grip[data-drag="true"]) iframe, body:has(.col-grip[data-drag="true
 .ai-drop > svg { color: var(--accent); }
 .ai-drop small { color: var(--ink-2); font-size: 12px; }
 .ai-dock[data-over="true"] .ai-drop { opacity: 1; transform: none; }
-@media (prefers-reduced-motion: reduce) { .ai-clip { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .ai-clip, .ai-start { animation: none; } .ai-wait { animation: none; color: var(--ink-3); background: none; } .ai-scroll > .ai-latest { transform: none; } }
 
 /* パンくずが入りきらないときは、左を切って右端(いまの位置)を見せる */
 .bc[data-cut] .bc-trail { -webkit-mask-image: linear-gradient(to right, transparent, #000 22px); mask-image: linear-gradient(to right, transparent, #000 22px); }
