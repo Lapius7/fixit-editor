@@ -87,9 +87,10 @@ function Menu({ items, onDone, sub, onBack, anchor }: MenuProps) {
   );
 }
 
-type Props = { x: number; y: number; items: Item[]; onClose: () => void; out?: boolean };
+// up のときは y をメニューの下端として扱い、押したボタンの上に出す
+type Props = { x: number; y: number; items: Item[]; onClose: () => void; out?: boolean; up?: boolean };
 
-export default function ContextMenu({ x, y, items, onClose, out }: Props) {
+export default function ContextMenu({ x, y, items, onClose, out, up }: Props) {
   const [closing, setClosing] = useState(false);
   const [pos, setPos] = useState({ x, y });
   const box = useRef<HTMLDivElement>(null);
@@ -98,8 +99,8 @@ export default function ContextMenu({ x, y, items, onClose, out }: Props) {
   useLayoutEffect(() => {
     const m = box.current?.querySelector(".ctx") as HTMLElement | null; // 外枠は大きさが 0 なので、メニュー本体を測る
     if (!m) return;
-    setPos({ x: Math.max(8, Math.min(x, innerWidth - m.offsetWidth - 8)), y: Math.max(8, Math.min(y, innerHeight - m.offsetHeight - 8)) });
-  }, [x, y]);
+    setPos({ x: Math.max(8, Math.min(x, innerWidth - m.offsetWidth - 8)), y: Math.max(8, Math.min(up ? y - m.offsetHeight : y, innerHeight - m.offsetHeight - 8)) });
+  }, [x, y, up]);
 
   const done = () => { setClosing(true); setTimeout(onClose, ms(110)); };
 

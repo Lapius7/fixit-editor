@@ -45,7 +45,7 @@ import Workspaces from "@/features/workspaces/Workspaces";
 import { GitBranch, Pin, History, MessageSquareText, RefreshCw, ArrowUpCircle } from "lucide-react";
 import { Play } from "lucide-react";
 import { runnerFor, buildCommand } from "@/features/run/runners";
-import { Sparkles, Server, FolderKanban, Eye, Maximize2, Minimize2, ImageIcon, ClipboardCopy, Save } from "lucide-react";
+import { Sparkles, Server, FolderKanban, Eye, Maximize2, Minimize2, ImageIcon, ClipboardCopy, Save, ChevronUp } from "lucide-react";
 import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, rootLabel, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
 import { displayPath, setRootNames, splitRoot } from "@/workbench/rootpath";
 import { getProfiles, switchProfile, useProfiles } from "@/features/settings/profiles";
@@ -80,8 +80,6 @@ type Root = { prefix: string; name: string; handle?: FileSystemDirectoryHandle; 
 type Spec = { prefix: string; name: string; handle?: FileSystemDirectoryHandle; conn?: Conn; ref: RootRef };
 // ツリーの見出しのホバーに出す、フォルダの種類と場所(ブラウザ版の PC のフォルダは場所が分からないので名前だけ)
 const rootPath = (r: { ref: RootRef }) => rootLabel(r.ref);
-// 「フォルダを追加」のメニュー(見出し+2 項目)のおおよその高さ。足りなくても ContextMenu が画面内に収める
-const ADD_MENU_H = 94;
 const newPrefix = () => "/@" + Math.random().toString(36).slice(2, 7);
 type Dlg = { title: string; desc?: string; input?: string; placeholder?: string; ok: string; danger?: boolean; validate?: (v: string) => string | null; onSubmit: (v: string) => void };
 type Pm<T> = Record<number, T>; // 画面の番号ごとの値
@@ -217,7 +215,7 @@ export default function App() {
   const [renOut, setRenOut] = useState(false);
   const [tp, setTp] = useState(false);
   const [dragT, setDragT] = useState(false);
-  const [menu, setMenu] = useState<null | { x: number; y: number; items: Item[]; path?: string }>(null);
+  const [menu, setMenu] = useState<null | { x: number; y: number; items: Item[]; path?: string; up?: boolean }>(null);
   const [dlg, setDlg] = useState<Dlg | null>(null);
   // 外から閉じられても、閉じるアニメーションが終わるまで残す
   const pQo = usePresence(qo), pPal = usePresence(pal), pSetts = usePresence(setts), pDlg = usePresence(dlg), pCn = usePresence(cn);
@@ -1244,6 +1242,17 @@ export default function App() {
       ],
     });
   };
+  // フォルダを開く・ワークスペースに足すメニュー。左下のボタンと、フォルダ見出しの右クリックで使う
+  const addItems = (): Item[] => [
+    { label: i18next.t("この PC のフォルダ"), icon: ic(FolderOpen), run: addFolder, disabled: !supportsFs() },
+    { label: i18next.t("WSL・SSH のフォルダ"), icon: ic(Server), run: () => { setCnAdd(true); setCn(true); } },
+  ];
+  const folderItems = (): Item[] => [
+    { type: "title", label: i18next.t("フォルダを開く") },
+    { label: i18next.t("この PC のフォルダ"), icon: ic(FolderOpen), keys: K("openFolder"), run: openFolder, disabled: !supportsFs() },
+    { label: i18next.t("WSL・SSH のフォルダ"), icon: ic(Server), run: () => { setCnAdd(false); setCn(true); } },
+    ...(root.handle ? [{ type: "sep" as const }, { type: "title" as const, label: i18next.t("ワークスペースに追加") }, ...addItems()] : []),
+  ];
   const treeMenu = (e: React.MouseEvent, n: Node | null) => {
     e.preventDefault();
     const dir = n?.kind === "dir";
@@ -1271,6 +1280,7 @@ export default function App() {
           ] : []),
           { label: i18next.t("ファイル一覧を更新"), icon: ic(RotateCw), run: reload },
           { type: "sep" as const },
+          { label: i18next.t("ワークスペースに追加"), icon: ic(FolderPlus), sub: addItems() },
           { label: i18next.t("ワークスペースから外す"), icon: ic(FolderMinus), run: () => removeRoot(rr.prefix), disabled: roots.length < 2 },
         ] : n ? [
           { type: "sep" as const },
@@ -1565,20 +1575,13 @@ export default function App() {
                 {roots.length === 1 && <DropGhost on={rootDrop && !!drag.node} depth={sectioned ? 1 : 0} />}
               </nav>
               <div className="side-foot">
-                <button className="open-btn" onClick={openFolder} disabled={!supportsFs()} title={supportsFs() ? "" : i18next.t("このブラウザではフォルダを開けません(Chrome か Edge を使ってください)")}>
-                  <FolderOpen /><Trans i18nKey="フォルダを開く" />
+                {/* 開く・追加は 1 つのボタンのメニューにまとめ、ツリーの場所を広く取る。フォルダを開くまでは「開く」だけ */}
+                <button className="open-btn" aria-haspopup="menu" onClick={(e) => {
+                  const r = e.currentTarget.getBoundingClientRect();
+                  setMenu({ x: r.left, y: r.top - 4, up: true, items: folderItems() });
+                }}>
+                  <FolderOpen /><span className="truncate">{root.handle ? i18next.t("フォルダ") : i18next.t("フォルダを開く")}</span><ChevronUp className="open-btn-chev" />
                 </button>
-                <button className="open-btn" onClick={() => { setCnAdd(false); setCn(true); }} title={i18next.t("WSL や SSH 先のフォルダを開く")}><Server /><Trans i18nKey="WSL・SSH" /></button>
-                {root.handle && (
-                  <button className="open-btn" aria-haspopup="menu" title={i18next.t("いま開いているフォルダはそのままで、別のフォルダを並べて開きます")} onClick={(e) => {
-                    const r = e.currentTarget.getBoundingClientRect();
-                    setMenu({ x: r.left, y: r.top - ADD_MENU_H - 4, items: [ // ボタンを隠さないよう、ボタンの上に出す
-                      { type: "title", label: i18next.t("フォルダを追加") },
-                      { label: i18next.t("この PC のフォルダ"), icon: ic(FolderOpen), run: addFolder, disabled: !supportsFs() },
-                      { label: i18next.t("WSL・SSH のフォルダ"), icon: ic(Server), run: () => { setCnAdd(true); setCn(true); } },
-                    ] });
-                  }}><FolderPlus /><Trans i18nKey="フォルダを追加" /></button>
-                )}
               </div>
             </>
           ) : (
@@ -1676,7 +1679,7 @@ export default function App() {
       {pCn.v && <Connect key={pCn.key} out={pCn.out} current={cnAdd ? null : root.conn ?? null} adding={cnAdd} onConnect={cnAdd ? addConn : connect} onClose={() => setCn(false)} />}
       {pPop.v && <StatusPop key={pPop.key} out={pPop.out} kind={pPop.v} view={ev() ?? null} eol={tab?.eol ?? "lf"} lang={tab ? langName(tab.node.name) : ""} onEol={toggleEol} onClose={() => setPop(null)} />}
       <LangUI onGoto={gotoLoc} onRename={applyRename} />
-      {pMenu.v && <ContextMenu key={pMenu.key} out={pMenu.out} x={pMenu.v.x} y={pMenu.v.y} items={pMenu.v.items} onClose={() => setMenu(null)} />}
+      {pMenu.v && <ContextMenu key={pMenu.key} out={pMenu.out} x={pMenu.v.x} y={pMenu.v.y} up={pMenu.v.up} items={pMenu.v.items} onClose={() => setMenu(null)} />}
     </div>
     </GitMarks.Provider>
   );

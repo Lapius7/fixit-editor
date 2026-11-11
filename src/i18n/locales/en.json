@@ -129,9 +129,6 @@
   "ワークスペースとプロファイル": "Workspaces and profiles",
   "ファイル": "Files",
   "サイドバーを隠す": "Hide sidebar",
-  "このブラウザではフォルダを開けません(Chrome か Edge を使ってください)": "This browser can’t open folders (use Chrome or Edge)",
-  "WSL や SSH 先のフォルダを開く": "Open a folder on WSL or over SSH",
-  "WSL・SSH": "WSL / SSH",
   "ドラッグで幅を変える・ダブルクリックで半分に戻す": "Drag to resize, double-click to reset to half",
   "ターミナルの名前": "Terminal name",
   "{{arg0}} を終える": "End {{arg0}}",
@@ -1061,9 +1058,8 @@
   "{{name}} を大きく見る": "View {{name}} larger",
   "無題のワークスペース": "Untitled workspace",
   "開いているフォルダをまとめて、ワークスペースとして保存します": "Save the open folders together as a workspace",
-  "いま開いているフォルダはそのままで、別のフォルダを並べて開きます": "Open another folder alongside the current one",
-  "フォルダを追加": "Add folder",
   "この PC のフォルダ": "Folder on this PC",
   "WSL・SSH のフォルダ": "WSL or SSH folder",
-  "{{n}} フォルダ: {{first}} ほか": "{{n}} folders: {{first}} and more"
+  "{{n}} フォルダ: {{first}} ほか": "{{n}} folders: {{first}} and more",
+  "ワークスペースに追加": "Add to workspace"
 }
