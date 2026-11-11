@@ -5,6 +5,8 @@ import {
 } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 import WinControls from "@/app/WinControls";
+import FolderCards from "@/workbench/FolderCards";
+import { wave } from "@/shared/wave";
 import { CHROME } from "@/shared/chrome";
 import { notify, type NoticeKind } from "@/shared/notify";
 import { OUTLINE_EVENT } from "@/editor/Crumbs";
@@ -679,6 +681,12 @@ export default function App() {
     });
     const ok = await enterMany(specs, w);
     if (ok) flash(skipped ? i18next.t("ワークスペース「{{name}}」を開きました(開けないフォルダが {{n}} 件あります)", { name: w.name, n: skipped }) : i18next.t("ワークスペース「{{name}}」を開きました", { name: w.name }));
+    return ok;
+  };
+  // 一覧・コマンド・スタート画面から切り替えたときは、押した所から波を出す(起動時の復元では出さない)
+  const switchWs = async (w: Workspace, at?: { x: number; y: number }) => {
+    const ok = await openWs(w);
+    if (ok && st.wsWave) wave(at);
     return ok;
   };
   const saveNew = async (name: string) => {
@@ -1390,7 +1398,7 @@ export default function App() {
   ], [st.keys, tabs, act, fp, split, term, st.fontSize, st.wrap, st.mode, root]); // eslint-disable-line react-hooks/exhaustive-deps
   const wsCmds: Cmd[] = [
     ...cmds,
-    ...wsStore.list.map((w) => ({ id: `ws-${w.id}`, label: i18next.t("ワークスペース: {{name}}", { name: w.name }), group: i18next.t("ワークスペース"), icon: <FolderKanban />, run: () => { openWs(w).catch((e) => flash((e as Error).message, "error")); } })),
+    ...wsStore.list.map((w) => ({ id: `ws-${w.id}`, label: i18next.t("ワークスペース: {{name}}", { name: w.name }), group: i18next.t("ワークスペース"), icon: <FolderKanban />, run: () => { switchWs(w).catch((e) => flash((e as Error).message, "error")); } })),
     ...pfStore.list.map((p) => ({ id: `pf-${p.id}`, label: i18next.t("プロファイル: {{name}}{{arg1}}", { name: p.name, arg1: p.id === pfStore.active ? i18next.t("(使用中)") : "" }), group: i18next.t("プロファイル"), run: () => { switchProfile(p.id); flash(i18next.t("プロファイル「{{name}}」に切り替えました", { name: p.name })); } })),
   ];
 
@@ -1780,6 +1788,7 @@ export default function App() {
           <div className="empty">
             <p className="empty-title">{APP_NAME}</p>
             <p className="empty-sub">{roots.every((r) => r.ref.kind === "demo") ? i18next.t("左下の「フォルダを開く」から始めます。") : <Trans i18nKey="左のファイルを選ぶと、ここで開きます。" />}</p>
+            <FolderCards list={wsStore.list} current={ws?.id ?? null} canNew={supportsFs()} onNew={openFolder} onOpen={(w, at) => void switchWs(w, at).catch((e) => flash((e as Error).message, "error"))} />
             {st.emptyHint && (
               <ul className="empty-acts">
                 {([["quickOpen", i18next.t("ファイルを開く"), () => setQo(true)], ["palette", i18next.t("コマンドを探す"), () => setPal(true)], ["searchAll", i18next.t("全文検索"), () => run("searchAll")], ["toggleTerm", i18next.t("ターミナル"), () => showTerm()]] as const).map(([id, label, go]) => (
@@ -2032,7 +2041,7 @@ export default function App() {
       {pSetts.v && <Settings onCheckUpdate={checkNow} onTheme={() => { setSetts(null); setTp(true); }} key={pSetts.key} out={pSetts.out} first={pSetts.v} onClose={() => setSetts(null)} />}
       {pLh.v && (() => { const lt = tabs.find((x) => x.node.path === pLh.v); return lt && isText(lt) ? <LocalHistory key={pLh.key} out={pLh.out} path={lt.node.path} name={lt.node.name} current={lt.text} onRestore={(text) => setTabs((p) => p.map((x) => (x.node.path === lt.node.path && isText(x) ? { ...x, text } : x)))} onClose={() => setLh(null)} /> : null; })()}
       {pDlg.v && <Dialog key={pDlg.key} out={pDlg.out} {...pDlg.v} onClose={() => setDlg(null)} />}
-      {pWs.v && <Workspaces key={pWs.key} out={pWs.out} initial={pWs.v} curId={ws?.id ?? null} saveName={root.conn ? root.name : root.handle ? root.name : ""} max={st.wsMax} onOpen={(w) => openWs(w)} onSaveNew={saveNew} onClose={() => setWsDlg(null)} flash={flash} />}
+      {pWs.v && <Workspaces key={pWs.key} out={pWs.out} initial={pWs.v} curId={ws?.id ?? null} saveName={root.conn ? root.name : root.handle ? root.name : ""} max={st.wsMax} onOpen={(w) => switchWs(w)} onSaveNew={saveNew} onClose={() => setWsDlg(null)} flash={flash} />}
       {pSetup.v && <Setup key={pSetup.key} out={pSetup.out} onClose={() => setSetupOpen(false)} />}
       {pFb.v && <FeedbackView key={pFb.key} out={pFb.out} onClose={() => setFbOpen(false)} />}
       {pUp.v && upd && <UpdateView key={pUp.key} m={upd} out={pUp.out} onClose={() => setUpdOpen(false)} />}

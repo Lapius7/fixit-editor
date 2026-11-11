@@ -1,5 +1,6 @@
 // 配布する版を署名して、公式サイトのサーバーへ置く。使い方:
-//   bun scripts/release.ts [--notes "更新内容"] [--exe dist-win/Fixit-Editor.exe] [--dry]
+//   bun scripts/release.ts --notes "更新内容" --notes-en "..." --notes-ko "..." [--exe dist-win/Fixit-Editor.exe] [--dry]
+// 更新内容は 3 つの言語すべてで渡す。アプリは設定の言語のものを出す(notes は 1.0.4 までのアプリ向けで、日本語を入れる)
 // 署名の秘密鍵は ~/.config/fixit-release/update-key.pem(リポジトリの外。なければ --keygen で作る)。
 // 署名する文字列は src-tauri/fixit-core/src/update.rs の signed_payload と同じ並び。
 // サーバー側は DATA_DIR/releases/latest.json を読むだけなので、本体を先に置き、latest.json は最後に置く。
@@ -39,7 +40,10 @@ const sig = sign(null, Buffer.from(`fixit-update:v1\n${version}\n${sha256}\n${si
 const file = `Fixit-Editor-${version}.exe`;
 const setup = `dist-win/Fixit-Editor-Setup-${version}.exe`; // インストーラーがあれば、サイトのダウンロードボタンはこちらを配る
 const installer = existsSync(setup) ? basename(setup) : undefined;
-const manifest = { version, date: new Date().toISOString().slice(0, 10), notes: arg("--notes") ?? "", file, size, sha256, sig, ...(installer ? { installer } : {}) };
+const notes = { ja: arg("--notes") ?? "", en: arg("--notes-en") ?? "", ko: arg("--notes-ko") ?? "" };
+const lack = Object.entries(notes).filter(([, v]) => !v.trim()).map(([k]) => k);
+if (lack.length && !has("--dry")) throw new Error(`更新内容が足りません(${lack.join(", ")})。--notes(日本語)・--notes-en・--notes-ko をすべて渡してください`);
+const manifest = { version, date: new Date().toISOString().slice(0, 10), notes: notes.ja, notes_i18n: notes, file, size, sha256, sig, ...(installer ? { installer } : {}) };
 console.log(JSON.stringify({ ...manifest, sig: sig.slice(0, 12) + "…" }, null, 2));
 if (has("--dry")) process.exit(0);
 if (!HOST || !DIR) throw new Error(`置き先が決まっていません。${CONF} に {"host":"<ssh の接続先>","dir":"<サーバー上の releases フォルダ>"} を書くか、FIXIT_SSH と FIXIT_RELEASES を渡してください`);

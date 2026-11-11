@@ -1128,5 +1128,8 @@
   "{{name}} は外で変更されたため、自動では保存しません。保存すると上書きします": "{{name}} was changed outside, so it will not be saved automatically. Saving will overwrite it",
   "{{name}} は、開いたあとに外で変更されています。上書きして保存しますか?": "{{name}} was changed outside after you opened it. Overwrite and save?",
   "上書きして保存": "Overwrite",
-  "{{name}} は外で変更されました。保存すると上書きします": "{{name}} was changed outside. Saving will overwrite it"
+  "{{name}} は外で変更されました。保存すると上書きします": "{{name}} was changed outside. Saving will overwrite it",
+  "最近のワークスペース": "Recent workspaces",
+  "ワークスペース「{{name}}」を開く": "Open workspace “{{name}}”",
+  "ワークスペースを切り替えたときに波を出す": "Show a wave when switching workspaces"
 }

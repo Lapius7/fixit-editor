@@ -205,6 +205,7 @@ const RAW = [
   b("tabAnim", "motion", "タブの出入りを動かす", true, { attr: "tabanim" }),
   b("treeStagger", "motion", "ファイルを順に出す", true, { attr: "stagger" }),
   b("hoverZoom", "motion", "アイコンをホバーで少し大きく", true, { attr: "hoverzoom" }),
+  b("wsWave", "motion", "ワークスペースを切り替えたときに波を出す", true),
 
   /* 詳細 */
   b("confirmExit", "adv", "未保存のままページを閉じるとき確かめる", true),

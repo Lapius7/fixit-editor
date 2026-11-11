@@ -2,7 +2,14 @@ import { useSyncExternalStore } from "react";
 import { IS_TAURI } from "@/shared/chrome";
 import { UPDATE_URL } from "@/shared/config";
 
-export type Manifest = { version: string; date: string; notes: string; file: string; size: number; sha256: string; sig: string; url: string };
+export type Manifest = { version: string; date: string; notes: string; notes_i18n?: Record<string, string>; file: string; size: number; sha256: string; sig: string; url: string };
+
+// 更新内容を、設定の言語で返す(その言語がなければ notes。notes は日本語)
+export function notesFor(m: Manifest, lang: string): string {
+  const all = m.notes_i18n && typeof m.notes_i18n === "object" ? m.notes_i18n : {};
+  const v = all[lang.split("-")[0]];
+  return typeof v === "string" && v.trim() ? v : typeof m.notes === "string" ? m.notes : "";
+}
 
 const ver = (v: string) => v.split("-")[0].split(".").map((n) => parseInt(n, 10) || 0);
 // a が b より新しければ true(1.10.0 > 1.9.0)

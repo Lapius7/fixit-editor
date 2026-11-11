@@ -3,12 +3,13 @@ import i18next from "i18next";
 import { Trans } from "react-i18next";
 import { ms } from "@/features/settings/settings";
 import { notify } from "@/shared/notify";
-import { applyUpdate, type Manifest } from "./update";
+import { applyUpdate, notesFor, type Manifest } from "./update";
 
 // 新しい版のお知らせ。「更新する」で、署名を確かめた新しい版に置き換えて再起動する
 export default function UpdateView({ m, onClose, out }: { m: Manifest; onClose: () => void; out?: boolean }) {
   const [closing, setClosing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const notes = notesFor(m, i18next.language);
   const close = () => { if (busy) return; setClosing(true); setTimeout(onClose, ms(180)); };
   useEffect(() => {
     const on = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
@@ -30,7 +31,7 @@ export default function UpdateView({ m, onClose, out }: { m: Manifest; onClose: 
           <button className="btn close-btn" onClick={close}>{i18next.t("閉じる")}<kbd>Esc</kbd></button>
         </header>
         <p className="up-ver"><span className="tnum">v{__APP_VERSION__}</span> → <b className="tnum">v{m.version}</b></p>
-        {m.notes && <pre className="up-notes">{m.notes}</pre>}
+        {notes && <pre className="up-notes">{notes}</pre>}
         <p className="fb-note"><Trans i18nKey="更新すると、アプリが自動で再起動します。" /></p>
         <div className="dlg-foot">
           <button className="btn" onClick={close} disabled={busy}><Trans i18nKey="あとで" /></button>
