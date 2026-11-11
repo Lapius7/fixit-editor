@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { MY_FEEDBACK_URL, REPLY_POLL_MS } from "@/shared/config";
+import { MY_FEEDBACK_URL, REPLY_OPEN_POLL_MS, REPLY_POLL_MS } from "@/shared/config";
 import { authFetch, getAccount, subscribeAccount } from "./auth";
 
 // 自分が送ったフィードバックと、開発者からの返信。ログイン中だけ取りに行く
@@ -44,5 +44,8 @@ export function startReplies() {
   let last = getAccount()?.id ?? "";
   subscribeAccount(() => { const id = getAccount()?.id ?? ""; if (id !== last) { last = id; void loadReplies(); } });
   setInterval(() => { if (document.visibilityState === "visible") void loadReplies(); }, REPLY_POLL_MS);
+  // 窓に戻ったときも取り直す(Web で消したものや新しい返信を、未読の数にすぐ反映するため)。続けて何度も取りに行かないよう間を空ける
+  let at = 0;
+  addEventListener("focus", () => { if (Date.now() - at < REPLY_OPEN_POLL_MS) return; at = Date.now(); void loadReplies(); });
   setTimeout(() => void loadReplies(), 4000);
 }

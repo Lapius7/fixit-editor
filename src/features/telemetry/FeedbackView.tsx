@@ -72,14 +72,12 @@ export default function FeedbackView({ onClose, out }: { onClose: () => void; ou
   const user = useAccount();
   const mine = useReplies();
   const [tab, setTab] = useState<"new" | "mine">("new");
-  // 開いたとき・表示を切り替えたとき・窓に戻ったとき、開いている間は少しずつ取り直す(Web で消したものを残さないため)
+  // 開いたとき・表示を切り替えたときと、開いている間は少しずつ取り直す(Web で消したものを残さないため。窓に戻ったときは replies.ts が取り直す)
   useEffect(() => {
     if (!user) return;
     void loadReplies();
-    const on = () => { if (document.visibilityState === "visible") void loadReplies(); };
-    const t = setInterval(on, REPLY_OPEN_POLL_MS);
-    addEventListener("focus", on);
-    return () => { clearInterval(t); removeEventListener("focus", on); };
+    const t = setInterval(() => { if (document.visibilityState === "visible") void loadReplies(); }, REPLY_OPEN_POLL_MS);
+    return () => clearInterval(t);
   }, [user, tab]);
   useEffect(() => { if (tab === "mine") void markRepliesSeen(); }, [tab, mine.unread]);
   const area = useRef<HTMLTextAreaElement>(null);
