@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, ClipboardCopy, Clock, File as FileIcon, Folder, FolderOpen, FolderPlus, HardDrive, Home, RotateCw, Server, X } from "lucide-react";
 import ContextMenu, { type Item } from "@/workbench/ContextMenu";
 import { usePresence } from "@/shared/presence";
-import { byName, dropZoneIds, hideZoneId, isZoneId } from "@/platform/fs";
+import { byName, dropJunk, isJunk } from "@/platform/fs";
 import { checkDir, connLabel, dropRecent, getRecent, homeOf, listHosts, parseTarget, pushRecent, resolvePath, showPath, RemoteDir, type Conn } from "@/platform/remote";
 import { ms } from "@/features/settings/settings";
 import i18next from 'i18next'
@@ -60,12 +60,12 @@ export default function Connect({ current, adding, onConnect, onClose, out }: Pr
       try {
         const base = { kind, host: kind === "ssh" ? sshHost : undefined } as Pick<Conn, "kind" | "host">;
         const abs = await resolvePath(base, parseTarget(path).path || path);
-        const out: Row[] = [], zone: string[] = [], rd = new RemoteDir({ ...base, path: abs }, abs);
+        const out: Row[] = [], junk: string[] = [], rd = new RemoteDir({ ...base, path: abs }, abs);
         for await (const [name, h] of rd.entries()) {
-          if (h.kind === "file" && isZoneId(name) && hideZoneId()) zone.push(name);
+          if (h.kind === "file" && isJunk(name)) junk.push(name);
           else out.push({ name, dir: h.kind === "directory" });
         }
-        dropZoneIds(rd as unknown as FileSystemDirectoryHandle, zone);
+        dropJunk(rd as unknown as FileSystemDirectoryHandle, junk);
         out.sort((a, b) => Number(b.dir) - Number(a.dir) || byName(a, b));
         if (live) { setDir(abs); setRows(out); setRowsOf(of); setLerr(""); setLoading(false); }
       } catch (e) { if (live) { setRows(null); setRowsOf(of); setLerr((e as Error).message); setLoading(false); } }

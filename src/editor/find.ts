@@ -1,5 +1,5 @@
 import { MAX_OPEN_BYTES } from "@/shared/config";
-import { crawl, hideZoneId, isZoneId, remoteRoot, skipNames, type Node } from "@/platform/fs";
+import { crawl, isJunk, remoteRoot, skipNames, type Node } from "@/platform/fs";
 import { RemoteFile, remoteGrep } from "@/platform/remote";
 import { getFile } from "@/platform/load";
 import { splitRoot } from "@/workbench/rootpath";
@@ -81,7 +81,7 @@ async function searchAll(nodes: Node[], q: string, o: Opt, live: Map<string, str
     const byPath = new Map<string, FileHits>();
     for (const h of sc.open ? [] : await remoteGrep(rr, q, o, skipNames(), 5000)) {
       const hp = prefix + h.rel;
-      if (live.has(hp) || BIN.test(h.handle.name) || (hideZoneId() && isZoneId(h.handle.name)) || signal.stop || !allowed(hp)) continue;
+      if (live.has(hp) || BIN.test(h.handle.name) || isJunk(h.handle.name) || signal.stop || !allowed(hp)) continue;
       re.lastIndex = 0;
       const hits = byPath.get(hp) ?? { node: { name: h.handle.name, path: hp, kind: "file" as const, handle: h.handle as unknown as FileSystemHandle }, hits: [] };
       let m: RegExpExecArray | null;
