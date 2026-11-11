@@ -1104,12 +1104,10 @@
   "拡張子ごとに、▶ で走らせるコマンドを決めます。実行はファイルのあるフォルダに移動してから行うので、{file} と {name} はファイル名、{stem} は拡張子を除いた名前、{dir} はフォルダのパスになります。": "Set the command that ▶ runs for each extension. Commands run after moving into the file's folder, so {file} and {name} are the file name, {stem} the name without the extension, and {dir} the folder path.",
   "Git パネルで開く": "Open in Git panel",
   "開いているフォルダに戻す": "Back to the open folder",
-  "ここにリポジトリを作成": "Create a repository here",
   "作成しています…": "Creating…",
   "リポジトリを複製": "Clone a repository",
   "複製": "Clone",
   "複製しています…": "Cloning…",
-  "「{{name}}」フォルダに複製します": "Clones into the “{{name}}” folder",
   "中のリポジトリを探しています…": "Looking for repositories inside…",
   "このフォルダの中のリポジトリ": "Repositories in this folder",
   "ドラッグで高さを変える・ダブルクリックで元の高さに戻す": "Drag to resize · double-click to reset",
@@ -1119,5 +1117,11 @@
   "大きいファイルです（{{arg0}}）": "This is a large file ({{arg0}})",
   "{{arg0}} を超えるファイルは、読み込むとエディタが重くなることがあります。": "Files over {{arg0}} may slow down the editor when loaded.",
   "中の階層をすべて開く": "Expand all inside",
-  "中の階層をすべて閉じる": "Collapse all inside"
+  "中の階層をすべて閉じる": "Collapse all inside",
+  "Git のリポジトリではありません": "Not a Git repository",
+  "このフォルダを Git で管理する": "Track this folder with Git",
+  "{{name}} をリポジトリにする": "Make “{{name}}” a repository",
+  "git init を実行し、このフォルダに .git を作ります。": "Runs git init and creates .git in this folder.",
+  "または": "or",
+  "「{{dir}}」の中に「{{name}}」フォルダを作って複製します。": "Clones into a new “{{name}}” folder inside “{{dir}}”."
 }

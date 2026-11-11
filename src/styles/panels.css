@@ -532,16 +532,24 @@ body:has(.git-vgrip[data-drag="true"]) { cursor: row-resize; user-select: none; 
 .pv-float { position: absolute; top: 8px; right: 18px; z-index: 5; padding: 3px; border-radius: 10px; background: var(--field); box-shadow: 0 0 0 1px var(--hair), 0 4px 14px rgba(0, 0, 0, .12); backdrop-filter: blur(12px); }
 /* Git パネル: リポジトリではないフォルダのとき(作成・複製・中のリポジトリ) */
 .git-where { flex: none; max-width: 45%; color: var(--ink-2); font-weight: 500; }
-.git-setup { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 12px; padding: 16px 12px; }
-.git-setup-note { margin: 0; text-align: center; color: var(--ink-3); font: 12.5px/20px var(--font-sans); text-wrap: balance; }
+.git-setup { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 16px; padding: 14px 12px; }
+/* 対象のフォルダ: 名前・パス・状態 */
+.git-setup-where { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--s1); box-shadow: 0 0 0 1px var(--hair); }
+.git-setup-where > div { flex: 1; min-width: 0; }
+.git-setup-where > svg { flex: none; width: 18px; height: 18px; margin-top: 1px; color: var(--ink-2); }
+.git-setup-where b { display: block; color: var(--ink); font: 600 13px/20px var(--font-sans); }
+.git-setup-path { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; color: var(--ink-3); font: 11px/16px var(--font-mono); } /* 長いパスは先頭を省き、末尾を残す */
+.git-setup-note { margin: 4px 0 0; color: var(--ink-2); font: 12px/18px var(--font-sans); }
+.git-setup-sec { display: flex; flex-direction: column; gap: 6px; }
+.git-setup-sec h3, .git-setup-list h3 { margin: 0; color: var(--ink-2); font: 500 12px/18px var(--font-sans); }
+.git-setup-or { display: flex; align-items: center; gap: 8px; color: var(--ink-3); font: 11px/16px var(--font-sans); }
+.git-setup-or::before, .git-setup-or::after { content: ""; flex: 1; height: 1px; background: var(--hair); }
 .git-setup-err { margin: 0; padding: 6px 10px; border-radius: 8px; background: color-mix(in srgb, #d9534f 12%, transparent); color: var(--ink); font: 12px/18px var(--font-sans); white-space: pre-wrap; word-break: break-word; }
-.git-setup-btn { height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 8px; background: var(--accent); color: #fff; font: 600 12.5px/20px var(--font-sans); transition: filter calc(.14s * var(--sp)) var(--ease), transform calc(.12s * var(--sp)) var(--ease), opacity calc(.14s * var(--sp)) var(--ease); }
+.git-setup-btn { height: 30px; min-width: 0; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 8px; background: var(--accent); color: #fff; font: 500 12.5px/20px var(--font-sans); transition: filter calc(.14s * var(--sp)) var(--ease), transform calc(.12s * var(--sp)) var(--ease), opacity calc(.14s * var(--sp)) var(--ease); }
 .git-setup-btn svg, .git-setup-go svg, .git-setup-repo svg { flex: none; width: 16px; height: 16px; }
 .git-setup-btn:hover:not(:disabled) { filter: brightness(1.08); }
 .git-setup-btn:active:not(:disabled), .git-setup-go:active:not(:disabled), .git-setup-repo:active:not(:disabled) { transform: scale(var(--ps)); }
 .git-setup-btn:disabled, .git-setup-go:disabled, .git-setup-repo:disabled { opacity: .5; }
-.git-setup-clone { display: flex; flex-direction: column; gap: 6px; }
-.git-setup-clone label, .git-setup-list h3 { margin: 0; color: var(--ink-2); font: 500 12px/18px var(--font-sans); }
 .git-setup-row { display: flex; gap: 6px; }
 .git-setup-row input { flex: 1; min-width: 0; height: 28px; padding: 0 10px; border: 0; outline: 0; border-radius: 8px; background: var(--field); box-shadow: 0 0 0 1px var(--hair) inset; font: 12px/18px var(--font-mono); color: var(--ink); transition: box-shadow calc(.14s * var(--sp)) var(--ease); }
 .git-setup-row input:focus { box-shadow: 0 0 0 2px var(--accent) inset; }
