@@ -39,6 +39,12 @@ export default function Workspaces({ initial, curId, saveName, max, onOpen, onSa
   const file = useRef<HTMLInputElement>(null);
 
   const close = () => { setClosing(true); setTimeout(onClose, ms(180)); };
+  // マウスで開いたときは中にフォーカスがないので、画面全体で Esc を受ける(名前の変更中は、その欄の Esc だけを効かせる)
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => { if (e.key === "Escape" && !ren) close(); };
+    addEventListener("keydown", on);
+    return () => removeEventListener("keydown", on);
+  });
 
   useEffect(() => {
     let live = true;
@@ -102,7 +108,7 @@ export default function Workspaces({ initial, curId, saveName, max, onOpen, onSa
   return (
     <div className="qo-backdrop" data-mid data-closing={closing || !!out}>
       <div className="qo dlg ws" role="dialog" aria-label={i18next.t("ワークスペースとプロファイル")} onMouseDown={(e) => e.stopPropagation()}
-        onKeyDown={(e) => { if (e.key === "Escape" && !ren) close(); }}>
+>
         <header className="st-head">
           <h2><Trans i18nKey="ワークスペースとプロファイル" /></h2>
           <button className="btn close-btn" onClick={close}>{i18next.t("閉じる")}<kbd>Esc</kbd></button>
