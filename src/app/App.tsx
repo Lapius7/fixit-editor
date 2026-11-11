@@ -80,6 +80,8 @@ type Root = { prefix: string; name: string; handle?: FileSystemDirectoryHandle; 
 type Spec = { prefix: string; name: string; handle?: FileSystemDirectoryHandle; conn?: Conn; ref: RootRef };
 // ツリーの見出しのホバーに出す、フォルダの種類と場所(ブラウザ版の PC のフォルダは場所が分からないので名前だけ)
 const rootPath = (r: { ref: RootRef }) => rootLabel(r.ref);
+// 「フォルダを追加」のメニュー(見出し+2 項目)のおおよその高さ。足りなくても ContextMenu が画面内に収める
+const ADD_MENU_H = 94;
 const newPrefix = () => "/@" + Math.random().toString(36).slice(2, 7);
 type Dlg = { title: string; desc?: string; input?: string; placeholder?: string; ok: string; danger?: boolean; validate?: (v: string) => string | null; onSubmit: (v: string) => void };
 type Pm<T> = Record<number, T>; // 画面の番号ごとの値
@@ -1563,7 +1565,7 @@ export default function App() {
                 {root.handle && (
                   <button className="open-btn" aria-haspopup="menu" title={i18next.t("いま開いているフォルダはそのままで、別のフォルダを並べて開きます")} onClick={(e) => {
                     const r = e.currentTarget.getBoundingClientRect();
-                    setMenu({ x: r.left, y: r.top, items: [
+                    setMenu({ x: r.left, y: r.top - ADD_MENU_H - 4, items: [ // ボタンを隠さないよう、ボタンの上に出す
                       { type: "title", label: i18next.t("フォルダを追加") },
                       { label: i18next.t("この PC のフォルダ"), icon: ic(FolderOpen), run: addFolder, disabled: !supportsFs() },
                       { label: i18next.t("WSL・SSH のフォルダ"), icon: ic(Server), run: () => { setCnAdd(true); setCn(true); } },
