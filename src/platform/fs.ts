@@ -26,13 +26,23 @@ export const byName = (a: { name: string }, b: { name: string }) => {
 };
 export const nodeOrder = (a: Node, b: Node) => (a.kind === b.kind ? byName(a, b) : a.kind === "dir" ? -1 : 1);
 
+// Windows のエクスプローラーで WSL などへ写すと、代替データストリームが「名前:Zone.Identifier」という普通のファイルになって残る
+export const isZoneId = (name: string) => /:Zone\.Identifier$/i.test(name);
+export const hideZoneId = () => get().zoneId !== "show";
+// 設定が「自動で消す」なら消す(待たない。消せなくても一覧には出さない)
+export function dropZoneIds(dir: FileSystemDirectoryHandle, names: string[]) {
+  if (get().zoneId === "delete") for (const n of names) void removeEntry(dir, n).catch(() => {});
+}
+
 export async function readDir(dir: FileSystemDirectoryHandle, base = ""): Promise<Node[]> {
-  const out: Node[] = [];
+  const out: Node[] = [], zone: string[] = [];
   for await (const [name, handle] of (dir as any).entries() as AsyncIterable<[string, FileSystemHandle]>) {
     const isDir = handle.kind === "directory";
     if (isDir && get().hideBuild && SKIP_DIRS.has(name)) continue;
+    if (!isDir && isZoneId(name) && hideZoneId()) { zone.push(name); continue; }
     out.push({ name, path: `${base}/${name}`, kind: isDir ? "dir" : "file", handle, parent: dir });
   }
+  dropZoneIds(dir, zone);
   return out.sort(nodeOrder);
 }
 
@@ -82,7 +92,7 @@ export async function crawl(nodes: Node[], limit = get().crawlLimit, prefix = ""
   const rr = remoteRoot(nodes, prefix);
   if (!rr) return crawlLocal(nodes, limit);
   const files = await remoteFind(rr, skipNames(), limit);
-  return files.map((f) => ({ name: f.handle.name, path: prefix + f.path, kind: "file" as const, handle: f.handle as unknown as FileSystemHandle }));
+  return files.filter((f) => !(hideZoneId() && isZoneId(f.handle.name))).map((f) => ({ name: f.handle.name, path: prefix + f.path, kind: "file" as const, handle: f.handle as unknown as FileSystemHandle }));
 }
 async function crawlLocal(nodes: Node[], limit: number, out: Node[] = []): Promise<Node[]> {
   for (const n of nodes) {

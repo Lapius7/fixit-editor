@@ -1083,5 +1083,10 @@
   "最新の状態にする": "Refresh",
   "新しいフォルダ": "New folder",
   "新しいフォルダの名前": "New folder name",
-  "入れられませんでした: {{msg}}": "Couldn't add: {{msg}}"
+  "入れられませんでした: {{msg}}": "Couldn't add: {{msg}}",
+  "Windows から写したときにできる :Zone.Identifier": "\":Zone.Identifier\" files left by copying from Windows",
+  "自動で消す": "Delete automatically",
+  "一覧に出さない": "Hide from lists",
+  "そのまま出す": "Show as is",
+  "Windows のエクスプローラーで WSL に写すと、ファイルごとに「名前:Zone.Identifier」というファイルができます。WSL の中では使われないファイルです": "Copying files into WSL with Windows Explorer leaves a \"name:Zone.Identifier\" file next to each one. WSL does not use these files."
 }

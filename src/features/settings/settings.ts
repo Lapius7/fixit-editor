@@ -138,6 +138,7 @@ const RAW = [
   n("sshTimeout", "files", "SSH の接続を待つ時間", 10, { sec: "WSL と SSH", min: 3, max: 60, step: 1, unit: "秒" }),
   n("remoteMaxMB", "files", "WSL・SSH で開ける上限", 20, { min: 1, max: 200, step: 1, unit: "MB", hint: "これより大きいファイルは開きません" }),
   n("recentMax", "files", "最近開いた場所の数", 8, { min: 1, max: 20, step: 1 }),
+  e("zoneId", "files", "Windows から写したときにできる :Zone.Identifier", "delete", [["delete", "自動で消す"], ["hide", "一覧に出さない"], ["show", "そのまま出す"]], { hint: "Windows のエクスプローラーで WSL に写すと、ファイルごとに「名前:Zone.Identifier」というファイルができます。WSL の中では使われないファイルです" }),
   b("remoteFocusReload", "files", "画面に戻ったとき、WSL・SSH の一覧を読み直す", true),
   b("remoteKeepEol", "files", "改行コード(CRLF)を保ったまま保存する", true),
 
