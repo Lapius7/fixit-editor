@@ -67,3 +67,12 @@ export const TELEMETRY_STORE_KEY = "fixit:telemetry:v1";
 export const LOCAL_HISTORY_MAX_PER_FILE = 30;
 export const LOCAL_HISTORY_FILE_CHARS = 300_000; // これより大きいファイルは残さない
 export const LOCAL_HISTORY_TOTAL_CHARS = 4_000_000; // 全体の上限
+
+// 設定の「開発者情報」に出す連絡先
+export const DEV = {
+  name: "Lapius",
+  x: { id: "Lapius7", url: "https://x.com/Lapius7" },
+  github: { id: "Lapius7", url: "https://github.com/Lapius7" },
+  mail: "me@lapius7.com",
+  discord: "x_lapius7.xyz",
+};

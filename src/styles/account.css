@@ -65,3 +65,15 @@
 @media (prefers-reduced-motion: reduce) { .acct-av[data-loading="true"]::after { animation: none; } }
 /* フィードバックのやりとり: 状態の印・自分の書き込み・続けて書く欄 */
 .fb-reply[data-mine] { margin-left: 24px; background: transparent; box-shadow: 0 0 0 1px var(--hair); }
+
+/* 設定の「開発者情報」 */
+.about-app { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px; font: 13px/20px var(--font-sans); color: var(--ink); }
+.about-app .tnum, .about-by { color: var(--ink-2); font-size: 12px; }
+.about-by { margin-left: auto; }
+.about-list { border-radius: 12px; background: var(--s1); box-shadow: 0 0 0 1px var(--hair); }
+.about-row { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 8px 0 12px; font: 13px/20px var(--font-sans); }
+.about-row + .about-row { border-top: 1px solid var(--hair); }
+.about-ic { display: inline-flex; flex: none; color: var(--ink-2); }
+.about-label { flex: none; width: 112px; color: var(--ink-2); }
+.about-val { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); user-select: text; }
+.about-row .icon-btn { flex: none; }

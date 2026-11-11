@@ -1090,5 +1090,10 @@
   "そのまま出す": "Show as is",
   "Windows のエクスプローラーで WSL に写すと、ファイルごとに「名前:Zone.Identifier」というファイルができます。WSL の中では使われないファイルです": "Copying files into WSL with Windows Explorer leaves a \"name:Zone.Identifier\" file next to each one. WSL does not use these files.",
   "外部のターミナルで開く": "Open in External Terminal",
-  "エクスプローラーで表示": "Reveal in File Explorer"
+  "エクスプローラーで表示": "Reveal in File Explorer",
+  "このアプリについて": "About this app",
+  "作者": "Author",
+  "ソースコード": "Source code",
+  "開発者": "Developer",
+  "開発者情報": "About"
 }

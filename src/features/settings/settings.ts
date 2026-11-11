@@ -5,7 +5,7 @@ import { TAB_SIZE } from "@/shared/config";
 
 export type Dot = { x: number; y: number; c: string };
 export type Mode = "light" | "dark" | "auto";
-export type Cat = "look" | "layout" | "editor" | "cursor" | "assist" | "files" | "ws" | "term" | "run" | "status" | "motion" | "privacy" | "adv" | "history" | "ai" | "account";
+export type Cat = "look" | "layout" | "editor" | "cursor" | "assist" | "files" | "ws" | "term" | "run" | "status" | "motion" | "privacy" | "adv" | "history" | "ai" | "account" | "about";
 
 // 背景の色を選ぶ見本(画像の下段の丸)
 export const SWATCHES = ["#e4e6ec", "#f08bb4", "#f2836b", "#f5a65b", "#e6c85a", "#8ccf6f", "#4fc79a", "#4aa8f0", "#7a7cf0", "#b57cf0"];
@@ -15,7 +15,7 @@ export const MAX_DOTS = 5;
 export const CATS: { id: Cat | "keys"; label: string }[] = [
   { id: "look", label: "外観" }, { id: "layout", label: "レイアウト" }, { id: "editor", label: "エディタ" }, { id: "cursor", label: "カーソルと行番号" },
   { id: "assist", label: "補完と入力" }, { id: "files", label: "ファイル" }, { id: "ws", label: "ワークスペース" }, { id: "term", label: "ターミナル" }, { id: "run", label: "実行" }, { id: "status", label: "ステータスバー" },
-  { id: "motion", label: "アニメーション" }, { id: "privacy", label: "統計とプライバシー" }, { id: "adv", label: "詳細" }, { id: "account", label: "アカウント" }, { id: "ai", label: "AI" }, { id: "history", label: "変更履歴" }, { id: "keys", label: "ショートカット" },
+  { id: "motion", label: "アニメーション" }, { id: "privacy", label: "統計とプライバシー" }, { id: "adv", label: "詳細" }, { id: "account", label: "アカウント" }, { id: "ai", label: "AI" }, { id: "history", label: "変更履歴" }, { id: "keys", label: "ショートカット" }, { id: "about", label: "開発者情報" },
 ];
 
 /* ---------- 設定の一覧(ここに足すだけで、設定画面・保存・検索に出る) ----------

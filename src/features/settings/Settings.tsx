@@ -9,6 +9,7 @@ import { IS_TAURI } from "@/shared/chrome";
 import { CATS, DEFS, changedCount, exportJson, importJson, isChanged, ms, resetAll, update, useSettings } from "@/features/settings/settings";
 import { Rows, Look } from "@/features/settings/SettingsParts";
 import HistoryView from "@/features/settings/HistoryView";
+import About from "@/features/settings/About";
 import { AiSettings } from "@/features/ai/AiSettings";
 import { AccountSettings } from "@/features/account/AccountUI";
 import { KEYS, chips, comboOf, keyOf, rec, table } from "@/features/settings/keys";
@@ -118,7 +119,7 @@ export default function Settings({ onClose, first, out, onTheme, onCheckUpdate }
             <div key={searching ? "search" : cat} className="set-fade">
             {searching ? (
               found.length ? <Rows defs={found} flat /> : <p className="set-none"><Trans i18nKey="見つかりません" /></p>
-            ) : cat === "keys" ? <Keys /> : cat === "history" ? <HistoryView /> : cat === "ai" ? <AiSettings /> : cat === "account" ? <AccountSettings /> : (
+            ) : cat === "keys" ? <Keys /> : cat === "history" ? <HistoryView /> : cat === "ai" ? <AiSettings /> : cat === "account" ? <AccountSettings /> : cat === "about" ? <About /> : (
               <>
                 {cat === "look" && onTheme && <div className="set-theme-link"><div><Trans i18nKey="プレビューを見ながら編集" /><small><Trans i18nKey="エディタの右にパネルをひらき、画面そのままで変えられます" /></small></div><button className="btn" data-primary="true" onClick={() => { setClosing(true); setTimeout(onTheme, ms(180)); }}><Trans i18nKey="パネルで編集" /></button></div>}
                 {cat === "look" && <Look />}
