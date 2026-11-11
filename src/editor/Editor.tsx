@@ -88,6 +88,9 @@ export default function Editor({ path, docKey, name, value, onChange, onCursor, 
     });
     emitted.current = value;
     const v = new EditorView({ parent: host.current!, state });
+    // 開発版の React は、変わった props を中までたどって記録する。view → observer → window と進み、さらにプレビューの iframe(別オリジン)に触れて例外になり、
+    // 描画が止まる(Crumbs・StatusPop が view を受け取るため)。たどられないよう、observer だけ列挙の対象から外す(動作には関係しない)
+    try { Object.defineProperty(v, "observer", { enumerable: false }); } catch { /* 外せなくても動作は同じ */ }
     view.current = v; setVw(v);
     cb.current.onReady(v);
     // 切り替え直後のカーソル情報を状態バーへ

@@ -1071,5 +1071,9 @@
   "昨日": "Yesterday",
   "{{n}} 件": "{{n}}",
   "会話を消しました": "Chat deleted",
-  "質問 {{n}} 件": "{{n}} questions"
+  "質問 {{n}} 件": "{{n}} questions",
+  "プレビューを固定": "Pin preview",
+  "プレビューの固定を外す": "Unpin preview",
+  "ほかのファイルを開いている間も、このプレビューを横に出し続けます": "Keep this preview open beside other files you switch to",
+  "固定中: {{name}}": "Pinned: {{name}}"
 }

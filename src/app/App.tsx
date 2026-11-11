@@ -160,11 +160,14 @@ export default function App() {
   const pvSeen = useRef(new Set<string>()); // 一度プレビューを開いたファイル(閉じる動きの間も中身を残す)
   const [pvR, setPvR] = useState(0.5); // エディタとプレビューを並べたときの、エディタの幅の割合
   const [pv, setPv] = useState<Record<string, PvMode | undefined>>({}); // プレビュー形式のファイルの表示(パス → 表示)
+  const [pvPin, setPvPin] = useState<string | null>(null); // 固定したプレビュー(パス)。同じ画面でほかのファイルを開いている間も横に出し続ける(CSS・JS を直しながら見るため)
+  useEffect(() => { if (pvPin && (!pv[pvPin] || !tabs.some((t) => t.node.path === pvPin))) setPvPin(null); }, [pvPin, pv, tabs]);
   const pvTools = (path: string) => {
     const cur = pv[path], on = cur !== undefined, wide = cur === "preview", key = chips(K("togglePreview")).join(" ");
     const set = (m: PvMode | undefined) => setPv((p) => ({ ...p, [path]: m }));
     return (
       <span className="pv-tools" data-open={on}>
+        {on && <button className="icon-btn bc-btn" data-on={pvPin === path} aria-pressed={pvPin === path} aria-label={pvPin === path ? i18next.t("プレビューの固定を外す") : i18next.t("プレビューを固定")} data-tip={pvPin === path ? i18next.t("プレビューの固定を外す") : i18next.t("プレビューを固定")} data-tip-sub={pvPin === path ? undefined : i18next.t("ほかのファイルを開いている間も、このプレビューを横に出し続けます")} onClick={() => { setPvPin((q) => (q === path ? null : path)); setPreview((q) => (q === path ? null : q)); }}><Pin /></button>}
         {on && <button className="icon-btn bc-btn" aria-pressed={wide} aria-label={wide ? i18next.t("エディタも表示する") : i18next.t("プレビューだけにする")} data-tip={wide ? i18next.t("エディタも表示する") : i18next.t("プレビューだけにする")} onClick={() => set(wide ? "split" : "preview")}>{wide ? <Minimize2 /> : <Maximize2 />}</button>}
         <button className="icon-btn bc-btn" data-on={on} aria-pressed={on} aria-label={on ? i18next.t("プレビューを閉じる") : i18next.t("プレビューを横に開く")} data-tip={`${on ? i18next.t("プレビューを閉じる") : i18next.t("プレビューを横に開く")} (${key})`} onClick={() => set(on ? undefined : "split")}><Eye /></button>
       </span>
@@ -1518,6 +1521,9 @@ export default function App() {
   };
   const pane = (i: number) => {
     const t = tabOf(act[i]);
+    // 固定したプレビュー: そのファイルがこの画面にあり、いま開いているファイル自身のプレビューを出していないときに、横に出す
+    const pin = t && t.view.kind === "text" && pvPin && pvPin !== t.node.path && mem(i, pvPin) && !(previewKind(t.node.name) && pv[t.node.path]) ? tabOf(pvPin) : null;
+    const pvt = pin ?? (t && previewKind(t.node.name) ? t : null); // 横に出すプレビューのファイル
     return (
       <div className={onTop(lay, i) ? "paper" : "paper has-strip"} data-focus={fp === i} onMouseDown={() => setFp(i)} onContextMenu={(e) => { if (!t) stageMenu(e); }}>
         {!onTop(lay, i) && strip(i)}
@@ -1534,19 +1540,23 @@ export default function App() {
             )}
           </div>
         ) : t.view.kind === "text" ? (
-          <div className="ed-pv" data-pv={previewKind(t.node.name) ? pv[t.node.path] ?? "text" : "text"} style={{ "--pv-r": pvR, "--pv-a": `${pvR}fr`, "--pv-b": `${1 - pvR}fr` } as React.CSSProperties}>
+          <div className="ed-pv" data-pv={pin ? "split" : previewKind(t.node.name) ? pv[t.node.path] ?? "text" : "text"} style={{ "--pv-r": pvR, "--pv-a": `${pvR}fr`, "--pv-b": `${1 - pvR}fr` } as React.CSSProperties}>
           <Editor
-          crumbExtra={previewKind(t.node.name) ? pvTools(t.node.path) : undefined}
+          crumbExtra={pin ? (
+              <span className="pv-tools" data-open>
+                <button className="icon-btn bc-btn" data-on aria-pressed aria-label={i18next.t("プレビューの固定を外す")} data-tip={i18next.t("プレビューの固定を外す")} data-tip-sub={i18next.t("固定中: {{name}}", { name: pin.node.name })} onClick={() => setPvPin(null)}><Pin /></button>
+              </span>
+            ) : previewKind(t.node.name) ? pvTools(t.node.path) : undefined}
             key={`${i}:${t.node.path}`} docKey={`${i}:${t.node.path}`} path={displayPath(t.node.path)} name={t.node.name} value={t.text} jump={jump[i]}
             onChange={(v) => { setTabs((p) => p.map((x) => (x.node.path === t.node.path && x.text !== v ? { ...x, text: v } : x))); setPreview((q) => (q === t.node.path ? null : q)); }}
             onCursor={(c) => setCur((p) => ({ ...p, [i]: c }))}
             onFocus={() => setFp(i)} onReady={(v) => { views.current[i] = v; }} onContext={editorMenu} gitBase={bases[t.node.path]}
           />
           {previewKind(t.node.name) && pv[t.node.path] === "preview" && <div className="pv-float">{pvTools(t.node.path)}</div>}
-          {previewKind(t.node.name) && pv[t.node.path] === "split" && <RatioGrip ratio={pvR} onChange={setPvR} />}
-          {previewKind(t.node.name) && (
-            <div className="pv-pane" inert={!pv[t.node.path]}>
-              {(pv[t.node.path] || pvSeen.current.has(t.node.path)) && (pvSeen.current.add(t.node.path), <Preview kind={previewKind(t.node.name)!} text={t.text} name={t.node.name} source={previewSource(t)} />)}
+          {(pin || (previewKind(t.node.name) && pv[t.node.path] === "split")) && <RatioGrip ratio={pvR} onChange={setPvR} />}
+          {pvt && (
+            <div className="pv-pane" inert={!pin && !pv[t.node.path]}>
+              {(pin || pv[pvt.node.path] || pvSeen.current.has(pvt.node.path)) && (pvSeen.current.add(pvt.node.path), <Preview key={pvt.node.path} kind={previewKind(pvt.node.name)!} text={pvt.text} name={pvt.node.name} source={previewSource(pvt)} />)}
             </div>
           )}
           </div>
