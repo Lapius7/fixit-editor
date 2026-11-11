@@ -11,6 +11,7 @@ export const KEYS: KeyDef[] = [
   d(G.app, "save", "保存", "Mod+S"),
   d(G.app, "openFolder", "フォルダを開く", "Mod+O"),
   d(G.app, "addFolder", "フォルダをワークスペースに追加", ""),
+  d(G.app, "addRemote", "WSL・SSH のフォルダをワークスペースに追加", ""),
   d(G.app, "connect", "WSL・SSH のフォルダを開く", "Mod+Alt+O"),
   d(G.app, "stats", "統計を見る", "Mod+Alt+I", { inTerm: true }),
   d(G.app, "workspaces", "ワークスペースを開く・切り替える", "Mod+Alt+E", { inTerm: true }),

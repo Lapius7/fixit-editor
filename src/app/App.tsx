@@ -1091,7 +1091,7 @@ export default function App() {
   const ev = () => views.current[fp];
   const run = (id: string) => {
     const f: Record<string, () => unknown> = {
-      palette: () => setPal(true), quickOpen: () => setQo(true), save, openFolder, addFolder, connect: () => { setCnAdd(false); setCn(true); }, workspaces: () => setWsDlg("ws"), profiles: () => setWsDlg("profile"), saveWorkspace: quickSave, newFile: () => create("file", null), settings: () => setSetts("look"), shortcuts: () => setSetts("keys"),
+      palette: () => setPal(true), quickOpen: () => setQo(true), save, openFolder, addFolder, addRemote: () => { if (root.handle) { setCnAdd(true); setCn(true); } }, connect: () => { setCnAdd(false); setCn(true); }, workspaces: () => setWsDlg("ws"), profiles: () => setWsDlg("profile"), saveWorkspace: quickSave, newFile: () => create("file", null), settings: () => setSetts("look"), shortcuts: () => setSetts("keys"),
       newTerm: () => addTerm(), runFile, closeTerm: () => alive().length && endTerm(actT), nextTerm: () => stepTerm(1), prevTerm: () => stepTerm(-1),
       renameTerm: () => { if (alive().length) { showTerm(true); setRenaming(actT); } }, clearTerm: () => apis.current.get(actT)?.clear(),
       aiQuote: () => { const v = views.current[fp]; if (v) quoteToAi(v); },
@@ -1278,13 +1278,13 @@ export default function App() {
   };
   // フォルダを開く・ワークスペースに足すメニュー。左下のボタンと、フォルダ見出しの右クリックで使う
   const addItems = (): Item[] => [
-    { label: i18next.t("この PC のフォルダ"), icon: ic(FolderOpen), run: addFolder, disabled: !supportsFs() },
-    { label: i18next.t("WSL・SSH のフォルダ"), icon: ic(Server), run: () => { setCnAdd(true); setCn(true); } },
+    { label: i18next.t("この PC のフォルダ"), icon: ic(FolderOpen), keys: K("addFolder"), run: addFolder, disabled: !supportsFs() },
+    { label: i18next.t("WSL・SSH のフォルダ"), icon: ic(Server), keys: K("addRemote"), run: () => { setCnAdd(true); setCn(true); } },
   ];
   const folderItems = (): Item[] => [
     { type: "title", label: i18next.t("フォルダを開く") },
     { label: i18next.t("この PC のフォルダ"), icon: ic(FolderOpen), keys: K("openFolder"), run: openFolder, disabled: !supportsFs() },
-    { label: i18next.t("WSL・SSH のフォルダ"), icon: ic(Server), run: () => { setCnAdd(false); setCn(true); } },
+    { label: i18next.t("WSL・SSH のフォルダ"), icon: ic(Server), keys: K("connect"), run: () => { setCnAdd(false); setCn(true); } },
     ...(root.handle ? [{ type: "sep" as const }, { type: "title" as const, label: i18next.t("ワークスペースに追加") }, ...addItems()] : []),
   ];
   const treeMenu = (e: React.MouseEvent, n: Node | null) => {
@@ -1335,7 +1335,7 @@ export default function App() {
           { label: i18next.t("WSL・SSH に接続"), icon: ic(Server), keys: K("connect"), run: () => { setCnAdd(false); setCn(true); } },
           { label: i18next.t("フォルダを開く"), icon: ic(FolderOpen), keys: K("openFolder"), run: openFolder, disabled: !supportsFs() },
           { label: i18next.t("フォルダをワークスペースに追加"), icon: ic(FolderPlus), keys: K("addFolder"), run: addFolder, disabled: !supportsFs() || !root.handle },
-          { label: i18next.t("WSL・SSH のフォルダを追加"), icon: ic(Server), run: () => { setCnAdd(true); setCn(true); }, disabled: !root.handle },
+          { label: i18next.t("WSL・SSH のフォルダを追加"), icon: ic(Server), keys: K("addRemote"), run: () => { setCnAdd(true); setCn(true); }, disabled: !root.handle },
         ]),
       ],
     });

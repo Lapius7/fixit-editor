@@ -10,7 +10,7 @@
 .cn-row > span { color: var(--ink-2); font-size: 12px; }
 .cn-hint { margin: 8px 0 0 !important; font-size: 12px; line-height: 20px; color: var(--ink-3) !important; }
 .cn-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.cn-chips .chipbtn[data-on="true"] { color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.cn-chips .chipbtn[data-on="true"], .cn-chips .chipbtn[data-on="true"]:hover:not(:disabled) { color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .cn-recent { margin-top: 14px; border-top: 1px solid var(--hair); padding-top: 8px; }
 .cn-recent h3 { margin: 0 0 4px; font-size: 12px; line-height: 20px; font-weight: 500; color: var(--ink-3); display: flex; align-items: center; gap: 6px; }
 .cn-recent h3 svg { width: 13px; height: 13px; stroke-width: 1.8; }

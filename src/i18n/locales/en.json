@@ -709,6 +709,7 @@
   "PC · {{path}}": "PC · {{path}}",
   "このフォルダはブラウザ版で保存したものです。「フォルダを開く」から開き直してください": "This folder was saved by the browser version. Open it again with \"Open Folder\".",
   "フォルダをワークスペースに追加": "Add folder to workspace",
+  "WSL・SSH のフォルダをワークスペースに追加": "Add WSL / SSH folder to workspace",
   "WSL・SSH のフォルダを追加": "Add WSL / SSH folder",
   "ワークスペースから外す": "Remove from workspace",
   "別のフォルダへは移せません": "Can't move to a different folder",

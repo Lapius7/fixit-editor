@@ -26,7 +26,8 @@
 .chipbtn { height: 32px; flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 0 12px; border-radius: calc(var(--r-md) * var(--rk, 1)); font-size: 12px; color: var(--ink-2); background: var(--field); box-shadow: 0 0 0 1px var(--hair) inset; transition: background-color .15s var(--out), color .15s var(--out), box-shadow .2s var(--out); }
 .chipbtn:hover:not(:disabled) { color: var(--ink); background: var(--field-on); }
 .chipbtn:active:not(:disabled) { transform: scale(var(--ps)); }
-.chipbtn[aria-pressed="true"] { background: var(--accent); color: #fff; box-shadow: none; }
+.chipbtn[aria-pressed="true"], .chipbtn[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent); color: #fff; box-shadow: none; }
+.chipbtn[aria-pressed="true"]:hover:not(:disabled) { background: color-mix(in oklab, var(--accent) 88%, #fff); }
 .chipbtn:disabled { opacity: .45; cursor: default; }
 .set-note { flex: none; margin: 0; padding: 4px 22px 0; min-height: 24px; }
 .set-body { flex: 1; min-height: 0; padding: 16px 22px 22px; }
