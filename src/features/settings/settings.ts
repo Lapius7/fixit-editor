@@ -206,6 +206,7 @@ const RAW = [
   b("treeStagger", "motion", "ファイルを順に出す", true, { attr: "stagger" }),
   b("hoverZoom", "motion", "アイコンをホバーで少し大きく", true, { attr: "hoverzoom" }),
   b("wsWave", "motion", "ワークスペースを切り替えたときに波を出す", true),
+  b("aiGlow", "motion", "AI が回答を作っている間、画面の縁を光らせる", true),
 
   /* 詳細 */
   b("confirmExit", "adv", "未保存のままページを閉じるとき確かめる", true),

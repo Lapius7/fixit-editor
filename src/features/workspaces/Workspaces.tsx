@@ -32,7 +32,6 @@ export default function Workspaces({ initial, curId, saveName, max, onOpen, onSa
   const pf = useProfiles();
   const [q, setQ] = useState("");
   const [ren, setRen] = useState<{ id: string; v: string; out?: boolean } | null>(null);
-  const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const [closing, setClosing] = useState(false);
   const [perm, setPerm] = useState<Record<string, boolean>>({});
@@ -63,9 +62,11 @@ export default function Workspaces({ initial, curId, saveName, max, onOpen, onSa
       .sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || b.updated - a.updated);
   }, [list, q]);
 
-  const go = async (w: Workspace) => {
-    setErr(""); setBusy(w.id);
-    try { if ((await onOpen(w)) !== false) close(); } catch (e) { setErr((e as Error).message); } finally { setBusy(""); }
+  // 押したらすぐ閉じ、読み込みは閉じたあとで進める。失敗したときは通知で知らせる
+  const go = (w: Workspace) => {
+    close();
+    // 閉じ始めの画面を一度描いてから読み込む(読み込みで閉じる動きが止まらないように)
+    requestAnimationFrame(() => setTimeout(() => void Promise.resolve().then(() => onOpen(w)).catch((e) => flash((e as Error).message))));
   };
   const commitRen = () => {
     if (!ren || ren.out) return;
@@ -126,7 +127,7 @@ export default function Workspaces({ initial, curId, saveName, max, onOpen, onSa
               {rows.length === 0 && <p className="ws-empty">{list.length ? i18next.t("当てはまるものがありません") : i18next.t("まだありません")}</p>}
               {rows.map((w) => (
                 <div key={w.id} className="ws-row" data-cur={w.id === (curId ?? current)}>
-                  <button className="ws-main" disabled={!!busy} onClick={() => go(w)} title={rootLabel(w.root)}>
+                  <button className="ws-main" onClick={() => go(w)} title={rootLabel(w.root)}>
                     <i className="ws-dot" style={{ background: w.color }} />
                     <span className="ws-txt">
                       {nameCell(w.id, w.name)}
@@ -135,7 +136,7 @@ export default function Workspaces({ initial, curId, saveName, max, onOpen, onSa
                     <span className="ws-sub">
                       {w.root.kind === "local" && perm[w.id] === false && <em className="ws-badge" data-tone="warn"><Trans i18nKey="要許可" /></em>}
                       {w.profile && pf.list.some((p) => p.id === w.profile) && <em className="ws-badge"><UserRound />{pf.list.find((p) => p.id === w.profile)!.name}</em>}
-                      {w.id === (curId ?? current) ? <em className="ws-badge" data-tone="on"><Check /><Trans i18nKey="使用中" /></em> : <span>{busy === w.id ? i18next.t("開いています…") : ago(w.updated)}</span>}
+                      {w.id === (curId ?? current) ? <em className="ws-badge" data-tone="on"><Check /><Trans i18nKey="使用中" /></em> : <span>{ago(w.updated)}</span>}
                     </span>
                   </button>
                   <div className="ws-acts">

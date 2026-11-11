@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { AI_DEFAULT_MODEL, AI_MAX_TOKENS } from "@/shared/config";
 import { IS_TAURI } from "@/shared/chrome";
 import type { Effort, Link, Provider } from "@/features/ai/store";
+import { glow } from "@/shared/glow";
 
 // 画像は base64(data: の前置きなし)。type は AI_IMAGE_TYPES のどれか
 export type Img = { type: string; data: string };
@@ -183,7 +184,11 @@ async function claudeCli(r: Req): Promise<Stop> {
   return stop;
 }
 
-export const streamChat = (r: Req): Promise<Stop> => (r.provider === "anthropic" ? anthropic(r) : r.provider === "claude-cli" ? claudeCli(r) : openai(r));
+// 回答を作っている間は、窓の縁を光らせる(設定の「アニメーション」で切れる)
+export const streamChat = (r: Req): Promise<Stop> => {
+  const off = glow();
+  return (r.provider === "anthropic" ? anthropic(r) : r.provider === "claude-cli" ? claudeCli(r) : openai(r)).finally(off);
+};
 export const isAbort = (e: unknown, signal: AbortSignal) => signal.aborted || e instanceof Anthropic.APIUserAbortError || (e as { name?: string })?.name === "AbortError";
 
 // claude コマンドの接続状態を確かめる。ログインの中身(メール・トークン)は受け取らない。状態の語だけが返る

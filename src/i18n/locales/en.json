@@ -1131,5 +1131,6 @@
   "{{name}} は外で変更されました。保存すると上書きします": "{{name}} was changed outside. Saving will overwrite it",
   "最近のワークスペース": "Recent workspaces",
   "ワークスペース「{{name}}」を開く": "Open workspace “{{name}}”",
-  "ワークスペースを切り替えたときに波を出す": "Show a wave when switching workspaces"
+  "ワークスペースを切り替えたときに波を出す": "Show a wave when switching workspaces",
+  "AI が回答を作っている間、画面の縁を光らせる": "Light up the window edges while AI is writing a reply"
 }

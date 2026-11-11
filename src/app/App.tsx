@@ -6,7 +6,7 @@ import {
 import type { EditorView } from "@codemirror/view";
 import WinControls from "@/app/WinControls";
 import FolderCards from "@/workbench/FolderCards";
-import { wave } from "@/shared/wave";
+import { origin, wave } from "@/shared/wave";
 import { CHROME } from "@/shared/chrome";
 import { notify, type NoticeKind } from "@/shared/notify";
 import { OUTLINE_EVENT } from "@/editor/Crumbs";
@@ -685,8 +685,9 @@ export default function App() {
   };
   // 一覧・コマンド・スタート画面から切り替えたときは、押した所から波を出す(起動時の復元では出さない)
   const switchWs = async (w: Workspace, at?: { x: number; y: number }) => {
+    const from = at ?? origin();
     const ok = await openWs(w);
-    if (ok && st.wsWave) wave(at);
+    if (ok && st.wsWave) wave(from);
     return ok;
   };
   const saveNew = async (name: string) => {
