@@ -1042,8 +1042,6 @@
   "中身をコピー": "Copy contents",
   "中身をコピーしました": "Contents copied",
   "テキストではないため、中身をコピーできません": "This isn't a text file, so its contents can't be copied",
-  "たたむ": "Show less",
-  "すべて表示({{n}})": "Show all ({{n}})",
   "選んだコード・画像・入力した文章は、この PC の claude コマンドを通して Anthropic のサーバーに送られます。利用は、あなたの Claude の契約の枠に数えられます。このエディタの開発元には送られません": "The code and images you select and the text you type are sent to Anthropic's servers through the claude command on this PC. Usage counts toward your Claude plan. Nothing is sent to the developer of this editor.",
   "選んだコード・画像・入力した文章は、{{name}} のサーバーに送られます。送った内容の扱いは、各社の規約に従います。このエディタの開発元には送られません": "The code and images you choose and the text you type will be sent to {{name}}'s servers and handled under that company's terms. Nothing is sent to this editor's developer.",
   "ファイルの中身や画像を、質問と一緒に送ります": "File contents and images are sent with your question",
@@ -1075,5 +1073,15 @@
   "プレビューを固定": "Pin preview",
   "プレビューの固定を外す": "Unpin preview",
   "ほかのファイルを開いている間も、このプレビューを横に出し続けます": "Keep this preview open beside other files you switch to",
-  "固定中: {{name}}": "Pinned: {{name}}"
+  "固定中: {{name}}": "Pinned: {{name}}",
+  "{{n}} 件を「{{name}}」に入れました": "Added {{n}} item(s) to \"{{name}}\"",
+  "「{{name}}」を移しています…": "Moving \"{{name}}\"…",
+  "このフォルダに移動": "Go to this folder",
+  "すべてのフォルダを閉じる": "Close all folders",
+  "フォルダをそれ自身の中へは入れられません": "Can't put a folder inside itself",
+  "フォルダ名": "Folder name",
+  "最新の状態にする": "Refresh",
+  "新しいフォルダ": "New folder",
+  "新しいフォルダの名前": "New folder name",
+  "入れられませんでした: {{msg}}": "Couldn't add: {{msg}}"
 }

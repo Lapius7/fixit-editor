@@ -1,6 +1,4 @@
-import type { Node } from "@/platform/fs";
-
-const sort = (a: Node, b: Node) => (a.kind === b.kind ? a.name.localeCompare(b.name, "ja", { numeric: true }) : a.kind === "dir" ? -1 : 1);
+import { nodeOrder as sort, type Node } from "@/platform/fs";
 export const dirOf = (p: string) => p.slice(0, p.lastIndexOf("/"));
 
 // メモリ上のツリー(デモ用)を、パスで指定して作り替える

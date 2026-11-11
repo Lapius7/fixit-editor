@@ -50,12 +50,12 @@ import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, 
 import { displayPath, setRootNames, splitRoot } from "@/workbench/rootpath";
 import { getProfiles, switchProfile, useProfiles } from "@/features/settings/profiles";
 import { copyWithNotice } from "@/platform/clipboard";
-import { prefetchOpen } from "@/workbench/treeOpen";
+import { prefetchOpen, shownOpen } from "@/workbench/treeOpen";
 import { listShells, type ShellOpt } from "@/platform/pty";
-import { RemoteFile, checkDir, connKey, connLabel, lastDir, normConn, showPath, pushRecent, rootHandle, sshUrl, type Conn, type RemoteDir } from "@/platform/remote";
+import { RemoteFile, checkDir, connKey, isRemote, remoteSig, connLabel, lastDir, normConn, showPath, pushRecent, rootHandle, sshUrl, type Conn, type RemoteDir } from "@/platform/remote";
 import { DEMO_NAME, DEMO_TREE } from "@/shared/demo";
 import { IS_TAURI } from "@/shared/chrome";
-import { createDir, createFile, moveEntry, pickFolder, pickPcFolder, readDir, removeEntry, renameFile, supportsFs, writeFile, writeBlob, freeName, type Node } from "@/platform/fs";
+import { copyInto, createDir, createFile, freeEntryName, moveEntry, pickFolder, pickPcFolder, readDir, removeEntry, renameFile, supportsFs, writeFile, writeBlob, freeName, type Node } from "@/platform/fs";
 import { getFile, isImageName, load } from "@/platform/load";
 import { copyImage } from "@/shared/clipimage";
 import { langName } from "@/editor/lang";
@@ -68,7 +68,7 @@ import Preview, { previewKind } from "@/features/preview/Preview";
 import { KEYS, DEF, chips, comboOf, keyOf, rec, table } from "@/features/settings/keys";
 import { EDIT } from "@/editor/edit-cmds";
 import { codeToPng, shareShot } from "@/editor/shot";
-import { drag, dragEnd, paneDrag, rootKey, setDropTarget, useDropTarget } from "@/workbench/dnd";
+import { drag, dragEnd, extFiles, paneDrag, rootKey, setDropTarget, useDropTarget } from "@/workbench/dnd";
 import { LEAF0, boxes, flipAround, fromPair, isLeaf, joints, leaves, nextId, onTop, removeLeaf, renumber, setRatio, splitLeaf, swapLeaves, topLeaves, topRight, valid as validLay, type Box, type Dir, type Edge, type Joint, type Lay } from "@/workbench/layout";
 import { addNode, dirOf, exists, moveNode, removeNode, renameNode } from "@/workbench/treeops";
 import { DEFS, isDark, ms, update, useSettings } from "@/features/settings/settings";
@@ -672,7 +672,7 @@ export default function App() {
     return { name, handle: rootHandle(conn) as unknown as FileSystemDirectoryHandle, ref: rootRefOf(conn, name, true) };
   };
   // エクスプローラーへ、OS のフォルダ・ファイルをドロップして開く(フォルダはいまのフォルダに並べて足し、ファイルは各ファイルをタブで開く)
-  const hasFiles = (e: React.DragEvent) => !drag.node && !drag.tab && e.dataTransfer.types.includes("Files");
+  const hasFiles = extFiles;
   const dropExternal = async (e: React.DragEvent) => {
     setRootDrop(false); setExtDrop(false);
     if (!hasFiles(e)) return;
@@ -687,6 +687,37 @@ export default function App() {
       if (!files.length) { flash(i18next.t("ここへはドロップできません"), "error"); return; }
       for (const f of files) await open({ name: f.name, path: f.name, kind: "file", handle: f }, fp, true);
     } catch (err) { flash((err as Error).message, "error"); }
+  };
+  // OS のファイル・フォルダを、落とした所のフォルダ(dest。null ならフォルダ r の一番上)へ写す。同じ名前があれば「名前-2」にする
+  const dropInto = async (e: React.DragEvent, dest: Node | null, r?: Root) => {
+    e.preventDefault(); e.stopPropagation();
+    setRootDrop(false); setExtDrop(false); setDropTarget(null);
+    // ドロップのイベントが終わると中身を読めなくなるので、待つ前にまとめて受け取っておく
+    const hps = [...e.dataTransfer.items].filter((i) => i.kind === "file").map((i) => (i as unknown as { getAsFileSystemHandle?: () => Promise<FileSystemHandle | null> }).getAsFileSystemHandle?.());
+    const files = [...e.dataTransfer.files];
+    const rr = dest ? rootOf(dest) : r ?? roots[0];
+    const to = (dest?.handle ?? rr.handle) as FileSystemDirectoryHandle | undefined;
+    if (!to) return flash(i18next.t("ここへはドロップできません"), "error");
+    try {
+      let n = 0;
+      const hs = hps.every(Boolean) ? await Promise.all(hps) : [];
+      if (hs.some(Boolean)) {
+        for (const h of hs) {
+          if (!h) continue;
+          // 落とした先が、落としたフォルダそのものかその中なら写さない(終わらなくなる)
+          if (h.kind === "directory" && !isRemote(to) && (await (h as unknown as { resolve: (x: FileSystemHandle) => Promise<string[] | null> }).resolve(to).catch(() => null))) { flash(i18next.t("フォルダをそれ自身の中へは入れられません"), "error"); continue; }
+          await copyInto(h, to, await freeEntryName(to, h.name)); n++;
+        }
+      } else {
+        for (const f of files) {
+          const w = await ((await to.getFileHandle(await freeEntryName(to, f.name), { create: true })) as unknown as { createWritable: () => Promise<{ write: (d: ArrayBuffer) => Promise<void>; close: () => Promise<void> }> }).createWritable();
+          await w.write(await f.arrayBuffer()); await w.close(); n++;
+        }
+      }
+      if (!n) return;
+      await reload();
+      flash(i18next.t("{{n}} 件を「{{name}}」に入れました", { n, name: dest?.name ?? rr.name }));
+    } catch (err) { flash(i18next.t("入れられませんでした: {{msg}}", { msg: (err as Error).message }), "error"); }
   };
   const openFolder = async () => {
     try {
@@ -767,6 +798,52 @@ export default function App() {
     return () => removeEventListener("focus", f);
   }); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 外(エクスプローラーや端末など)での追加・削除・改名に追従する。画面に出ているフォルダの更新日時(ブラウザ版の PC のフォルダは名前の一覧)を数秒ごとに確かめ、変わっていたら読み直す
+  const watchRef = useRef({ roots, reload });
+  watchRef.current = { roots, reload };
+  useEffect(() => {
+    const prev = new Map<string, string>();
+    let busy = false, stop = false, n = 0;
+    const look = async (r: Root): Promise<[string, string][]> => {
+      if (!r.handle) return [];
+      const rels = ["", ...shownOpen(r.prefix).map((p) => p.slice(r.prefix.length))].slice(0, 300);
+      if (r.conn) {
+        const base = (r.handle as unknown as RemoteDir).path.replace(/\/+$/, "");
+        const abs = rels.map((x) => base + x || "/");
+        const got = new Map<string, string>();
+        for (const line of (await remoteSig(r.conn, abs)).split("\n")) { const t = line.indexOf("\t"); if (t > 0) got.set(line.slice(t + 1), line.slice(0, t)); }
+        return abs.map((a) => [`${r.prefix}\0${a}`, got.get(a) ?? "-"]);
+      }
+      return Promise.all(rels.map(async (x): Promise<[string, string]> => {
+        try {
+          let d: FileSystemDirectoryHandle = r.handle!;
+          for (const seg of x.split("/").filter(Boolean)) d = await d.getDirectoryHandle(seg);
+          const names: string[] = [];
+          for await (const n of (d as any).keys() as AsyncIterable<string>) names.push(n);
+          return [`${r.prefix}\0${x}`, names.sort().join("/")];
+        } catch { return [`${r.prefix}\0${x}`, "-"]; }
+      }));
+    };
+    const tick = async () => {
+      if (busy || document.visibilityState === "hidden") return;
+      busy = true;
+      try {
+        const { roots, reload } = watchRef.current;
+        // SSH は Windows では接続を使い回せず毎回つなぎ直すので、4 回に 1 回(約 10 秒ごと)だけ見る
+        const due = roots.filter((r) => r.conn?.kind !== "ssh" || n % 4 === 0);
+        n++;
+        const got = await Promise.all(due.map((r) => look(r).catch(() => [] as [string, string][]))); // 切れているフォルダは今回は見ない
+        if (stop) return;
+        // 前に見たフォルダの値が変わったときだけ読み直す(フォルダを開いて見る対象が増えただけでは読み直さない)
+        let changed = false;
+        for (const [k, v] of got.flat()) { if (prev.has(k) && prev.get(k) !== v) changed = true; prev.set(k, v); }
+        if (changed) await reload();
+      } catch { /* 読めないときは次の回に */ } finally { busy = false; }
+    };
+    const id = setInterval(tick, 2500);
+    return () => { stop = true; clearInterval(id); };
+  }, []);
+
   const parentDir = (n: Node | null) => (n ? (n.kind === "dir" ? n : null) : null);
   const create = (kind: "file" | "dir", at: Node | null) => {
     const rr = at ? rootOf(at) : roots[0];
@@ -818,23 +895,41 @@ export default function App() {
     });
   };
   // ドラッグで別のフォルダへ移す(dest が null なら最上位)。別のルートのフォルダへは移せない
+  // フォルダ to が、フォルダ src そのものかその中か。接続先が違っても同じディスクのこともある(このPC の C:/x と WSL の /mnt/c/x)
+  const inside = async (src: FileSystemHandle, sc: Conn | undefined, to: FileSystemDirectoryHandle, tc: Conn | undefined) => {
+    if (!isRemote(src) && !isRemote(to)) return !!(await (src as unknown as { resolve: (x: FileSystemHandle) => Promise<string[] | null> }).resolve(to).catch(() => null));
+    if (!sc || !tc || sc.kind === "ssh" || tc.kind === "ssh") return false;
+    const disk = (c: Conn, p: string) => {
+      const m = c.kind === "wsl" ? /^\/mnt\/([a-z])(\/.*)?$/i.exec(p) : null;
+      return (m ? `${m[1]}:${m[2] ?? ""}` : p.replace(/\\/g, "/")).replace(/\/+$/, "").toLowerCase();
+    };
+    const a = disk(sc, (src as unknown as RemoteDir).path), b = disk(tc, (to as unknown as RemoteDir).path);
+    return b === a || b.startsWith(a + "/");
+  };
   const moveTo = async (n: Node, dest: Node | null) => {
-    const rr = rootOf(n);
-    if (dest && rootOf(dest) !== rr) return flash(i18next.t("別のフォルダへは移せません"));
+    const rr = rootOf(n), dr = dest ? rootOf(dest) : rr, cross = dr !== rr; // cross: ワークスペースの別のフォルダへ移す
     const base = dest ? dest.path : rr.prefix;
     if (dirOf(n.path) === base || (n.kind === "dir" && (base === n.path || base.startsWith(n.path + "/")))) return;
-    if (exists(rr.nodes, `${base}/${n.name}`)) return flash(i18next.t("同じ名前があります"));
+    // サンプルのフォルダとは、中身の持ち方が違うので移し合えない
+    if (cross && (!rr.handle || !dr.handle || !n.handle)) return flash(i18next.t("別のフォルダへは移せません"));
+    if (!cross && exists(rr.nodes, `${base}/${n.name}`)) return flash(i18next.t("同じ名前があります"));
     const under = tabs.filter((t) => t.node.path === n.path || t.node.path.startsWith(n.path + "/"));
     if (under.some((t) => dirtyList.includes(t))) return flash(i18next.t("保存していない変更があるので、移せません"));
     try {
-      const np = `${base}/${n.name}`, to = (dest?.handle ?? rr.handle) as FileSystemDirectoryHandle | undefined;
+      const np = `${base}/${n.name}`, to = (dest?.handle ?? dr.handle) as FileSystemDirectoryHandle | undefined;
+      const from = (n.parent ?? rr.handle) as FileSystemDirectoryHandle;
       let handle = n.handle;
-      if (rr.conn) {
-        const from = (n.parent ?? rr.handle) as unknown as RemoteDir, d = to as unknown as RemoteDir;
-        await from.moveTo(n.name, d);
-        handle = n.kind === "file" ? (new RemoteFile(rr.conn, `${d.path === "/" ? "" : d.path}/${n.name}`, n.name) as unknown as FileSystemHandle) : undefined;
-      } else if (rr.handle && n.handle && to) handle = await moveEntry((n.parent ?? rr.handle) as FileSystemDirectoryHandle, n.handle, to);
-      else updRoot(rr.prefix, (r) => ({ ...r, nodes: moveNode(r.nodes, n.path, base) }));
+      if (rr.conn && dr.conn && rr.conn.kind === dr.conn.kind && (rr.conn.host ?? "") === (dr.conn.host ?? "")) {
+        // 同じ接続先(このPC・同じ WSL・同じ SSH ホスト)の中なら、mv 1回で移す
+        const d = to as unknown as RemoteDir;
+        await (from as unknown as RemoteDir).moveTo(n.name, d);
+        handle = n.kind === "file" ? (new RemoteFile(dr.conn, `${d.path === "/" ? "" : d.path}/${n.name}`, n.name) as unknown as FileSystemHandle) : undefined;
+      } else if (rr.handle && n.handle && to) {
+        // 接続先が違うときは、写してから元を消す。フォルダをそれ自身の中へ写すと終わらないので止める
+        if (cross && n.kind === "dir" && (await inside(n.handle, rr.conn, to, dr.conn))) return flash(i18next.t("フォルダをそれ自身の中へは入れられません"), "error");
+        if (cross) flash(i18next.t("「{{name}}」を移しています…", { name: n.name }));
+        handle = await moveEntry(from, n.handle, to);
+      } else updRoot(rr.prefix, (r) => ({ ...r, nodes: moveNode(r.nodes, n.path, base) }));
       if (n.kind === "dir") closeMany(under.map((t) => t.node.path), true);
       else {
         setTabs((p) => p.map((t) => (t.node.path === n.path ? { ...t, node: { ...t.node, path: np, handle, parent: to } } : t)));
@@ -842,7 +937,7 @@ export default function App() {
         setGrp((g) => Object.fromEntries(Object.entries(g).map(([k, x]) => [k, x.has(n.path) ? new Set([...x].map((q) => (q === n.path ? np : q))) : x])) as Pm<Set<string>>);
       }
       dropStates((k) => k.endsWith(`:${n.path}`));
-      if (rr.handle) await reload();
+      if (rr.handle || dr.handle) await reload();
       flash(i18next.t("「{{name}}」を移しました", { name: n.name }));
     } catch (e) { flash("移せませんでした: " + (e as Error).message); }
   };
@@ -1298,7 +1393,7 @@ export default function App() {
     { label: i18next.t("この PC のフォルダ"), icon: ic(FolderOpen), keys: K("openFolder"), run: openFolder, disabled: !supportsFs() },
     { label: i18next.t("WSL・SSH のフォルダ"), icon: ic(Server), keys: K("connect"), run: () => { setCnAdd(false); setCn(true); } },
     ...(root.handle ? [{ type: "sep" as const }, { type: "title" as const, label: i18next.t("ワークスペースに追加") }, ...addItems(),
-      { type: "sep" as const }, { label: i18next.t("フォルダを閉じる"), icon: ic(FolderX), keys: K("closeFolder"), run: closeFolder }] : []),
+      { type: "sep" as const }, { label: roots.length > 1 ? i18next.t("すべてのフォルダを閉じる") : i18next.t("フォルダを閉じる"), icon: ic(FolderX), keys: K("closeFolder"), run: closeFolder }] : []),
   ];
   const treeMenu = (e: React.MouseEvent, n: Node | null) => {
     e.preventDefault();
@@ -1328,8 +1423,9 @@ export default function App() {
           { label: i18next.t("ファイル一覧を更新"), icon: ic(RotateCw), run: reload },
           { type: "sep" as const },
           { label: i18next.t("ワークスペースに追加"), icon: ic(FolderPlus), sub: addItems() },
-          { label: i18next.t("ワークスペースから外す"), icon: ic(FolderMinus), run: () => removeRoot(rr.prefix), disabled: roots.length < 2 },
-          { label: i18next.t("フォルダを閉じる"), icon: ic(FolderX), keys: K("closeFolder"), run: closeFolder },
+          // 見出しの「フォルダを閉じる」は、そのフォルダだけを閉じる(ワークスペースから外す)。全部を閉じるのは別の項目
+          { label: i18next.t("フォルダを閉じる"), icon: ic(FolderMinus), run: () => (roots.length < 2 ? closeFolder() : removeRoot(rr.prefix)) },
+          ...(roots.length > 1 ? [{ label: i18next.t("すべてのフォルダを閉じる"), icon: ic(FolderX), keys: K("closeFolder"), run: closeFolder }] : []),
         ] : n ? [
           { type: "sep" as const },
           { label: i18next.t("名前の変更"), icon: ic(Pencil), run: () => rename(n) },
@@ -1599,12 +1695,13 @@ export default function App() {
               )}
               <nav className="tree scroll overscroll-contain" data-foot={footOpen} style={{ ["--fh" as string]: `${footOpen ? footH : 0}px` }} data-drop={rootDrop || (roots.length === 1 && dropAt === rootKey(roots[0].prefix))}
                 onDragOver={(e) => {
-                  if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setRootDrop(true); setExtDrop(true); return; }
+                  if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDropTarget(null); setRootDrop(true); setExtDrop(true); return; }
                   // ここまで来るのは、一番上の階層のファイルか、何もない所の上。フォルダが1つなら、その一番上へ移す
                   if (!drag.node) return;
                   if (roots.length > 1 || dirOf(drag.node.path) === roots[0].prefix) { setDropTarget(null); return; }
                   e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropTarget(rootKey(roots[0].prefix));
                 }}
+                onDragOverCapture={(e) => { if (hasFiles(e)) { setRootDrop(false); setExtDrop(false); } }} // フォルダの上なら、そのフォルダが受け止める(開く案内は出さない)。何もない所なら下で出し直す
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as globalThis.Node | null)) { setRootDrop(false); setExtDrop(false); setDropTarget(null); } }}
                 onDrop={(e) => {
                   if (hasFiles(e)) { void dropExternal(e); return; }
@@ -1619,8 +1716,11 @@ export default function App() {
                   const h = headNode(r), shut = folded.has(r.prefix);
                   return (
                     <section key={r.prefix || "main"} className="root-sec" data-new={freshRoot === r.prefix} data-drop={dropAt === rootKey(r.prefix) || undefined} aria-label={r.name}
-                      onDragOver={(e) => { if (!drag.node) return; e.stopPropagation(); if (!canDrop(h)) { setDropTarget(null); return; } e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropTarget(rootKey(r.prefix)); }}
-                      onDrop={(e) => { if (!drag.node) return; e.stopPropagation(); const m = drag.node, ok = canDrop(h); dragEnd(); if (!ok) return; e.preventDefault(); moveTo(m, roots.length > 1 ? h : null); }}>
+                      onDragOver={(e) => {
+                        if (r.handle && hasFiles(e)) { e.stopPropagation(); e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDropTarget(rootKey(r.prefix)); return; }
+                        if (!drag.node) return; e.stopPropagation(); if (!canDrop(h)) { setDropTarget(null); return; } e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropTarget(rootKey(r.prefix));
+                      }}
+                      onDrop={(e) => { if (r.handle && hasFiles(e)) { void dropInto(e, null, r); return; } if (!drag.node) return; e.stopPropagation(); const m = drag.node, ok = canDrop(h); dragEnd(); if (!ok) return; e.preventDefault(); moveTo(m, roots.length > 1 ? h : null); }}>
                       <button className="tree-row root-head" title={rootPath(r)} data-ctx={menu?.path === r.prefix} aria-expanded={!shut}
                         onClick={() => setFolded((p) => { const q = new Set(p); if (q.has(r.prefix)) q.delete(r.prefix); else q.add(r.prefix); return q; })}
                         onContextMenu={(e) => { e.stopPropagation(); treeMenu(e, h); }}
@@ -1631,7 +1731,7 @@ export default function App() {
                       </button>
                       <div className="collapse" data-open={!shut} inert={shut}>
                         <div className="collapse-inner">
-                          <FileTree nodes={r.nodes} activePath={act[fp]} ctxPath={menu?.path ?? null} rev={rev} onOpen={(n, pin) => openOrFocus(n, !!pin)} onContext={(e, n) => treeMenu(e, n)} onMove={moveTo} />
+                          <FileTree nodes={r.nodes} activePath={act[fp]} ctxPath={menu?.path ?? null} rev={rev} onOpen={(n, pin) => openOrFocus(n, !!pin)} onContext={(e, n) => treeMenu(e, n)} onMove={moveTo} onDropFiles={r.handle ? (e, n) => void dropInto(e, n) : undefined} />
                         </div>
                       </div>
                     </section>

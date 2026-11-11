@@ -49,6 +49,16 @@ fn need<'a>(q: &'a Q, name: &str) -> Result<&'a str, FsError> {
         _ => Err(FsError::new(format!("{name} がありません"), 400, "EARG")),
     }
 }
+// sig のパス一覧(改行区切り、絶対パス、最大 300 件)
+pub fn sig_paths(q: &Q) -> Result<Vec<String>, FsError> {
+    let v = need(q, "paths")?;
+    let ps: Vec<String> = v.split('\n').filter(|s| !s.is_empty()).take(300).map(|s| s.to_string()).collect();
+    if ps.iter().any(|p| p.contains('\0') || !(p.starts_with('/') || (p.len() >= 2 && p.as_bytes()[1] == b':'))) {
+        return Err(FsError::new("絶対パスで指定してください", 400, "EARG"));
+    }
+    Ok(ps)
+}
+
 fn abs_path(q: &Q, name: &str) -> Result<String, FsError> {
     let v = need(q, name)?;
     if !v.starts_with('/') || v.contains('\0') {
@@ -72,6 +82,8 @@ fn posix_join(root: &str, rel: &str) -> String {
 }
 
 // ---- 実行先 ----
+// WSL が止まっていたときに、立ち上がるのを待つ時間
+const WSL_BOOT_MS: u64 = 45_000;
 #[derive(Clone)]
 pub enum Runner {
     Ssh { host: String, timeout: u64 },
@@ -136,7 +148,9 @@ impl Runner {
                         _ => "FIXIT_SH".to_string(),
                     };
                     c.env("WSLENV", wslenv);
-                    (c, ms)
+                    // WSL は使っていない間(既定で約 60 秒)に止まり、次の wsl.exe で立ち上げ直す。その起動に 20 秒以上かかることがあるため、
+                    // コマンドの持ち時間に起動の分を足す(足さないと、一覧やホームの取得が「時間内に終わりませんでした」になる)
+                    (c, ms + WSL_BOOT_MS)
                 } else {
                     let mut c = Command::new("sh");
                     c.args(["-c", script]);
@@ -294,7 +308,7 @@ fn runner_for(q: &Q) -> Result<Runner, FsError> {
     }
 }
 
-const READ: [&str; 9] = ["hosts", "home", "list", "read", "stat", "find", "grep", "gitstatus", "githead"];
+const READ: [&str; 10] = ["hosts", "home", "list", "read", "stat", "sig", "find", "grep", "gitstatus", "githead"];
 const WRITE: [&str; 5] = ["write", "mkdir", "rm", "mv", "git"];
 
 // body は write のときだけ使う
@@ -317,6 +331,14 @@ pub fn dispatch(op: &str, q: &Q, body: Option<Vec<u8>>) -> Result<Reply, FsError
             let p = abs_path(q, "path")?;
             let out = r.sh(&format!("cd -- {} && find . -mindepth 1 -maxdepth 1 -printf '%y%Y\\t%s\\t%T@\\t%f\\0'", sq(&p)), None, 20000, BIG, &[0])?;
             Ok(Reply::Json(json!({ "entries": parse_list(&out) })))
+        }
+        // 開いているフォルダの更新日時をまとめて返す(エクスプローラーを外の変更に追従させるため。中の追加・削除・改名でフォルダの日時が変わる)
+        "sig" => {
+            let ps = sig_paths(q)?;
+            // パスはコマンド行ではなく標準入力で渡す(Windows のコマンド行の長さの上限を超えないように)
+            let input = ps.join("\0").into_bytes();
+            let out = r.sh("xargs -0 stat -c '%y\t%n' -- 2>/dev/null; true", Some(input), 20000, 4 * 1024 * 1024, &[0])?;
+            Ok(Reply::Json(json!({ "sig": String::from_utf8_lossy(&out) })))
         }
         "stat" => {
             let p = abs_path(q, "path")?;

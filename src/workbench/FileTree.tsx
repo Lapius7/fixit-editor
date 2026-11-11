@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { ChevronRight, FileText, FileCode2, FileJson, FileType, Folder, FolderOpen, Image as ImageIcon, Film, Music } from "lucide-react";
 import { readDir, type Node } from "@/platform/fs";
 import { useSettings } from "@/features/settings/settings";
-import { drag, dragEnd, setDragSrc, setDropTarget, useDnd } from "@/workbench/dnd";
+import { drag, dragEnd, extFiles, setDragSrc, setDropTarget, useDnd } from "@/workbench/dnd";
 import { dirOf } from "@/workbench/treeops"; import { isOpen, setOpenPath, takePrefetched } from "@/workbench/treeOpen";
 
 // ドラッグ中のものを、このフォルダへ移せるか(自分の中・今いる場所へは移せない)
@@ -40,19 +40,19 @@ export const dragChip = (e: React.DragEvent, row: HTMLElement, name: string) => 
 export type GitMark = "M" | "A" | "D" | "U" | "R" | "C" | "dir";
 export const GitMarks = createContext<(n: Node) => GitMark | undefined>(() => undefined);
 
-type Props = { nodes: Node[]; activePath: string | null; ctxPath: string | null; rev: number; onOpen: (n: Node, pin?: boolean) => void; onContext: (e: React.MouseEvent, n: Node) => void; onMove: (n: Node, dest: Node) => void; depth?: number };
+type Props = { nodes: Node[]; activePath: string | null; ctxPath: string | null; rev: number; onOpen: (n: Node, pin?: boolean) => void; onContext: (e: React.MouseEvent, n: Node) => void; onMove: (n: Node, dest: Node) => void; onDropFiles?: (e: React.DragEvent, dest: Node) => void; depth?: number };
 
-export default function FileTree({ nodes: all, activePath, ctxPath, rev, onOpen, onContext, onMove, depth = 0 }: Props) {
+export default function FileTree({ nodes: all, activePath, ctxPath, rev, onOpen, onContext, onMove, onDropFiles, depth = 0 }: Props) {
   const { showHidden, treeIndent } = useSettings();
   const nodes = showHidden ? all : all.filter((n) => !n.name.startsWith("."));
   return (
     <ul role={depth ? "group" : "tree"} className="m-0 list-none p-0" style={depth ? { ["--guide" as string]: `${16 + (depth - 1) * treeIndent}px` } : undefined}>
-      {nodes.map((n, i) => <Item key={n.path} idx={i} n={n} activePath={activePath} ctxPath={ctxPath} rev={rev} onOpen={onOpen} onContext={onContext} onMove={onMove} depth={depth} />)}
+      {nodes.map((n, i) => <Item key={n.path} idx={i} n={n} activePath={activePath} ctxPath={ctxPath} rev={rev} onOpen={onOpen} onContext={onContext} onMove={onMove} onDropFiles={onDropFiles} depth={depth} />)}
     </ul>
   );
 }
 
-function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, depth, idx }: Omit<Props, "nodes"> & { n: Node; depth: number; idx: number }) {
+function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, onDropFiles, depth, idx }: Omit<Props, "nodes"> & { n: Node; depth: number; idx: number }) {
   const git = useContext(GitMarks)(n);
   const indent = useSettings().treeIndent;
   const restored = useRef(n.kind === "dir" && isOpen(n.path)).current; // 前に開いていたフォルダは、アニメーションなしで開いた状態に戻す
@@ -103,12 +103,15 @@ function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, depth, i
   // いちばん内側のフォルダで受け止め、移せない場所(自分自身・いまの場所)なら外のフォルダへは伝えない
   const dropProps = isDir ? {
     onDragOver: (e: React.DragEvent) => {
+      // OS から引きずってきたものは、このフォルダへ写す
+      if (onDropFiles && extFiles(e)) { e.stopPropagation(); e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDropTarget(n.path); return; }
       if (!drag.node) return;
       e.stopPropagation();
       if (!canDrop(n)) { setDropTarget(null); return; }
       e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropTarget(n.path);
     },
     onDrop: (e: React.DragEvent) => {
+      if (onDropFiles && extFiles(e)) { onDropFiles(e, n); return; }
       if (!drag.node) return;
       e.stopPropagation();
       if (!canDrop(n)) { dragEnd(); return; }
@@ -130,7 +133,7 @@ function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, depth, i
       </button>
       {isDir && kids && (
         <div className="collapse" data-open={open && armed}>
-          <div className="collapse-inner"><FileTree nodes={kids} activePath={activePath} ctxPath={ctxPath} rev={rev} onOpen={onOpen} onContext={onContext} onMove={onMove} depth={depth + 1} /></div>
+          <div className="collapse-inner"><FileTree nodes={kids} activePath={activePath} ctxPath={ctxPath} rev={rev} onOpen={onOpen} onContext={onContext} onMove={onMove} onDropFiles={onDropFiles} depth={depth + 1} /></div>
         </div>
       )}
     </li>

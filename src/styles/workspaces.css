@@ -11,27 +11,12 @@
 .cn-hint { margin: 8px 0 0 !important; font-size: 12px; line-height: 20px; color: var(--ink-3) !important; }
 .cn-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .cn-chips .chipbtn[data-on="true"], .cn-chips .chipbtn[data-on="true"]:hover:not(:disabled) { color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.cn-recent { margin-top: 14px; border-top: 1px solid var(--hair); padding-top: 8px; }
-.cn-recent h3 { margin: 0 0 4px; font-size: 12px; line-height: 20px; font-weight: 500; color: var(--ink-3); display: flex; align-items: center; gap: 6px; }
-.cn-recent h3 svg { width: 13px; height: 13px; stroke-width: 1.8; }
-.cn-more { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 6px 0 8px; border-radius: 6px; font: 400 12px/20px var(--font-sans); color: var(--ink-2); background: none; transition: background-color calc(.12s * var(--sp)) var(--ease), color calc(.12s * var(--sp)) var(--ease); }
-.cn-more:hover { background: var(--press); color: var(--ink); }
-.cn-more svg { flex: none; width: 14px; height: 14px; transition: transform calc(.18s * var(--sp)) var(--ease); }
-.cn-more[aria-expanded="true"] svg { transform: rotate(180deg); }
-.cn-recent[data-all] .cn-recent-list { max-height: 160px; overflow-y: auto; overscroll-behavior: contain; }
-.cn-item { display: flex; align-items: center; gap: 4px; }
-.cn-item > button:first-child { flex: 1; min-width: 0; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: 8px; text-align: left; line-height: 20px; transition: background-color calc(.12s * var(--sp)) var(--ease); }
-.cn-item > button:first-child:hover { background: var(--press); }
-.cn-item b { flex: none; font-weight: 500; font-size: 12px; }
-.cn-item span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font: 12px/20px var(--font-mono); }
-.cn-item .icon-btn { width: 26px; height: 26px; flex: none; opacity: 0; }
-.cn-item:hover .icon-btn, .cn-item .icon-btn:focus-visible { opacity: 1; }
 .cn-br { margin-top: 10px; border-radius: 12px; background: var(--s1); box-shadow: 0 0 0 1px var(--hair) inset; overflow: hidden; }
 .cn-br-bar { display: flex; align-items: center; gap: 2px; padding: 4px 6px; border-bottom: 1px solid var(--hair); }
 .cn-br-bar .icon-btn { width: 28px; height: 28px; flex: none; }
 .cn-br-bar .icon-btn svg { width: 15px; height: 15px; }
-.cn-br-path { flex: 1; min-width: 0; margin-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px/20px var(--font-mono); color: var(--ink-2); }
-.cn-br-list { height: 184px; overflow-y: auto; overscroll-behavior: contain; padding: 4px; display: flex; flex-direction: column; gap: 1px; }
+.cn-br-path { flex: 1; min-width: 0; margin: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px/20px var(--font-mono); color: var(--ink-2); }
+.cn-br-list { height: min(360px, calc(100vh - 360px)); min-height: 184px; overflow-y: auto; overscroll-behavior: contain; padding: 4px; display: flex; flex-direction: column; gap: 1px; }
 .cn-br-list > button, .cn-br-file { flex: none; height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: 8px; text-align: left; font-size: 13px; line-height: 20px; }
 .cn-br-list > button { transition: background-color calc(.12s * var(--sp)) var(--ease); }
 .cn-br-list > button:hover { background: var(--press); }
@@ -104,3 +89,6 @@
 .cn-suggest li b { font-weight: 600; flex: none; }
 .cn-suggest li span { min-width: 0; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font-size: 12px; }
 .cn-row:has(.cn-suggest) { position: relative; z-index: 3; }
+.cn-br-new { flex: none; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 2px 0 8px; }
+.cn-br-new > svg { width: 15px; height: 15px; flex: none; stroke-width: 1.8; color: var(--accent); }
+.cn-br-new .field { flex: 1; min-width: 0; height: 28px; font-size: 13px; line-height: 20px; }

@@ -199,3 +199,9 @@ export async function gitRun(c: Conn, dir: string, body: Record<string, unknown>
 export async function gitHeadText(c: Conn, file: string): Promise<string | null> {
   return (await json<{ text: string | null }>(c, "githead", { path: file })).text;
 }
+
+// 指定したフォルダの更新日時をまとめて取る(1回の呼び出し)。外での追加・削除・改名を見つけるのに使う
+export async function remoteSig(c: Conn, paths: string[]): Promise<string> {
+  if (!paths.length) return "";
+  return (await json<{ sig: string }>(c, "sig", { paths: paths.join("\n") })).sig;
+}

@@ -121,6 +121,13 @@ pub fn dispatch(op: &str, q: &Q, body: Option<Vec<u8>>) -> Result<Reply, FsError
             }
             Ok(Reply::Json(json!({ "entries": out })))
         }
+        "sig" => {
+            let mut out = String::new();
+            for p in crate::fs::sig_paths(q)? {
+                if let Ok(m) = fs::metadata(&p) { out.push_str(&format!("{}\t{p}\n", mtime_ms(&m))); }
+            }
+            Ok(Reply::Json(json!({ "sig": out })))
+        }
         "stat" => {
             let p = abs(q, "path")?;
             Ok(Reply::Json(match fs::metadata(&p) {

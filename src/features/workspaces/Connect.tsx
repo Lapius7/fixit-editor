@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, ChevronDown, Clock, File as FileIcon, Folder, HardDrive, Home, Server, X } from "lucide-react";
+import { ArrowUp, ClipboardCopy, Clock, File as FileIcon, Folder, FolderOpen, FolderPlus, HardDrive, Home, RotateCw, Server, X } from "lucide-react";
+import ContextMenu, { type Item } from "@/workbench/ContextMenu";
+import { usePresence } from "@/shared/presence";
+import { byName } from "@/platform/fs";
 import { checkDir, connLabel, dropRecent, getRecent, homeOf, listHosts, parseTarget, pushRecent, resolvePath, showPath, RemoteDir, type Conn } from "@/platform/remote";
 import { ms } from "@/features/settings/settings";
 import i18next from 'i18next'
@@ -12,7 +15,6 @@ type Row = { name: string; dir: boolean };
 const up = (p: string) => (/^[A-Za-z]:\/?$/.test(p) || p === "/" ? p : p.replace(/\/+$/, "").replace(/\/[^/]*$/, "") || "/");
 
 // WSL(このPC)か SSH 先のフォルダを開くための画面
-const RECENT_SHOWN = 3; // 最近開いた場所を、たたんだ状態で出す数
 
 const SKEL = [46, 62, 38, 70, 54, 42]; // 読み込み中に並べる仮の行の幅(%)
 
@@ -31,7 +33,10 @@ export default function Connect({ current, adding, onConnect, onClose, out }: Pr
   const [hosts, setHosts] = useState<{ name: string; hostname?: string; user?: string }[]>([]);
   const [suggest, setSuggest] = useState(false);
   const [recent, setRecent] = useState<Conn[]>(getRecent);
-  const [allRecent, setAllRecent] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number; items: Item[] } | null>(null);
+  const pMenu = usePresence(menu, 140);
+  const [mk, setMk] = useState<string | null>(null); // 新しいフォルダの名前を入れている間の値
+  const [tick, setTick] = useState(0); // 一覧を読み直す合図
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [closing, setClosing] = useState(false);
@@ -57,12 +62,12 @@ export default function Connect({ current, adding, onConnect, onClose, out }: Pr
         const abs = await resolvePath(base, parseTarget(path).path || path);
         const out: Row[] = [];
         for await (const [name, h] of new RemoteDir({ ...base, path: abs }, abs).entries()) out.push({ name, dir: h.kind === "directory" });
-        out.sort((a, b) => Number(b.dir) - Number(a.dir) || Number(a.name.startsWith(".")) - Number(b.name.startsWith(".")) || a.name.localeCompare(b.name));
+        out.sort((a, b) => Number(b.dir) - Number(a.dir) || byName(a, b));
         if (live) { setDir(abs); setRows(out); setRowsOf(of); setLerr(""); setLoading(false); }
       } catch (e) { if (live) { setRows(null); setRowsOf(of); setLerr((e as Error).message); setLoading(false); } }
     }, 300);
     return () => { live = false; clearTimeout(t); };
-  }, [kind, sshHost, path]);
+  }, [kind, sshHost, path, tick]);
   const enter = (p: string) => { setPath(p); setErr(""); };
   // 別の接続先(このPC→SSH、ホストの切り替え)を読んでいる間は、前の一覧を出さず、読み込み中の行を出す
   const stale = loading && rowsOf !== `${kind}|${kind === "ssh" ? sshHost : ""}`;
@@ -79,6 +84,47 @@ export default function Connect({ current, adding, onConnect, onClose, out }: Pr
     return () => { live = false; };
   }, [kind, sshHost]); // eslint-disable-line react-hooks/exhaustive-deps
   const home = async () => { try { enter(await homeOf({ kind, host: kind === "ssh" ? sshHost : undefined })); } catch { /* 接続先がまだ決まっていない */ } };
+  const sub = (name: string) => `${dir.replace(/\/$/, "")}/${name}`;
+  // 一覧の中で新しいフォルダを作る(名前は一覧の先頭の入力欄で受け取る)
+  const makeDir = async (name: string) => {
+    const v = name.trim();
+    if (!v) return setMk(null);
+    if (/[\\/]/.test(v)) return setErr(i18next.t("「/」は使えません"));
+    if (rows?.some((r) => r.name === v)) return setErr(i18next.t("同じ名前があります"));
+    try {
+      await new RemoteDir({ kind, host: kind === "ssh" ? sshHost : undefined, path: dir }, dir).getDirectoryHandle(v, { create: true });
+      setMk(null); setErr(""); setTick((t) => t + 1);
+    } catch (e) { setErr((e as Error).message); }
+  };
+  const copyPath = (p: string) => void navigator.clipboard.writeText(p).catch(() => {});
+  // 一覧の右クリック。行の上ならその行の操作、空いたところなら、いま見ているフォルダの操作
+  const listMenu = (e: React.MouseEvent, r?: Row) => {
+    e.preventDefault(); e.stopPropagation();
+    if (!dir || stale) return;
+    const at = r ? sub(r.name) : dir;
+    const items: Item[] = [
+      ...(r?.dir ? [{ label: i18next.t("このフォルダに移動"), icon: <FolderOpen />, run: () => enter(at) }] : []),
+      { label: i18next.t("新しいフォルダ"), icon: <FolderPlus />, run: () => { setErr(""); setMk(""); } },
+      { label: i18next.t("最新の状態にする"), icon: <RotateCw />, run: () => setTick((t) => t + 1) },
+      { type: "sep" },
+      { label: i18next.t("パスをコピー"), icon: <ClipboardCopy />, run: () => copyPath(at) },
+    ];
+    setMenu({ x: e.clientX, y: e.clientY, items });
+  };
+  // 最近開いた場所は、一覧の上の時計のボタンから出す(一覧を縦に広く使うため)
+  const mine = recent.filter((c) => (kind === "ssh") === (c.kind === "ssh"));
+  const recentMenu = (e: React.MouseEvent) => {
+    const b = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setMenu({
+      x: b.left, y: b.bottom + 4,
+      items: [
+        { type: "title", label: i18next.t("最近開いた場所") },
+        ...mine.map((c): Item => ({ label: `${connLabel(c)}  ${showPath(c.path)}`, icon: <Clock />, disabled: busy, run: () => void go(c) })),
+        { type: "sep" },
+        { label: i18next.t("履歴から外す"), icon: <X />, sub: mine.map((c): Item => ({ label: `${connLabel(c)}  ${showPath(c.path)}`, run: () => { dropRecent(c); setRecent(getRecent()); } })) },
+      ],
+    });
+  };
   const close = (after?: () => void) => { setClosing(true); setTimeout(() => { onClose(); after?.(); }, ms(180)); };
 
   const go = async (target?: Conn) => {
@@ -139,48 +185,36 @@ export default function Connect({ current, adding, onConnect, onClose, out }: Pr
             <button className="icon-btn" aria-label={i18next.t("親のフォルダ")} title={i18next.t("親のフォルダ")} disabled={!dir || up(dir) === dir} onClick={() => enter(up(dir))}><ArrowUp /></button>
             <button className="icon-btn" aria-label={i18next.t("ホーム")} title={i18next.t("ホーム")} onClick={home}><Home /></button>
             <span className="cn-br-path" title={stale ? undefined : dir}>{stale ? (kind === "ssh" ? i18next.t("{{host}} に接続中…", { host: sshHost }) : i18next.t("読み込み中…")) : dir || "—"}</span>
+            <button className="icon-btn" aria-label={i18next.t("新しいフォルダ")} title={i18next.t("新しいフォルダ")} disabled={!dir || stale} onClick={() => { setErr(""); setMk(""); }}><FolderPlus /></button>
+            {mine.length > 0 && <button className="icon-btn" aria-label={i18next.t("最近開いた場所")} title={i18next.t("最近開いた場所")} aria-haspopup="menu" onClick={recentMenu}><Clock /></button>}
           </div>
-          <div className="cn-br-list" role="listbox" aria-label={i18next.t("フォルダの中身")}>
+          <div className="cn-br-list" role="listbox" aria-label={i18next.t("フォルダの中身")} onContextMenu={(e) => listMenu(e)}>
+            {mk !== null && !stale && (
+              <div className="cn-br-new"><FolderPlus />
+                <input className="field" autoFocus value={mk} spellCheck={false} placeholder={i18next.t("フォルダ名")} aria-label={i18next.t("新しいフォルダの名前")}
+                  onChange={(e) => setMk(e.target.value)} onBlur={() => { if (!mk.trim()) setMk(null); }}
+                  onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); void makeDir(mk); } else if (e.key === "Escape") { setMk(null); setErr(""); } }} />
+              </div>
+            )}
             {stale || (loading && rows === null) ? SKEL.map((w, i) => <div key={i} className="cn-br-skel" style={{ ["--w" as string]: `${w}%`, ["--i" as string]: i }}><i /><b /></div>)
               : rows === null ? <p className="cn-br-empty">{lerr || (kind === "ssh" ? i18next.t("ホストを入力すると、中身を表示します") : i18next.t("読み込み中…"))}</p>
               : rows.length === 0 ? <p className="cn-br-empty">{i18next.t("空のフォルダです")}</p>
               : rows.slice(0, LIST_MAX).map((r) => r.dir
-                ? <button key={r.name} role="option" aria-selected="false" onClick={() => enter(`${dir.replace(/\/$/, "")}/${r.name}`)}><Folder /><span>{r.name}</span></button>
-                : <div key={r.name} className="cn-br-file"><FileIcon /><span>{r.name}</span></div>)}
+                ? <button key={r.name} role="option" aria-selected="false" onClick={() => enter(sub(r.name))} onContextMenu={(e) => listMenu(e, r)}><Folder /><span>{r.name}</span></button>
+                : <div key={r.name} className="cn-br-file" onContextMenu={(e) => listMenu(e, r)}><FileIcon /><span>{r.name}</span></div>)}
             {rows !== null && rows.length > LIST_MAX && <p className="cn-br-empty">{i18next.t("ほか {{n}} 件", { n: rows.length - LIST_MAX })}</p>}
           </div>
         </div>
         {hosts.length > 0 && kind === "ssh" && (
           <div className="cn-chips">{hosts.map((h) => <button key={h.name} className="chipbtn" data-on={host === h.name} onClick={() => { setHost(h.name); setSshHost(h.name); }}><Server />{h.name}</button>)}</div>
         )}
-        {(() => {
-          // いま選んでいる種類(このPC / SSH)の履歴だけを出す。多いときはたたんでおく
-          const mine = recent.filter((c) => (kind === "ssh") === (c.kind === "ssh"));
-          if (!mine.length) return null;
-          const more = mine.length > RECENT_SHOWN, list = allRecent ? mine : mine.slice(0, RECENT_SHOWN);
-          return (
-            <div className="cn-recent" data-all={allRecent || undefined}>
-              <h3>
-                <Clock /><Trans i18nKey="最近開いた場所" />
-                {more && <button className="cn-more" aria-expanded={allRecent} onClick={() => setAllRecent((v) => !v)}>{allRecent ? i18next.t("たたむ") : i18next.t("すべて表示({{n}})", { n: mine.length })}<ChevronDown /></button>}
-              </h3>
-              <div className="cn-recent-list">
-                {list.map((c) => (
-                  <div key={`${c.kind}:${c.host}:${c.path}`} className="cn-item">
-                    <button onClick={() => go(c)} disabled={busy} data-tip={connLabel(c)} data-tip-sub={showPath(c.path)}><b>{connLabel(c)}</b><span>{showPath(c.path)}</span></button>
-                    <button className="icon-btn" aria-label={i18next.t("履歴から外す")} onClick={() => { dropRecent(c); setRecent(getRecent()); }}><X /></button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
         <p className="cn-err" role="alert">{err}</p>
         <div className="dlg-foot">
           <button className="btn" onClick={() => close()}><Trans i18nKey="キャンセル" /></button>
           <button className="btn" data-primary="true" disabled={busy} onClick={() => go()}>{busy ? i18next.t("接続中…") : adding ? i18next.t("追加") : i18next.t("開く")}</button>
         </div>
       </div>
+      {pMenu.v && <ContextMenu key={pMenu.key} out={pMenu.out} x={pMenu.v.x} y={pMenu.v.y} items={pMenu.v.items} onClose={() => setMenu(null)} />}
     </div>
   );
 }

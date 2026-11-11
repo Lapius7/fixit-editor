@@ -19,5 +19,7 @@ export const rootKey = (prefix: string) => `\0root:${prefix}`;
 // 1 = 落とし先、2 = 引きずっている元
 export const useDnd = (k: string) => useSyncExternalStore(sub, () => (st.target === k ? 1 : 0) | (st.src === k ? 2 : 0));
 
+// OS(エクスプローラーなど)から引きずってきたファイル・フォルダか
+export const extFiles = (e: React.DragEvent) => !drag.node && !drag.tab && e.dataTransfer.types.includes("Files");
 export const dragEnd = () => { drag.node = null; drag.tab = null; setDropTarget(null); setDragSrc(null); };
 export const useDropTarget = () => useSyncExternalStore(sub, () => st.target);

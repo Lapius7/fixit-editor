@@ -14,6 +14,18 @@ export async function pickFolder(): Promise<{ name: string; handle: FileSystemDi
   return { name: handle.name, handle };
 }
 
+// 名前の並び: Windows のエクスプローラーと同じく、記号(. _ - など)→数字(2 が 10 より前)→英字(大小を区別しない)→かな→漢字。フォルダが先
+const coll = new Intl.Collator("ja", { numeric: true });
+// 記号どうしの順は ICU と Windows で違う(ICU は _ が . より先)。最初に違う字が両方とも記号なら、Windows の順で比べる
+const SYM = "!#$%&(),.'-;@[]^_`{}~+=";
+export const byName = (a: { name: string }, b: { name: string }) => {
+  const x = a.name.toLowerCase(), y = b.name.toLowerCase();
+  let i = 0; while (i < x.length && x[i] === y[i]) i++;
+  const p = SYM.indexOf(x[i] ?? ""), q = SYM.indexOf(y[i] ?? "");
+  return p >= 0 && q >= 0 && x[i] && y[i] ? p - q : coll.compare(a.name, b.name);
+};
+export const nodeOrder = (a: Node, b: Node) => (a.kind === b.kind ? byName(a, b) : a.kind === "dir" ? -1 : 1);
+
 export async function readDir(dir: FileSystemDirectoryHandle, base = ""): Promise<Node[]> {
   const out: Node[] = [];
   for await (const [name, handle] of (dir as any).entries() as AsyncIterable<[string, FileSystemHandle]>) {
@@ -21,7 +33,7 @@ export async function readDir(dir: FileSystemDirectoryHandle, base = ""): Promis
     if (isDir && get().hideBuild && SKIP_DIRS.has(name)) continue;
     out.push({ name, path: `${base}/${name}`, kind: isDir ? "dir" : "file", handle, parent: dir });
   }
-  return out.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name, "ja", { numeric: true }) : a.kind === "dir" ? -1 : 1));
+  return out.sort(nodeOrder);
 }
 
 export async function writeFile(h: FileSystemFileHandle, text: string) {
@@ -43,6 +55,15 @@ export async function freeName(dir: FileSystemDirectoryHandle, name: string): Pr
   for (let i = 1; ; i++) {
     const n = i === 1 ? name : `${b}-${i}${e}`;
     try { await dir.getFileHandle(n); } catch { return n; }
+  }
+}
+
+// フォルダも含めて空いている名前を探す(freeName はファイルしか見ないので、同名のフォルダに混ぜてしまう)
+export async function freeEntryName(dir: FileSystemDirectoryHandle, name: string): Promise<string> {
+  const dot = name.lastIndexOf("."), b = dot > 0 ? name.slice(0, dot) : name, e = dot > 0 ? name.slice(dot) : "";
+  for (let i = 1; ; i++) {
+    const n = i === 1 ? name : `${b}-${i}${e}`;
+    if (!(await dir.getFileHandle(n).then(() => true, () => false)) && !(await dir.getDirectoryHandle(n).then(() => true, () => false))) return n;
   }
 }
 
@@ -105,8 +126,9 @@ export async function renameFile(dir: FileSystemDirectoryHandle, h: FileSystemFi
   return nh;
 }
 
-// 別のフォルダへ移す: 中身を書き出してから元を消す(File System Access API には移動がないため)
-async function copyInto(src: FileSystemHandle, dest: FileSystemDirectoryHandle, name: string): Promise<void> {
+// 中身を書き出して写す(フォルダは中も丸ごと)。File System Access API には移動がないため、移すときもこれで写してから元を消す。
+// WSL・SSH のハンドル(RemoteDir / RemoteFile)も同じ形なので、そのまま渡せる
+export async function copyInto(src: FileSystemHandle, dest: FileSystemDirectoryHandle, name: string): Promise<void> {
   if (src.kind === "file") {
     const f = await (src as FileSystemFileHandle).getFile();
     const w = await ((await dest.getFileHandle(name, { create: true })) as any).createWritable();

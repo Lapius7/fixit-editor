@@ -245,7 +245,7 @@ function backendFor(q: URLSearchParams): Backend {
 // Git(読み取りだけ)。状態は porcelain(-z)の生のまま返し、整えるのは画面側。リポジトリでなければ NOREPO
 const gitStatusScript = (dir: string) => `cd -- ${sq(dir)} 2>/dev/null || { printf NOREPO; exit 0; }; top=$(git rev-parse --show-toplevel 2>/dev/null) || { printf NOREPO; exit 0; }; br=$(git symbolic-ref --short -q HEAD || git rev-parse --short HEAD 2>/dev/null); printf '%s\\0%s\\0' "$top" "$br"; git -c core.quotepath=off status --porcelain=v1 -z -uall 2>/dev/null`;
 const gitHeadScript = (file: string) => { const dir = path.posix.dirname(file), name = path.posix.basename(file); return `cd -- ${sq(dir)} 2>/dev/null && s=$(git cat-file -s ${sq("HEAD:./" + name)} 2>/dev/null) && [ "$s" -lt 2000000 ] && { printf Y; git show ${sq("HEAD:./" + name)}; } || printf N`; };
-const READ = new Set(["hosts", "home", "list", "read", "stat", "find", "grep", "gitstatus", "githead"]);
+const READ = new Set(["hosts", "home", "list", "read", "stat", "sig", "find", "grep", "gitstatus", "githead"]);
 const WRITE = new Set(["write", "mkdir", "rm", "mv", "git"]);
 
 export function fsApi(): Plugin {
@@ -275,6 +275,11 @@ export function fsApi(): Plugin {
             case "home": return json(res, 200, { path: await be.home() });
             case "list": return json(res, 200, { entries: await be.list(absPath(q.get("path"))) });
             case "stat": return json(res, 200, { stat: await be.stat(absPath(q.get("path"))) });
+            // 開いているフォルダの更新日時をまとめて返す(外での追加・削除・改名に追従するため)
+            case "sig": {
+              const ps = need(q.get("paths"), "paths").split("\n").filter(Boolean).slice(0, 300).map((p) => absPath(p));
+              return json(res, 200, { sig: (await be.exec(`printf '%s\\0' ${ps.map(sq).join(" ")} | xargs -0 stat -c '%y\t%n' -- 2>/dev/null; true`, 20000)).toString("utf8") });
+            }
             case "read": {
               const data = await be.read(absPath(q.get("path")), maxMB * 1024 * 1024);
               res.setHeader("content-type", "application/octet-stream");

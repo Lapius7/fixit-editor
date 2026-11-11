@@ -5,7 +5,7 @@
 .wc-b[data-k="close"] { background: #ff5f57; }
 .wc-b[data-k="min"] { background: #febc2e; }
 .wc-b[data-k="max"] { background: #28c840; }
-.wc-b svg { width: 8px; height: 8px; stroke-width: 3.2; flex: none; opacity: 0; transform: scale(.4); transition: opacity calc(.18s * var(--sp)) var(--ease), transform calc(.22s * var(--sp)) var(--out); }
+.wc-b svg { width: 12px; height: 12px; stroke-width: 3.2; flex: none; opacity: 0; transform: scale(.4); transition: opacity calc(.18s * var(--sp)) var(--ease), transform calc(.22s * var(--sp)) var(--out); }
 .wc:hover .wc-b svg { opacity: 1; transform: none; }
 .wc:hover .wc-b { color: rgba(0, 0, 0, .55); }
 .wc-b:active { filter: brightness(.88); transform: scale(var(--ps)); }

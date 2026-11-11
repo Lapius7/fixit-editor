@@ -51,3 +51,13 @@ export function takePrefetched(path: string): Node[] | undefined {
   pre.delete(path);
   return v;
 }
+
+// 開いているフォルダのうち、親もすべて開いていて画面に出ているもの(prefix はルートの見出しのパス)
+export function shownOpen(prefix: string): string[] {
+  const open = get();
+  return [...open].filter((p) => {
+    if (!p.startsWith(prefix + "/")) return false;
+    for (let i = p.lastIndexOf("/"); i > prefix.length; i = p.lastIndexOf("/", i - 1)) if (!open.has(p.slice(0, i))) return false;
+    return true;
+  });
+}
