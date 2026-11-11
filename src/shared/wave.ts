@@ -15,8 +15,9 @@ export const WAVE_STYLE: WaveStyle = {
   ...defaultStyle("center"),
   palette: PALETTES.colorful,
   cornerRadius: WINDOW_CORNER,
-  linger: 4, // 秒。広がり始めてから縁の色が消え始めるまで(原作 -0.35)
-  rimFade: 3.5, // 秒。消えるのにかける時間(原作 2.51)
+  linger: 1.4, // 秒。広がり始めてから縁の色が消え始めるまで(原作 -0.35)
+  rimFade: 2.4, // 秒。消えるのにかける時間(原作 2.51)
+  hairlineFade: 1.6, // 秒。細い線が消えるのにかける時間(原作 3)。縁の色と同じころに消す
   rimWidth: 34, // 原作 14
   rimUnevenness: 0.5, // 縁の太さのむら。下げて全周を光らせる(原作 1)
   rimStrength: 1, // 原作 0.6
