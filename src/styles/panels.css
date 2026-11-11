@@ -114,24 +114,36 @@ body:has(.ratio-grip[data-drag="true"]) .ed-pv { transition: none; }
 
 /* AI パネル(右側) */
 .ai-dock { flex: 0 0 min(var(--ai-w, 440px), 70%); min-width: 0; display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; background: var(--paper); box-shadow: 0 0 0 1px var(--hair); -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5); }
-.ai-dock { position: relative; animation: ai-dock-in calc(.42s * var(--sp)) var(--out) both; }
+/* 開く動きは終わったら外す(backwards)。both で残すと、終わりの幅が持ち手で変えた幅(--ai-w)を上書きし続ける */
+.ai-dock { position: relative; animation: ai-dock-in calc(.42s * var(--sp)) var(--out) backwards; }
 .ai-dock > * { animation: ai-dock-body calc(.42s * var(--sp)) var(--out) both; }
 .ai-dock[data-closing="true"] { animation: ai-dock-out calc(.26s * var(--sp)) var(--out) both; pointer-events: none; }
 .ai-dock[data-closing="true"] > * { animation: ai-dock-body-out calc(.2s * var(--sp)) var(--out) both; }
-@keyframes ai-dock-in { from { flex-basis: 0; margin-left: calc(var(--pane-gap, 8px) * -1); opacity: 0; } to { flex-basis: min(38%, 440px); margin-left: 0; opacity: 1; } }
-@keyframes ai-dock-out { from { flex-basis: min(38%, 440px); margin-left: 0; opacity: 1; } to { flex-basis: 0; margin-left: calc(var(--pane-gap, 8px) * -1); opacity: 0; } }
+@keyframes ai-dock-in { from { flex-basis: 0; margin-left: calc(var(--pane-gap, 8px) * -1); opacity: 0; } to { flex-basis: min(var(--ai-w, 440px), 70%); margin-left: 0; opacity: 1; } }
+@keyframes ai-dock-out { from { flex-basis: min(var(--ai-w, 440px), 70%); margin-left: 0; opacity: 1; } to { flex-basis: 0; margin-left: calc(var(--pane-gap, 8px) * -1); opacity: 0; } }
 @keyframes ai-dock-body { from { transform: translateX(28px); filter: blur(calc(var(--ab) * .8)); } to { transform: none; filter: none; } }
 @keyframes ai-dock-body-out { to { transform: translateX(20px); filter: blur(calc(var(--ab) * .8)); } }
-.ai-hist-bg { position: absolute; inset: 0; z-index: 5; }
-.ai-hist { position: absolute; z-index: 6; top: 42px; left: 8px; right: 8px; max-height: min(60%, 420px); overflow-y: auto; overscroll-behavior: contain; padding: 4px; border-radius: 12px; background: var(--pop-solid); -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5); box-shadow: 0 0 0 1px var(--hair), 0 12px 32px -8px rgb(20 30 60 / .25); animation: rise calc(.22s * var(--sp)) var(--out) both; }
-.ai-hist-row { display: flex; align-items: center; gap: 2px; border-radius: 8px; }
-.ai-hist-row:hover, .ai-hist-row[data-on="true"] { background: var(--s2); }
-.ai-hist-open { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 0; padding: 5px 8px; text-align: left; font: 500 13px/20px var(--font-sans); color: var(--ink); }
-.ai-hist-open span { max-width: 100%; }
-.ai-hist-open small { font: 400 11px/16px var(--font-mono); color: var(--ink-3); }
-.ai-hist-empty { padding: 14px 10px; font: 400 12px/20px var(--font-sans); color: var(--ink-3); text-align: center; }
-.ai-hist-clear { display: block; width: 100%; margin-top: 4px; padding: 6px 8px; border-radius: 8px; font: 400 12px/20px var(--font-sans); color: var(--ink-3); text-align: center; }
-.ai-hist-clear:hover { background: var(--s2); color: var(--ink); }
+/* 会話の履歴: パネルの中をまるごと使う一覧のページ。開いている間は会話と入力欄を隠す(入力中の文字は残る) */
+.ai-dock[data-hist="true"] > :not(.ai-bar):not(.ai-hist-page) { display: none; }
+.ai-hist-page { flex: 1; min-height: 0; display: flex; flex-direction: column; animation: fade calc(.16s * var(--sp)) var(--out) both; }
+.ai-hist-head { display: flex; align-items: center; gap: 6px; height: 44px; flex: none; padding: 0 12px 0 6px; }
+.ai-hist-head h2 { margin: 0; font: 600 15px/24px var(--font-sans); color: var(--ink); }
+.ai-hist-head small { font: 400 12px/16px var(--font-mono); color: var(--ink-3); }
+.ai-hist-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 8px 16px; }
+.ai-hist-day + .ai-hist-day { margin-top: 10px; }
+.ai-hist-day h3 { margin: 0; padding: 6px 12px 4px; font: 500 12px/16px var(--font-sans); color: var(--ink-3); }
+.ai-hist-row { position: relative; display: flex; align-items: flex-start; border-radius: 10px; }
+.ai-hist-row:hover, .ai-hist-row:focus-within { background: var(--s2); }
+.ai-hist-row[data-on="true"] { background: var(--s2); box-shadow: inset 2px 0 0 var(--accent); }
+.ai-hist-open { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 10px 40px 10px 12px; text-align: left; color: var(--ink); border-radius: inherit; }
+.ai-hist-t { font: 500 14px/20px var(--font-sans); }
+.ai-hist-x { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font: 400 12px/18px var(--font-sans); color: var(--ink-2); overflow-wrap: anywhere; }
+.ai-hist-open small { margin-top: 2px; font: 400 11px/16px var(--font-mono); color: var(--ink-3); }
+.ai-hist-del { position: absolute; top: 6px; right: 6px; opacity: 0; }
+.ai-hist-row:hover .ai-hist-del, .ai-hist-row:focus-within .ai-hist-del { opacity: 1; }
+.ai-hist-del:hover { color: var(--danger, #d94a4a); }
+@media (hover: none) { .ai-hist-del { opacity: 1; } }
+.ai-hist-empty { flex: 1; display: flex; align-items: center; justify-content: center; margin: 0; padding: 24px 16px 64px; font: 400 13px/20px var(--font-sans); color: var(--ink-3); text-align: center; }
 .ai-bar { display: flex; align-items: center; gap: 2px; height: 38px; padding: 0 6px 0 12px; box-shadow: 0 1px 0 var(--hair); }
 .ai-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font: 600 13px/20px var(--font-sans); }
 .ai-title small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 11px/16px var(--font-mono); color: var(--ink-3); }
@@ -169,7 +181,6 @@ body:has(.ratio-grip[data-drag="true"]) .ed-pv { transition: none; }
 .ai-consent div { display: flex; justify-content: flex-end; gap: 8px; }
 .ai-compose { padding: 8px 10px 10px; box-shadow: 0 -1px 0 var(--hair); }
 .ai-compose textarea { display: block; width: 100%; resize: none; padding: 8px 10px; border: 0; border-radius: 10px; outline: none; background: var(--field); box-shadow: 0 0 0 1px var(--hair) inset; color: inherit; font: 13px/20px var(--font-sans); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); transition: background-color calc(.2s * var(--sp)) var(--out), box-shadow calc(.2s * var(--sp)) var(--out); }
-.ai-compose textarea:focus { background: var(--field-on); }
 .ai-compose textarea:focus-visible { box-shadow: 0 0 0 1.5px var(--accent) inset; }
 .ai-pick { display: flex; gap: 6px; margin-top: 8px; min-width: 0; }
 .ai-pick .sel { height: 28px; font: 12px/20px var(--font-sans); min-width: 0; text-overflow: ellipsis; }

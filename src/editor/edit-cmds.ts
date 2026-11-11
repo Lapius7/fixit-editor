@@ -1,3 +1,4 @@
+import { readClip, writeClip } from "@/platform/clipboard";
 import { EditorSelection } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { copyLineDown, copyLineUp, deleteLine, indentLess, indentMore, insertBlankLine, moveLineDown, moveLineUp, redo, selectLine, toggleBlockComment, toggleComment, undo } from "@codemirror/commands";
@@ -24,7 +25,7 @@ const lines = (f: (l: string[]) => string[]): Run => (v) => {
   v.dispatch({ changes: { from, to, insert: f(s.sliceDoc(from, to).split("\n")).join("\n") } });
   return true;
 };
-const clip = (s: string) => navigator.clipboard.writeText(s).catch(() => {});
+const clip = (s: string) => writeClip(s);
 
 export const EDIT: Record<string, Run> = {
   undo, redo, comment: toggleComment, blockComment: toggleBlockComment, indentMore, indentLess,
@@ -36,7 +37,7 @@ export const EDIT: Record<string, Run> = {
   trimSpace: lines((l) => l.map((x) => x.replace(/[ \t]+$/, ""))),
   copy: (v) => { const t = text(v); clip(v.state.sliceDoc(t.from, t.to)); return true; },
   cut: (v) => { const t = text(v); clip(v.state.sliceDoc(t.from, t.to)); v.dispatch({ changes: { from: t.from, to: t.to } }); return true; },
-  paste: async (v) => { try { const s = await navigator.clipboard.readText(); v.dispatch(v.state.replaceSelection(s)); } catch { /* 許可されなかった */ } return true; },
+  paste: async (v) => { const s = await readClip(); if (s) v.dispatch(v.state.replaceSelection(s)); v.focus(); return true; },
 };
 
 // CodeMirror 標準のキー割り当てのうち、設定で変えられるようにした機能(標準側からは外す)

@@ -1,7 +1,7 @@
 // AI チャットのパネル。右側に出す(アプリ内ブラウザと同じ置き場所)。
 // 送るのは「利用者が操作したとき」だけ。送る前に、相手と送る範囲を画面に出し、初回は同意を取る。
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Check, Copy, Replace, Settings as Cog, Square, Trash2, X, History, SquarePen, FileText, Quote as QuoteIcon, FileDown, ImagePlus } from "lucide-react";
+import { ArrowUp, Check, Copy, Replace, Settings as Cog, Square, Trash2, X, History, SquarePen, ChevronLeft, FileText, Quote as QuoteIcon, FileDown, ImagePlus } from "lucide-react";
 import i18next from "i18next";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
@@ -12,13 +12,14 @@ import { isImageFile, toAiImage, type AiImage, type ImgFail } from "@/features/a
 import { actionLabel, actionPrompt, clipLabel, ctxLabel, systemPrompt, withClips, withCode, type AiJob, type Clip, type Ctx } from "@/features/ai/prompts";
 import { drag, dragEnd } from "@/workbench/dnd";
 import { notify } from "@/shared/notify";
+import { copyWithNotice } from "@/platform/clipboard";
 import { MAX_OPEN_BYTES } from "@/shared/config";
 import { ms } from "@/features/settings/settings";
 import { getAi, hasEffort, ready, PROVIDER_NAME, setConsent, useAi, useLink, type Provider } from "@/features/ai/store";
 import { ModelPicker } from "@/features/ai/ModelPicker";
 import { ImgPeek, type Peek } from "@/features/ai/ImgPeek";
 import { refreshLink } from "@/features/ai/link";
-import { deleteChat, clearChats, getChats, newChatId, saveChat, setCurChat, useChats, type Chat } from "@/features/ai/chats";
+import { deleteChat, getChats, newChatId, saveChat, setCurChat, useChats, type Chat } from "@/features/ai/chats";
 
 type M = { id: number; role: "user" | "assistant"; content: string; label?: string; ctx?: string; imgs?: (Img & { name: string })[]; busy?: boolean; err?: AiErrorKind; note?: Stop; job?: AiJob; applied?: "ok" | "stale" };
 
@@ -72,6 +73,24 @@ const imgSrc = (i: Img) => `data:${i.type};base64,${i.data}`;
 export type AiPic = { name: string; blob: Blob };
 // エディタから引用した文・ツリーから添える画像(id が変わるたびに 1 件ふえる)。resolve は、ドラッグされたファイル・タブの中身を読む
 export type AiQuote = Clip | (AiPic & { id: number });
+// 履歴の並び: 日ごとにまとめる(今日・昨日・それより前は日付)。新しい順のまま
+const dayKey = (t: number) => { const d = new Date(t); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+function dayGroups(list: Chat[]): [string, Chat[]][] {
+  const now = new Date(), today = dayKey(now.getTime()), yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).getTime(), out = new Map<string, Chat[]>();
+  for (const c of [...list].sort((a, b) => b.at - a.at)) {
+    const k = dayKey(c.at);
+    const label = k === today ? i18next.t("今日") : k === yesterday ? i18next.t("昨日")
+      : new Date(c.at).toLocaleDateString(i18next.language, { year: new Date(c.at).getFullYear() === new Date().getFullYear() ? undefined : "numeric", month: "long", day: "numeric", weekday: "short" });
+    (out.get(label) ?? out.set(label, []).get(label)!).push(c);
+  }
+  return [...out];
+}
+// 一覧に添える抜粋: 最後の AI の返事(なければ最初の質問)の先頭
+const excerpt = (c: Chat) => {
+  const m = [...c.msgs].reverse().find((x) => x.role === "assistant") ?? c.msgs[0];
+  return (m?.content ?? "").replace(/```[\s\S]*?```/g, " ").replace(/^\s*(?:#{1,6}|>|[-*+]|\d+\.)\s+/gm, "").replace(/[*_`~]+/g, "").replace(/\s+/g, " ").trim().slice(0, 160);
+};
+
 export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { open: boolean; job: AiJob | null; quote: AiQuote | null; resolve: (x: NonNullable<typeof drag.node> | string) => Promise<Ctx | AiPic | null>; onClose: () => void; onSettings: () => void }) {
   const cfg = useAi();
   const link = useLink();
@@ -81,6 +100,15 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
   const chats = useChats();
   const [chatId, setChatId] = useState(init.current.id);
   const [hist, setHist] = useState(false);
+  const histBack = useRef<HTMLButtonElement>(null);
+  // 履歴のページ: 開いたら「戻る」に合わせ、Esc で閉じる(行を消したあとはフォーカスがパネルの外へ出るため、window で受ける)
+  useEffect(() => {
+    if (!hist) return;
+    histBack.current?.focus({ preventScroll: true });
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.defaultPrevented && !(e.target as Element | null)?.closest?.("[role=dialog], [role=menu], [role=listbox]")) { e.preventDefault(); setHist(false); } };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [hist]);
   const loaded = useRef<M[]>(init.current.msgs); // 読み込んだままの状態は、保存し直さない(並び順が変わるため)
   const gen = useRef(0); // 会話を切り替えたら進める。古い送信の結果を、新しい会話に混ぜないため
   const [msgs, setMsgs] = useState<M[]>(init.current.msgs);
@@ -208,7 +236,7 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
     gate(() => run(w.content, q, label, undefined, pics));
   };
 
-  const copy = (m: M) => { void navigator.clipboard?.writeText(m.content); };
+  const copy = (m: M) => { void copyWithNotice(m.content); };
   const replace = (m: M) => {
     const j = m.job; if (!j) return;
     const v = j.view;
@@ -231,8 +259,8 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
     stopAll(); const m = c.msgs as M[]; loaded.current = m; seq.current = m.reduce((n, x) => Math.max(n, x.id), 0);
     setMsgs(m); setChatId(c.id); setCurChat(c.id); setHist(false);
   };
-  const dropChat = (c: Chat) => { if (c.id === chatId) startNew(); deleteChat(c.id); };
-  const when = (t: number) => new Date(t).toLocaleString(i18next.language, { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  const dropChat = (c: Chat) => { if (c.id === chatId) startNew(); deleteChat(c.id); notify(i18next.t("会話を消しました"), "success"); };
+  const when = (t: number) => new Date(t).toLocaleTimeString(i18next.language, { hour: "2-digit", minute: "2-digit" });
 
   // 閉じるときは、縮みきってから外す
   const [mounted, setMounted] = useState(open);
@@ -243,34 +271,46 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
   }, [open]);
   if (!open && !mounted) return null;
   return (
-    <aside className="ai-dock" data-closing={!open} data-over={over} aria-label="AI"
+    <aside className="ai-dock" data-closing={!open} data-over={over} data-hist={hist} aria-label="AI"
       onDragOver={(e) => { if (ready(cfg, link) && hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; if (!over) setOver(true); } }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as globalThis.Node | null)) setOver(false); }}
       onDrop={(e) => { if (ready(cfg, link) && hasFiles(e)) void onDrop(e); }}
-      onKeyDown={(e) => { if (e.key === "Escape" && hist) { e.stopPropagation(); setHist(false); } }}>
+      >
       <div className="ai-bar">
         <span className="ai-title">AI<small>{cfg.models[cfg.provider] || (cfg.provider === "claude-cli" ? "claude" : "")}</small></span>
         <button className="icon-btn" aria-label={i18next.t("新しい会話")} title={i18next.t("新しい会話")} disabled={!msgs.length} onClick={startNew}><SquarePen /></button>
-        <button className="icon-btn" data-on={hist} aria-label={i18next.t("会話の履歴")} title={i18next.t("会話の履歴")} aria-expanded={hist} onClick={() => setHist((v) => !v)}><History /></button>
+        <button className="icon-btn" data-on={hist} aria-label={i18next.t("会話の履歴")} title={i18next.t("会話の履歴")} aria-pressed={hist} onClick={() => setHist((v) => !v)}><History /></button>
         <button className="icon-btn" aria-label={i18next.t("この会話を消す")} title={i18next.t("この会話を消す")} disabled={!msgs.length} onClick={() => { stopAll(); loaded.current = []; setMsgs([]); }}><Trash2 /></button>
         <button className="icon-btn" aria-label={i18next.t("設定")} title={i18next.t("設定")} onClick={onSettings}><Cog /></button>
         <button className="icon-btn" aria-label={i18next.t("閉じる")} title={i18next.t("閉じる")} onClick={onClose}><X /></button>
       </div>
       {hist && (
-        <>
-          <div className="ai-hist-bg" onMouseDown={() => setHist(false)} />
-          <div className="ai-hist scroll" role="menu" aria-label={i18next.t("会話の履歴")}>
-            {chats.chats.length === 0 ? <p className="ai-hist-empty">{i18next.t("まだ会話の履歴はありません")}</p> : <>
-              {chats.chats.map((c) => (
-                <div key={c.id} className="ai-hist-row" data-on={c.id === chatId}>
-                  <button role="menuitem" className="ai-hist-open" onClick={() => openChat(c)}><span className="truncate">{c.title || i18next.t("(空の会話)")}</span><small>{when(c.at)} · {c.msgs.filter((m) => m.role === "user").length}</small></button>
-                  <button className="icon-btn" aria-label={i18next.t("この会話を消す")} title={i18next.t("この会話を消す")} onClick={() => dropChat(c)}><X /></button>
+        <section className="ai-hist-page" aria-label={i18next.t("会話の履歴")}>
+          <div className="ai-hist-head">
+            <button ref={histBack} className="icon-btn" aria-label={i18next.t("戻る")} title={i18next.t("戻る")} onClick={() => setHist(false)}><ChevronLeft /></button>
+            <h2>{i18next.t("会話の履歴")}</h2>
+            {chats.chats.length > 0 && <small>{i18next.t("{{n}} 件", { n: chats.chats.length })}</small>}
+          </div>
+          {chats.chats.length === 0 ? <p className="ai-hist-empty">{i18next.t("まだ会話の履歴はありません")}</p> : (
+            <div className="ai-hist-list scroll">
+              {dayGroups(chats.chats).map(([day, list]) => (
+                <div key={day} className="ai-hist-day" role="list" aria-label={day}>
+                  <h3>{day}</h3>
+                  {list.map((c) => (
+                    <div key={c.id} role="listitem" className="ai-hist-row" data-on={c.id === chatId}>
+                      <button className="ai-hist-open" onClick={() => openChat(c)}>
+                        <span className="ai-hist-t truncate">{c.title || i18next.t("(空の会話)")}</span>
+                        {excerpt(c) && <span className="ai-hist-x">{excerpt(c)}</span>}
+                        <small>{when(c.at)} · {i18next.t("質問 {{n}} 件", { n: c.msgs.filter((m) => m.role === "user").length })}</small>
+                      </button>
+                      <button className="icon-btn ai-hist-del" aria-label={i18next.t("この会話を消す")} title={i18next.t("この会話を消す")} onClick={() => dropChat(c)}><Trash2 /></button>
+                    </div>
+                  ))}
                 </div>
               ))}
-              <button className="ai-hist-clear" onClick={() => { startNew(); clearChats(); }}>{i18next.t("履歴をすべて消す")}</button>
-            </>}
-          </div>
-        </>
+            </div>
+          )}
+        </section>
       )}
       <div className="ai-list scroll" ref={list} aria-live="polite">
         {!ready(cfg, link) ? (

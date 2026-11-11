@@ -1,6 +1,7 @@
 // HTML プレビュー用: 相対パスで参照している CSS・JS・画像を、フォルダから読んで HTML の中に埋め込む。
 // 開いているタブに未保存の内容があれば、ファイルより優先する(Live Server のように、書いたそばから反映される)。
 import { splitRoot } from "@/workbench/rootpath";
+import { RemoteDir, RemoteFile } from "@/platform/remote";
 
 export type Source = {
   root?: FileSystemDirectoryHandle; // 開いているフォルダの先頭(これが無いと、ファイルは読めない)
@@ -27,12 +28,29 @@ function resolvePath(from: string, ref: string): string | null {
   return prefix + "/" + parts.filter(Boolean).join("/");
 }
 
+// 同じフォルダを何度もたどらないよう、読み直しの番号ごとに覚えておく(画像が多いと、問い合わせが何百回にもなるため)
+const dirs = new Map<string, Promise<FileSystemDirectoryHandle | null>>();
+function dirAt(root: FileSystemDirectoryHandle, key: string, segs: string[]): Promise<FileSystemDirectoryHandle | null> {
+  if (!segs.length) return Promise.resolve(root);
+  const k = key + "/" + segs.join("/");
+  let p = dirs.get(k);
+  if (!p) {
+    p = dirAt(root, key, segs.slice(0, -1)).then((d) => (d ? d.getDirectoryHandle(segs[segs.length - 1]) : null)).catch(() => null);
+    dirs.set(k, p);
+  }
+  return p;
+}
+
 async function fileAt(root: FileSystemDirectoryHandle, path: string): Promise<File | null> {
-  const segs = splitRoot(path).rel.split("/").filter(Boolean);
+  const { prefix, rel } = splitRoot(path);
+  const segs = rel.split("/").filter(Boolean);
+  if (!segs.length) return null;
   try {
-    let dir = root;
-    for (const s of segs.slice(0, -1)) dir = await dir.getDirectoryHandle(s);
-    return await (await dir.getFileHandle(segs[segs.length - 1])).getFile();
+    // WSL・SSH・PC のフォルダは、1 回の読み込みで済ませる(exe では、問い合わせのたびに wsl.exe などが動くため、フォルダを 1 段ずつたどると遅い)
+    const r = root as unknown;
+    if (r instanceof RemoteDir) return await new RemoteFile(r.conn, r.path.replace(/\/+$/, "") + "/" + segs.join("/"), segs[segs.length - 1]).getFile();
+    const dir = await dirAt(root, prefix, segs.slice(0, -1));
+    return dir ? await (await dir.getFileHandle(segs[segs.length - 1])).getFile() : null;
   } catch { return null; }
 }
 
@@ -43,24 +61,27 @@ const dataUrl = (f: Blob, type: string) => new Promise<string>((res) => {
   r.readAsDataURL(f);
 });
 
-const cache = new Map<string, string>();
+// 同じファイルを同時に何度も読みに行かないよう、読み終わる前から約束(Promise)を覚えておく
+const cache = new Map<string, Promise<string | null>>();
 let cacheNonce = -1;
 
-async function textOf(src: Source, path: string): Promise<string | null> {
-  if (path in src.open) return src.open[path];
-  if (!src.root) return null;
-  const f = await fileAt(src.root, path);
-  return f ? f.text() : null;
+function textOf(src: Source, path: string): Promise<string | null> {
+  if (path in src.open) return Promise.resolve(src.open[path]);
+  if (!src.root) return Promise.resolve(null);
+  const key = "t:" + path;
+  let p = cache.get(key);
+  if (!p) { p = fileAt(src.root, path).then((f) => (f ? f.text() : null)); cache.set(key, p); }
+  return p;
 }
-async function dataOf(src: Source, path: string): Promise<string | null> {
-  const key = path;
-  if (cache.has(key)) return cache.get(key)!;
-  if (!src.root) return null;
-  const f = await fileAt(src.root, path);
-  if (!f || f.size > IMG_MAX) return null;
-  const u = await dataUrl(f, MIME[extOf(path)] ?? (f.type || "application/octet-stream"));
-  cache.set(key, u);
-  return u;
+function dataOf(src: Source, path: string): Promise<string | null> {
+  if (!src.root) return Promise.resolve(null);
+  const key = "d:" + path;
+  let p = cache.get(key);
+  if (!p) {
+    p = fileAt(src.root, path).then((f) => (!f || f.size > IMG_MAX ? null : dataUrl(f, MIME[extOf(path)] ?? (f.type || "application/octet-stream"))));
+    cache.set(key, p);
+  }
+  return p;
 }
 
 // CSS の url(...) を、CSS ファイルの位置から見た相対で解いて埋め込む
@@ -81,7 +102,7 @@ const scriptSafe = (s: string) => s.replace(/<\/(script)/gi, "<\\/$1");
 const styleSafe = (s: string) => s.replace(/<\/(style)/gi, "<\\/$1");
 
 export async function inline(html: string, src: Source): Promise<string> {
-  if (src.nonce !== cacheNonce) { cache.clear(); cacheNonce = src.nonce; }
+  if (src.nonce !== cacheNonce) { cache.clear(); dirs.clear(); cacheNonce = src.nonce; }
   if (!src.root && !Object.keys(src.open).length) return html;
   const doc = new DOMParser().parseFromString(html, "text/html");
   const jobs: Promise<void>[] = [];

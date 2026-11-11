@@ -49,6 +49,8 @@ import { Sparkles, Server, FolderKanban, Eye, Maximize2, Minimize2, ImageIcon, C
 import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, patchWs, rootLabel, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
 import { displayPath, setRootNames, splitRoot } from "@/workbench/rootpath";
 import { getProfiles, switchProfile, useProfiles } from "@/features/settings/profiles";
+import { copyWithNotice } from "@/platform/clipboard";
+import { prefetchOpen } from "@/workbench/treeOpen";
 import { listShells, type ShellOpt } from "@/platform/pty";
 import { RemoteFile, checkDir, connKey, connLabel, lastDir, normConn, showPath, pushRecent, rootHandle, sshUrl, type Conn, type RemoteDir } from "@/platform/remote";
 import { DEMO_NAME, DEMO_TREE } from "@/shared/demo";
@@ -518,6 +520,7 @@ export default function App() {
     const main = specs[0];
     try {
       const lists = await Promise.all(specs.map((x) => (x.handle ? readDir(x.handle, x.prefix) : Promise.resolve(DEMO_TREE))));
+      await prefetchOpen(lists.flat());
       const hit = target ?? (main.handle && specs.length === 1 ? await matchRoot(main.ref, main.handle) : null);
       const restored: Tab[] = [];
       if (hit) {
@@ -709,6 +712,7 @@ export default function App() {
     try {
       const prefix = newPrefix();
       const nodes = await readDir(handle, prefix);
+      await prefetchOpen(nodes);
       const next = [...rootsNow.current, { prefix, name, handle, nodes, conn, ref }];
       rootsNow.current = next;
       setRoots(next);
@@ -858,7 +862,7 @@ export default function App() {
     const rr = rootOf(n);
     return n.handle && "path" in n.handle ? (n.handle as unknown as { path: string }).path : (rr.conn?.path ?? "") + n.path.slice(rr.prefix.length);
   };
-  const copyText = (s: string, m = i18next.t("コピーしました")) => navigator.clipboard.writeText(s).then(() => flash(m), () => flash(i18next.t("コピーできませんでした")));
+  const copyText = (s: string, m = i18next.t("コピーしました")) => copyWithNotice(s, m);
   // 画像はクリップボードへ PNG で(ファイルの中身。編集中の画像は、編集画面のコピーボタンから)
   const copyImg = (n: Node) => copyImage(getFile(n).then((f) => (!f.type && /\.svg$/i.test(n.name) ? new Blob([f], { type: "image/svg+xml" }) : f))).then(() => flash(i18next.t("画像をコピーしました")), () => flash(i18next.t("画像をコピーできませんでした")));
   const copyBody = async (n: Node) => {

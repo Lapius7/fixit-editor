@@ -3,7 +3,7 @@ import { ChevronRight, FileText, FileCode2, FileJson, FileType, Folder, FolderOp
 import { readDir, type Node } from "@/platform/fs";
 import { useSettings } from "@/features/settings/settings";
 import { drag, dragEnd, setDragSrc, setDropTarget, useDnd } from "@/workbench/dnd";
-import { dirOf } from "@/workbench/treeops"; import { isOpen, setOpenPath } from "@/workbench/treeOpen";
+import { dirOf } from "@/workbench/treeops"; import { isOpen, setOpenPath, takePrefetched } from "@/workbench/treeOpen";
 
 // ドラッグ中のものを、このフォルダへ移せるか(自分の中・今いる場所へは移せない)
 export const canDrop = (dest: Node) => {
@@ -58,7 +58,8 @@ function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, depth, i
   const restored = useRef(n.kind === "dir" && isOpen(n.path)).current; // 前に開いていたフォルダは、アニメーションなしで開いた状態に戻す
   const [open, setOpenRaw] = useState(restored);
   const setOpen = (v: boolean) => { setOpenRaw(v); setOpenPath(n.path, v); };
-  const [loaded, setLoaded] = useState<Node[] | undefined>();
+  const [loaded, setLoaded] = useState<Node[] | undefined>(() => (restored && n.handle ? takePrefetched(n.path) : undefined)); // 先読みできていれば、最初から開いた状態で描く
+  const pre = useRef(loaded).current;
   const dnd = useDnd(n.path), over = !!(dnd & 1);
   const isDir = n.kind === "dir";
   const kids = n.handle ? loaded : n.children;
@@ -73,7 +74,7 @@ function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, depth, i
   }, [open, kids, armed]);
 
   // 開いた状態で戻ったフォルダは、中身を読み直す
-  useEffect(() => { if (restored && n.handle) readDir(n.handle as FileSystemDirectoryHandle, n.path).then(setLoaded).catch(() => setOpen(false)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (restored && n.handle && !pre) readDir(n.handle as FileSystemDirectoryHandle, n.path).then(setLoaded).catch(() => setOpen(false)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 作成・削除のあとに、開いているフォルダの中身を読み直す
   useEffect(() => {

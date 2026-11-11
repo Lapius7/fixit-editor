@@ -20,6 +20,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 fixit-core = { path = "fixit-core" }
 rfd = "0.16"
+arboard = { version = "3", default-features = false }
 
 [profile.release]
 opt-level = "s"

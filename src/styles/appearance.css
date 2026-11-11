@@ -51,7 +51,7 @@
 .sel option { background: var(--pop); color: var(--ink); }
 /* 独自のセレクト(shared/Select.tsx)。開く一覧は右クリックメニュー(.ctx)と同じ見た目 */
 .sel-btn { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; font: inherit; line-height: 20px; text-align: left; cursor: default; transition: background-color calc(.15s * var(--sp)) var(--out), box-shadow calc(.15s * var(--sp)) var(--out), transform calc(.12s * var(--sp)) var(--out); }
-.sel-btn:hover:not(:disabled), .sel-btn[data-open="true"] { background: var(--field-on); }
+.sel-btn:hover:not(:disabled) { background: var(--field-on); }
 .sel-btn:active:not(:disabled) { transform: scale(.985); }
 .sel-btn:disabled { opacity: .5; }
 .sel-btn[data-open="true"] { box-shadow: 0 0 0 1px var(--accent) inset; }

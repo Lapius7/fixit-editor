@@ -1,5 +1,6 @@
 // ファイル一覧で開いているフォルダの記録。タブの切り替えや再起動でも、開閉の状態を保つ。
 import { kvGet, kvSet } from "@/platform/appdata";
+import { readDir, type Node } from "@/platform/fs";
 
 const KEY = "fixit:tree-open:v1";
 const MAX = 1000;
@@ -18,4 +19,35 @@ export function setOpenPath(path: string, on: boolean) {
   if (on) { open.add(path); if (open.size > MAX) open.delete(open.values().next().value as string); } else open.delete(path);
   clearTimeout(timer);
   timer = setTimeout(() => kvSet(KEY, JSON.stringify([...open])), 300);
+}
+
+// 前に開いていたフォルダの中身を、一覧を出す前にまとめて読んでおく。
+// 読まずに出すと、親を描く → 中身を読む → 子を描く…が 1 段ずつ進み、見ている前で順に開いていくように見える。
+// 同じ深さのフォルダは並行して読む。時間がかかりすぎるときは、読めた分だけ使い、残りは従来どおり描いてから読む。
+const pre = new Map<string, Node[]>();
+export const PREFETCH_MS = 1500;
+
+export async function prefetchOpen(nodes: Node[], wait = PREFETCH_MS): Promise<void> {
+  let stop = false;
+  pre.clear(); // 前回の読み残しは使わない
+  const walk = async (list: Node[]): Promise<void> => {
+    const dirs = list.filter((n) => n.kind === "dir" && n.handle && isOpen(n.path));
+    await Promise.all(dirs.map(async (d) => {
+      if (stop) return;
+      const kids = await readDir(d.handle as FileSystemDirectoryHandle, d.path).catch(() => null);
+      if (!kids || stop) return;
+      pre.set(d.path, kids);
+      await walk(kids);
+    }));
+  };
+  let t: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([walk(nodes), new Promise<void>((r) => { t = setTimeout(() => { stop = true; r(); }, wait); })]);
+  clearTimeout(t);
+}
+
+// 先読みした中身を受け取る(1 回きり。古い中身を後で使い回さない)
+export function takePrefetched(path: string): Node[] | undefined {
+  const v = pre.get(path);
+  pre.delete(path);
+  return v;
 }

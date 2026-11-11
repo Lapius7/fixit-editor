@@ -6,6 +6,8 @@ export const MAX_OPEN_BYTES = 2_000_000;
 
 // プレビューの更新を待つ時間(打鍵のたびに作り直さないため)
 export const PREVIEW_DELAY_MS = 250;
+export const PREVIEW_FIRST_MS = 1200; // HTML プレビューの初回: 画像などの埋め込みがこれより遅いときは、本文だけ先に出す
+export const PREVIEW_REFOCUS_MS = 3000; // ウィンドウに戻ったときの読み直しは、この間隔より詰めない
 
 // アプリ内ブラウザの最初のアドレス欄
 export const BROWSER_DEFAULT_URL = "http://localhost:5173";

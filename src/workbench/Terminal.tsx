@@ -7,6 +7,7 @@ import { isDark, useSettings } from "@/features/settings/settings";
 import { IS_TAURI } from "@/shared/chrome";
 import { openExternal } from "@/features/account/auth";
 import { tauriPty, type Sock } from "@/platform/pty";
+import { copyWithNotice, readClip, writeClip } from "@/platform/clipboard";
 import i18next from 'i18next'
 
 const LIGHT = { background: "#00000000", foreground: "#26292e", cursor: "#3b6fd9", selectionBackground: "#bfd2f8", selectionInactiveBackground: "#d6e1f7", black: "#26292e", red: "#c41a16", green: "#2a9d6c", yellow: "#8a5a00", blue: "#3b6fd9", magenta: "#9b2393", cyan: "#326d74", white: "#8b93a1" };
@@ -80,11 +81,24 @@ export default function TerminalSession({ id, active, open, focusKey, host: sshH
     };
     sock.onerror = () => t.write(i18next.t("\r\n\u001b[31mターミナルに接続できません。\u001b[0m\r\nこの機能は開発サーバー(pnpm dev)かデスクトップ版で使えます。"));
     t.onData((d) => { if (sock.readyState === 1 || (IS_TAURI && sock.readyState === 0)) sock.send(d); else if (d === "\r") cb.current.onExit(id); });
-    t.onSelectionChange(() => { if (copyOnSelect.current) { const x = t.getSelection(); if (x) navigator.clipboard.writeText(x).catch(() => {}); } });
+    t.onSelectionChange(() => { if (copyOnSelect.current) { const x = t.getSelection(); if (x) void writeClip(x); } });
+    // コピー・貼り付けのキー。xterm に任せると Ctrl+V が ^V としてシェルへ送られ、貼り付けにならない。
+    // 貼り付けは false を返すだけにして、ブラウザ本来の貼り付け(paste イベント)を xterm に受けさせる(許可の確認も出ない)
+    t.attachCustomKeyEventHandler((e) => {
+      const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+      if ((mod && k === "v") || (e.shiftKey && e.key === "Insert")) return false;
+      if (mod && k === "c" && (e.shiftKey || t.hasSelection())) {
+        if (e.type === "keydown") { e.preventDefault(); const x = t.getSelection(); if (x) void writeClip(x); if (!e.shiftKey) t.clearSelection(); }
+        return false;
+      }
+      return true;
+    });
+    // 右クリックのメニューなどから操作したあとは、続けて打てるように入力をこの画面へ戻す
+    const back = () => t.focus();
     cb.current.register(id, {
-      copy: () => { const x = t.getSelection(); if (x) navigator.clipboard.writeText(x).catch(() => {}); },
-      paste: () => navigator.clipboard.readText().then((x) => t.paste(x)).catch(() => {}),
-      clear: () => t.clear(),
+      copy: () => { const x = t.getSelection(); if (x) void copyWithNotice(x); back(); },
+      paste: () => { void readClip().then((x) => { if (x) t.paste(x); back(); }); },
+      clear: () => { t.clear(); back(); },
       focus: () => t.focus(),
       send: (x) => { if (ready && sock.readyState === 1) sock.send(x); else pending.push(x); },
     });
@@ -111,7 +125,7 @@ export default function TerminalSession({ id, active, open, focusKey, host: sshH
   return (
     <div
       ref={host} className="term-body" hidden={!active}
-      onContextMenu={(e) => { if (rightPaste.current) { e.preventDefault(); e.stopPropagation(); navigator.clipboard.readText().then((x) => term.current?.paste(x)).catch(() => {}); } else onContext(e, id); }}
+      onContextMenu={(e) => { if (rightPaste.current) { e.preventDefault(); e.stopPropagation(); void readClip().then((x) => { if (x) term.current?.paste(x); term.current?.focus(); }); } else onContext(e, id); }}
     />
   );
 }

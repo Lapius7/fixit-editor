@@ -40,6 +40,16 @@
 .cn-br-file { color: var(--ink-3); }
 .cn-br-list span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cn-br-empty { margin: auto !important; padding: 0 12px; text-align: center; font-size: 12px; line-height: 20px; color: var(--ink-3) !important; }
+/* 読み込み中: 見出しの下を細い線が流れ、同じ接続先の一覧は薄くする。別の接続先なら仮の行を並べる */
+.cn-br-bar { position: relative; }
+.cn-br[data-loading] .cn-br-bar::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent) 0 0 / 40% 100% no-repeat; animation: cn-load calc(1.1s * var(--sp, 1)) var(--ease) infinite; }
+@keyframes cn-load { from { background-position: -60% 0; } to { background-position: 160% 0; } }
+.cn-br[data-loading] .cn-br-list > button, .cn-br[data-loading] .cn-br-file { opacity: .5; transition: opacity calc(.2s * var(--sp)) var(--ease); }
+.cn-br-skel { flex: none; height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 8px; animation: cn-skel calc(1.2s * var(--sp, 1)) ease-in-out infinite alternate; animation-delay: calc(var(--i) * 90ms); }
+.cn-br-skel i { width: 15px; height: 15px; flex: none; border-radius: 4px; background: var(--hair); }
+.cn-br-skel b { width: var(--w); height: 10px; border-radius: 5px; background: var(--hair); }
+@keyframes cn-skel { from { opacity: .45; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .cn-br[data-loading] .cn-br-bar::after, .cn-br-skel { animation: none; } }
 .cn-err { min-height: 20px; margin: 10px 0 0 !important; color: #d93b3b !important; font-size: 12px; line-height: 20px; }
 
 /* ---------- ワークスペースとプロファイル ---------- */

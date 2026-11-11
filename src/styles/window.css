@@ -39,7 +39,7 @@ html[data-boot="wait"] .window { animation-play-state: paused; }
 /* ---- 入力欄は枠に色をつけない ---- */
 .field:focus, .sp-box:focus-within { box-shadow: 0 0 0 1px var(--hair) inset; animation: none; }
 input:focus-visible, textarea:focus-visible, select:focus-visible, .field:focus-visible { outline: none; }
-.field:focus, .sp-box:focus-within { background: var(--field-on); }
+/* 入力中も背景の色は変えない(白くしない) */
 
 /* ---- アプリなので、文字は基本選択できない(入力欄・エディタ・ターミナル・ビューアは除く) ---- */
 body { -webkit-user-select: none; user-select: none; cursor: default; }

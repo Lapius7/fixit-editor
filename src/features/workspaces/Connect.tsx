@@ -14,6 +14,8 @@ const up = (p: string) => (/^[A-Za-z]:\/?$/.test(p) || p === "/" ? p : p.replace
 // WSL(このPC)か SSH 先のフォルダを開くための画面
 const RECENT_SHOWN = 3; // 最近開いた場所を、たたんだ状態で出す数
 
+const SKEL = [46, 62, 38, 70, 54, 42]; // 読み込み中に並べる仮の行の幅(%)
+
 export default function Connect({ current, adding, onConnect, onClose, out }: Props) {
   const [kind, setKind] = useState<"wsl" | "ssh">(current?.kind === "ssh" ? "ssh" : "wsl");
   const [host, setHost] = useState(current?.host ?? "");
@@ -37,14 +39,18 @@ export default function Connect({ current, adding, onConnect, onClose, out }: Pr
   const [dir, setDir] = useState(""); // 一覧に出しているフォルダの絶対パス
   const [rows, setRows] = useState<Row[] | null>(null);
   const [lerr, setLerr] = useState("");
+  const [loading, setLoading] = useState(false); // 一覧を読んでいる間(SSH は数秒かかる)
+  const [rowsOf, setRowsOf] = useState(""); // いま出している一覧が、どの接続先のものか
 
   useEffect(() => { listHosts().then(setHosts); }, []);
   const q = host.trim().toLowerCase();
   const matches = hosts.filter((h) => h.name !== host && (!q || h.name.toLowerCase().includes(q))).slice(0, 6);
   // 入力したパスのフォルダの中身を出す(入力が止まってから読む)
   useEffect(() => {
-    if (kind === "ssh" && (!HOST_OK.test(sshHost) || sshHost.startsWith("-"))) { setRows(null); setDir(""); return; }
+    if (kind === "ssh" && (!HOST_OK.test(sshHost) || sshHost.startsWith("-"))) { setRows(null); setDir(""); setLoading(false); return; }
     let live = true;
+    setLoading(true); setLerr("");
+    const of = `${kind}|${kind === "ssh" ? sshHost : ""}`;
     const t = setTimeout(async () => {
       try {
         const base = { kind, host: kind === "ssh" ? sshHost : undefined } as Pick<Conn, "kind" | "host">;
@@ -52,12 +58,14 @@ export default function Connect({ current, adding, onConnect, onClose, out }: Pr
         const out: Row[] = [];
         for await (const [name, h] of new RemoteDir({ ...base, path: abs }, abs).entries()) out.push({ name, dir: h.kind === "directory" });
         out.sort((a, b) => Number(b.dir) - Number(a.dir) || Number(a.name.startsWith(".")) - Number(b.name.startsWith(".")) || a.name.localeCompare(b.name));
-        if (live) { setDir(abs); setRows(out); setLerr(""); }
-      } catch (e) { if (live) { setRows(null); setLerr((e as Error).message); } }
+        if (live) { setDir(abs); setRows(out); setRowsOf(of); setLerr(""); setLoading(false); }
+      } catch (e) { if (live) { setRows(null); setRowsOf(of); setLerr((e as Error).message); setLoading(false); } }
     }, 300);
     return () => { live = false; clearTimeout(t); };
   }, [kind, sshHost, path]);
   const enter = (p: string) => { setPath(p); setErr(""); };
+  // 別の接続先(このPC→SSH、ホストの切り替え)を読んでいる間は、前の一覧を出さず、読み込み中の行を出す
+  const stale = loading && rowsOf !== `${kind}|${kind === "ssh" ? sshHost : ""}`;
   // 初期値の "~" は、ホームの絶対パスに置き換える(階層を移動したときの表示とそろえる)。接続先を変えたら、また "~" から解決し直す
   const autoHome = useRef<string | null>(null);
   useEffect(() => {
@@ -126,14 +134,15 @@ export default function Connect({ current, adding, onConnect, onClose, out }: Pr
           <input className="field" autoFocus={kind === "wsl"} value={path} spellCheck={false} placeholder={kind === "wsl" ? i18next.t("例: ~/projects、C:\\Users\\me\\code") : i18next.t("例: ~/app、/var/www")} onChange={(e) => setPath(e.target.value)} />
         </label>
         <p className="cn-hint">{kind === "wsl" ? i18next.t("Windows のパス(C:\\…、\\\\wsl$\\…)も貼れます。") : i18next.t("鍵で入れるホストだけ使えます。パスワードの入力は受け付けません。")}</p>
-        <div className="cn-br">
+        <div className="cn-br" data-loading={loading || undefined} aria-busy={loading}>
           <div className="cn-br-bar">
             <button className="icon-btn" aria-label={i18next.t("親のフォルダ")} title={i18next.t("親のフォルダ")} disabled={!dir || up(dir) === dir} onClick={() => enter(up(dir))}><ArrowUp /></button>
             <button className="icon-btn" aria-label={i18next.t("ホーム")} title={i18next.t("ホーム")} onClick={home}><Home /></button>
-            <span className="cn-br-path" title={dir}>{dir || "—"}</span>
+            <span className="cn-br-path" title={stale ? undefined : dir}>{stale ? (kind === "ssh" ? i18next.t("{{host}} に接続中…", { host: sshHost }) : i18next.t("読み込み中…")) : dir || "—"}</span>
           </div>
           <div className="cn-br-list" role="listbox" aria-label={i18next.t("フォルダの中身")}>
-            {rows === null ? <p className="cn-br-empty">{lerr || (kind === "ssh" ? i18next.t("ホストを入力すると、中身を表示します") : i18next.t("読み込み中…"))}</p>
+            {stale || (loading && rows === null) ? SKEL.map((w, i) => <div key={i} className="cn-br-skel" style={{ ["--w" as string]: `${w}%`, ["--i" as string]: i }}><i /><b /></div>)
+              : rows === null ? <p className="cn-br-empty">{lerr || (kind === "ssh" ? i18next.t("ホストを入力すると、中身を表示します") : i18next.t("読み込み中…"))}</p>
               : rows.length === 0 ? <p className="cn-br-empty">{i18next.t("空のフォルダです")}</p>
               : rows.slice(0, LIST_MAX).map((r) => r.dir
                 ? <button key={r.name} role="option" aria-selected="false" onClick={() => enter(`${dir.replace(/\/$/, "")}/${r.name}`)}><Folder /><span>{r.name}</span></button>

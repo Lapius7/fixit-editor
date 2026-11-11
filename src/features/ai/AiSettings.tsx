@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Trash2, Check, RefreshCw, LogIn, Copy } from "lucide-react";
 import i18next from "i18next";
+import { copyWithNotice } from "@/platform/clipboard";
 import { Trans } from "react-i18next";
 import { PROVIDERS, PROVIDER_NAME, setEnabled, setKey, setProvider, tail, useAi, useLink, type Provider } from "@/features/ai/store";
 import { login, refreshLink } from "@/features/ai/link";
@@ -48,7 +49,7 @@ function ClaudeLink() {
       {busy && url && (
         <div className="ai-set-line">
           <input className="field" readOnly value={url} aria-label={i18next.t("ログインの URL")} onFocus={(e) => e.currentTarget.select()} />
-          <button className="btn" onClick={() => void navigator.clipboard?.writeText(url)}><Copy size={14} /><span>{i18next.t("コピー")}</span></button>
+          <button className="btn" onClick={() => void copyWithNotice(url)}><Copy size={14} /><span>{i18next.t("コピー")}</span></button>
         </div>
       )}
       {link === "nocli" && <p className="ai-link-note"><Trans i18nKey="Claude Code を入れてから、もう一度確認してください。Windows の PowerShell では、次のコマンドで入ります: irm https://claude.ai/install.ps1 | iex" /></p>}

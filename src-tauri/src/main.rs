@@ -323,12 +323,37 @@ async fn apply_update(app: AppHandle, version: String, sha256: String, size: u64
     Ok(())
 }
 
+// クリップボード。WebView の navigator.clipboard.readText は「クリップボードの参照を求めています」と
+// ブラウザの許可を聞いてくるので、アプリ版の読み書きは OS のクリップボードを直接使う
+#[tauri::command]
+async fn clip_read() -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(|| match arboard::Clipboard::new().and_then(|mut c| c.get_text()) {
+        Ok(s) => Ok(s),
+        Err(arboard::Error::ContentNotAvailable) => Ok(String::new()),
+        Err(e) => Err(e.to_string()),
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn clip_write(text: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || arboard::Clipboard::new().and_then(|mut c| c.set_text(text)).map_err(|e| e.to_string()))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 fn main() {
     if let Some(l) = std::env::var_os("FIXIT_LAUNCHER") { update::sweep_old(std::path::Path::new(&l)); }
     tauri::Builder::default()
         .manage(Ptys::default())
         .manage(Jobs::default())
-        .invoke_handler(tauri::generate_handler![pty_open, pty_shells, pty_write, pty_resize, pty_close, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_login, claude_cancel, store_load, store_read, store_stamps, store_save, apply_update, list_fonts, open_url])
+        // 念のため: 画面側から読み取りの許可を求められても、ブラウザの確認を出さずに許可する(アプリ自身の画面だけを表示するため)
+        .on_permission_request(|_, kind| match kind {
+            tauri::webview::PermissionKind::ClipboardRead => tauri::webview::PermissionResponse::Allow,
+            _ => tauri::webview::PermissionResponse::Default,
+        })
+        .invoke_handler(tauri::generate_handler![clip_read, clip_write, pty_open, pty_shells, pty_write, pty_resize, pty_close, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_login, claude_cancel, store_load, store_read, store_stamps, store_save, apply_update, list_fonts, open_url])
         .run(tauri::generate_context!())
         .expect("フィクシットエディタを起動できませんでした");
 }

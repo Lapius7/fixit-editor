@@ -5,7 +5,7 @@ import { inline, type Source } from "./resolve";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import i18next from "i18next";
-import { PREVIEW_DELAY_MS } from "@/shared/config";
+import { PREVIEW_DELAY_MS, PREVIEW_FIRST_MS, PREVIEW_REFOCUS_MS } from "@/shared/config";
 
 export type PreviewKind = "md" | "html";
 
@@ -42,15 +42,18 @@ export default function Preview({ kind, text, name, source }: { kind: PreviewKin
   const openNow = source ? JSON.stringify(source.open) : "";
   const [openKey, setOpenKey] = useState(openNow);
   useEffect(() => { const t = setTimeout(() => setOpenKey(openNow), PREVIEW_DELAY_MS); return () => clearTimeout(t); }, [openNow]);
+  // 作り直しは、新しく始めたものほど番号が大きい。遅れて終わった古い結果で、新しい表示を上書きしない。
+  // 新しい作り直しが始まっても、前の結果は捨てずに出す(読み込みが遅い場所で、ずっと真っ白にならないように)
+  const seq = useRef(0), shownSeq = useRef(0);
   useEffect(() => {
-    let live = true;
-    const run = async () => {
-      let html = build(kind, shown);
-      if (kind === "html" && source) html = await inline(html, { ...source, nonce }).catch(() => html);
-      if (live) setDoc(withScroll(html, y.current));
-    };
-    void run();
-    return () => { live = false; };
+    const id = ++seq.current;
+    const put = (html: string) => { if (id < shownSeq.current) return; shownSeq.current = id; setDoc(withScroll(html, y.current)); };
+    const raw = build(kind, shown);
+    if (kind !== "html" || !source) { put(raw); return; }
+    // まだ何も出ていなければ、埋め込みを待たずに本文だけ先に出す
+    const t = shownSeq.current ? 0 : window.setTimeout(() => { if (!shownSeq.current) put(raw); }, PREVIEW_FIRST_MS);
+    void inline(raw, { ...source, nonce }).catch(() => raw).then((html) => { clearTimeout(t); put(html); });
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, shown, openKey, nonce, source?.root, source?.path]);
   useEffect(() => {
@@ -61,7 +64,8 @@ export default function Preview({ kind, text, name, source }: { kind: PreviewKin
   // ウィンドウに戻ってきたら、フォルダの中で変わったファイル(別のエディタでの編集など)を読み直す
   useEffect(() => {
     if (kind !== "html" || !source?.root) return;
-    const on = () => setNonce((n) => n + 1);
+    let last = 0; // 続けてフォーカスが戻っても、読み直しは間をあける
+    const on = () => { const now = Date.now(); if (now - last < PREVIEW_REFOCUS_MS) return; last = now; setNonce((n) => n + 1); };
     addEventListener("focus", on);
     return () => removeEventListener("focus", on);
   }, [kind, source?.root]);
