@@ -9,6 +9,8 @@ export type Item =
   | { type: "title"; label: string }
   | { type?: undefined; label: string; icon?: ReactNode; keys?: string; run?: () => void; danger?: boolean; disabled?: boolean; checked?: boolean; sub?: Item[] };
 
+const TIP_DELAY = 250; // ms。切れた項目の全文を出すまでの間(なぞっただけで次々に出ないように)
+
 const live = (items: Item[]) => items.map((it, i) => ({ it, i })).filter((x) => x.it.type === undefined && !(x.it as { disabled?: boolean }).disabled);
 
 type MenuProps = { items: Item[]; onDone: () => void; sub?: boolean; onBack?: () => void; anchor?: DOMRect };
@@ -19,6 +21,23 @@ function Menu({ items, onDone, sub, onBack, anchor }: MenuProps) {
   const [open, setOpen] = useState<number>(-1);
   const [at, setAt] = useState<{ left: number; top: number } | null>(null);
   const lis = useRef<(HTMLLIElement | null)[]>([]);
+  // 文字が切れている項目は、選んでいる間だけ全文を吹き出しで出す(パスなど、末尾が見えないと区別できないため)
+  const [tip, setTip] = useState<{ text: string; r: DOMRect } | null>(null);
+  const tipEl = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    setTip(null);
+    const li = lis.current[sel], lab = li?.querySelector<HTMLElement>(".ctx-label");
+    if (!li || !lab || open === sel || lab.scrollWidth <= lab.clientWidth + 1) return;
+    const t = setTimeout(() => setTip({ text: lab.textContent ?? "", r: li.getBoundingClientRect() }), ms(TIP_DELAY));
+    return () => clearTimeout(t);
+  }, [sel, open]);
+  useLayoutEffect(() => {
+    const el = tipEl.current;
+    if (!el || !tip) return;
+    const w = el.offsetWidth, h = el.offsetHeight, { r } = tip;
+    el.style.left = `${Math.max(8, Math.min(r.left, innerWidth - 8 - w))}px`;
+    el.style.top = `${r.bottom + 4 + h <= innerHeight - 8 ? r.bottom + 4 : Math.max(8, r.top - 4 - h)}px`;
+  }, [tip]);
 
   useLayoutEffect(() => {
     const el = ref.current!;
@@ -83,6 +102,7 @@ function Menu({ items, onDone, sub, onBack, anchor }: MenuProps) {
           </li>
         );
       })}
+      {tip && createPortal(<div ref={tipEl} className="ctx-tip" role="tooltip">{tip.text}</div>, document.querySelector(".ctx-layer") ?? document.body)}
     </ul>
   );
 }

@@ -184,6 +184,10 @@ button.sb:active { transform: scale(var(--ps)); }
 .ctx-sep { height: 1px; margin: 5px 6px; background: var(--hair); }
 .ctx-title { padding: 4px 10px 2px; font-size: 11px; line-height: 16px; color: var(--ink-3); max-width: 280px; }
 .ctx-sub { position: fixed; }
+/* 文字が切れた項目の全文。項目のすぐ下(入らなければ上)に出す */
+.ctx-tip { position: fixed; left: -9999px; top: 0; z-index: 1; max-width: min(560px, calc(100vw - 16px)); padding: 6px 10px; border-radius: 8px; background: var(--pop-solid); color: var(--ink); font: 12px/18px var(--font-sans); overflow-wrap: anywhere; pointer-events: none;
+  box-shadow: 0 0 0 1px var(--edge), 0 2px 6px var(--shadow-soft), 0 12px 32px -8px var(--shadow); animation: pop calc(.13s * var(--sp)) var(--ease) both; }
+@media (prefers-reduced-motion: reduce) { .ctx-tip { animation: none; } }
 .ctx-chev { width: 13px !important; height: 13px !important; margin-left: 8px; opacity: .6; }
 
 /* 全文検索 */
