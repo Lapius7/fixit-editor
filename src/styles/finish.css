@@ -126,7 +126,7 @@ html.theme-fade, html.theme-fade * { transition: background-color calc(.45s * va
 .open-btn[aria-expanded="true"] .open-btn-chev { transform: rotate(180deg); }
 /* 項目はツリーに重ねて上へ広げ、ツリーや空の案内の位置を動かさない */
 .side-foot { position: relative; }
-.side-foot > .collapse { position: absolute; left: -12px; right: -12px; bottom: 100%; z-index: 2; padding: 0 12px; background: var(--pop); -webkit-backdrop-filter: blur(30px) saturate(1.8); backdrop-filter: blur(30px) saturate(1.8); }
+.side-foot > .collapse { position: absolute; left: -12px; right: -12px; bottom: 100%; z-index: 2; padding: 0 12px; } /* 背景は敷かない。下のツリーはマスクで消す(下の .tree[data-foot]) */
 .foot-menu { padding: 4px 0 6px; border-top: 1px solid var(--hair); }
 .foot-save { padding-bottom: 6px; }
 .foot-save-row { display: flex; align-items: center; gap: 8px; padding: 4px 0 0 6px; }
@@ -236,10 +236,30 @@ html.theme-fade, html.theme-fade * { transition: background-color calc(.45s * va
 .up-ver { margin: 4px 0 10px; font-size: 13px; line-height: 20px; color: var(--ink-2); }
 .up-ver b { color: var(--ink); font-weight: 600; }
 .up-notes { margin: 0; padding: 10px 12px; max-height: 180px; overflow-y: auto; overscroll-behavior: contain; white-space: pre-wrap; font: inherit; font-size: 12.5px; line-height: 20px; color: var(--ink-2); background: color-mix(in srgb, var(--ink) 5%, transparent); border-radius: 10px; }
-/* 広げている間は、下のボタンにも同じ背景を敷いて、重ねた項目とひと続きに見せる */
-.side-foot::before { content: ""; position: absolute; inset: 0 -12px; background: var(--pop); -webkit-backdrop-filter: blur(30px) saturate(1.8); backdrop-filter: blur(30px) saturate(1.8); opacity: 0; pointer-events: none; transition: opacity calc(.26s * var(--sp)) var(--out); }
-.side-foot:has(> .collapse[data-open="true"])::before { opacity: 1; }
-.side-foot > .open-btn { position: relative; }
 /* フォルダを足したときは、見出しが下から現れ、続けて中の行が順に入る */
 .root-sec[data-new="true"] > .root-head { animation: slide-up calc(.42s * var(--sp)) var(--out) both; }
 .root-sec[data-new="true"] .collapse-inner > ul > li > .tree-row { animation: row-in calc(.5s * var(--sp)) var(--out) both; animation-delay: calc((min(var(--i, 0), 12) * 32ms + 160ms) * var(--sp)); }
+
+/* 左下の項目を広げている間は、その高さぶんだけツリーを下から消す。境目は少しぼかす */
+@property --fh { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --ff { syntax: "<length>"; inherits: false; initial-value: 0px; }
+.tree { --ff: 0px; -webkit-mask-image: linear-gradient(to top, transparent var(--fh), #000 calc(var(--fh) + var(--ff))); mask-image: linear-gradient(to top, transparent var(--fh), #000 calc(var(--fh) + var(--ff))); transition: --fh calc(.32s * var(--sp)) var(--out), --ff calc(.32s * var(--sp)) var(--out); }
+.tree[data-foot="true"] { --ff: 24px; }
+
+/* 階層の線。開いたフォルダの中身の左に、親の矢印の真下から細く引く */
+.tree li ul[role="group"] { position: relative; }
+.tree li ul[role="group"]::before { content: ""; position: absolute; z-index: 1; left: var(--guide); top: 2px; bottom: 2px; width: 1px; border-radius: 1px; background: color-mix(in srgb, var(--ink) 9%, transparent); pointer-events: none; transition: background-color calc(.2s * var(--sp)) var(--out); }
+.tree:hover li ul[role="group"]::before { background: color-mix(in srgb, var(--ink) 14%, transparent); }
+.tree li[data-drop="true"] > .collapse ul[role="group"]::before { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+
+/* ---- エクスプローラーの中のドラッグ ---- */
+/* 落とすと入るフォルダは、行と開いた中身をまとめて囲む。行が押し下がったりはしない */
+.tree li, .root-sec { border-radius: calc(var(--r-sm) * var(--rk, 1)); transition: background-color calc(.14s * var(--sp)) var(--out), box-shadow calc(.14s * var(--sp)) var(--out); }
+.tree li[data-drop="true"], .root-sec[data-drop="true"] { background: color-mix(in srgb, var(--accent) 9%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent) inset; }
+.tree li[data-drop="true"] > .tree-row, .root-sec[data-drop="true"] > .root-head { color: var(--ink); }
+.tree li[data-drop="true"] > .tree-row .ico.folder, .root-sec[data-drop="true"] > .root-head .ico.folder { color: var(--accent); }
+/* 引きずっている元は薄く残す */
+.tree-row[data-src="true"] > * { opacity: .4; } /* 行には入場のアニメーションが opacity を持っているので、中身を薄くする */
+/* カーソルに付く札(画面の外で描いて写すだけ) */
+.drag-chip { position: fixed; left: -1000px; top: -1000px; display: inline-flex; align-items: center; gap: 6px; height: 28px; max-width: 240px; padding: 0 10px; border-radius: 8px; background: var(--pop-solid, #fff); color: var(--ink); font: 500 13px/20px var(--font-sans); white-space: nowrap; box-shadow: 0 0 0 1px var(--hair), 0 6px 16px -6px rgb(20 30 60 / .3); }
+.drag-chip > span { overflow: hidden; text-overflow: ellipsis; }

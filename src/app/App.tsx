@@ -11,7 +11,7 @@ import { OUTLINE_EVENT } from "@/editor/Crumbs";
 import LangUI from "@/editor/LangUI";
 import { openFiles, isScript, type Edit, type Loc } from "@/editor/ts/client";
 import Editor, { dropStates, type Cursor, type Jump } from "@/editor/Editor";
-import FileTree, { DropGhost, GitMarks, canDrop, type GitMark } from "@/workbench/FileTree";
+import FileTree, { GitMarks, canDrop, type GitMark } from "@/workbench/FileTree";
 import { ColGrip, RatioGrip } from "@/workbench/ColGrip";
 import { loadBase, loadGit, type GitInfo } from "@/features/git/git";
 import QuickOpen from "@/workbench/QuickOpen";
@@ -66,7 +66,7 @@ import Preview, { previewKind } from "@/features/preview/Preview";
 import { KEYS, DEF, chips, comboOf, keyOf, rec, table } from "@/features/settings/keys";
 import { EDIT } from "@/editor/edit-cmds";
 import { codeToPng, shareShot } from "@/editor/shot";
-import { drag, dragEnd, dragging } from "@/workbench/dnd";
+import { drag, dragEnd, paneDrag, rootKey, setDropTarget, useDropTarget } from "@/workbench/dnd";
 import { LEAF0, boxes, flipAround, fromPair, isLeaf, joints, leaves, nextId, onTop, removeLeaf, renumber, setRatio, splitLeaf, swapLeaves, topLeaves, topRight, valid as validLay, type Box, type Dir, type Edge, type Joint, type Lay } from "@/workbench/layout";
 import { addNode, dirOf, exists, moveNode, removeNode, renameNode } from "@/workbench/treeops";
 import { DEFS, isDark, ms, update, useSettings } from "@/features/settings/settings";
@@ -99,7 +99,7 @@ export default function App() {
   const root = roots[0]; // タイトル・接続表示・ターミナルの既定の場所は、先頭のフォルダに合わせる
   setRootNames(roots);
   const [folded, setFolded] = useState<Set<string>>(new Set()); // 見出しを畳んでいるフォルダ
-  const [dropHead, setDropHead] = useState<string | null>(null); // ドラッグ中に光らせるフォルダの見出し
+  const dropAt = useDropTarget(); // ドラッグ中に、落とすと入るフォルダ(エクスプローラーの中)
   const [cnAdd, setCnAdd] = useState(false); // WSL・SSH の画面を「追加」で開いているか
   const rootOfPath = (p: string): Root => {
     let best: Root | undefined;
@@ -222,6 +222,15 @@ export default function App() {
   const [freshRoot, setFreshRoot] = useState<string | null>(null); // いま足したフォルダ。見出しと中身を順に出す
   const [wsRen, setWsRen] = useState<string | null>(null); // ツリーの上で名前を変えている途中の値
   const footRef = useRef<HTMLDivElement>(null);
+  // 広げた項目の高さ。ツリーのこの高さぶんを消して、項目の下に文字が透けて重ならないようにする(背景は敷かない)
+  const [footH, setFootH] = useState(0);
+  useEffect(() => {
+    const el = footRef.current?.querySelector(".foot-menu");
+    if (!el) return;
+    const ro = new ResizeObserver(() => setFootH((el as HTMLElement).offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   useEffect(() => {
     if (!footOpen) return;
     const down = (e: MouseEvent) => { if (!footRef.current?.contains(e.target as globalThis.Node)) setFootOpen(false); };
@@ -1567,26 +1576,38 @@ export default function App() {
                   )}
                 </div>
               )}
-              <nav className="tree scroll overscroll-contain" data-drop={rootDrop}
-                onDragOver={(e) => { if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setRootDrop(true); setExtDrop(true); return; } if (roots.length > 1 || !drag.node || (e.target as HTMLElement).closest(".tree-row") || dirOf(drag.node.path) === roots[0].prefix) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; setRootDrop(true); }}
-                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as globalThis.Node | null)) { setRootDrop(false); setExtDrop(false); } }}
-                onDrop={(e) => { if (hasFiles(e)) { void dropExternal(e); return; } setRootDrop(false); if (roots.length > 1 || !drag.node || (e.target as HTMLElement).closest(".tree-row")) return; e.preventDefault(); const m = drag.node; dragEnd(); moveTo(m, null); }}
+              <nav className="tree scroll overscroll-contain" data-foot={footOpen} style={{ ["--fh" as string]: `${footOpen ? footH : 0}px` }} data-drop={rootDrop || (roots.length === 1 && dropAt === rootKey(roots[0].prefix))}
+                onDragOver={(e) => {
+                  if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setRootDrop(true); setExtDrop(true); return; }
+                  // ここまで来るのは、一番上の階層のファイルか、何もない所の上。フォルダが1つなら、その一番上へ移す
+                  if (!drag.node) return;
+                  if (roots.length > 1 || dirOf(drag.node.path) === roots[0].prefix) { setDropTarget(null); return; }
+                  e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropTarget(rootKey(roots[0].prefix));
+                }}
+                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as globalThis.Node | null)) { setRootDrop(false); setExtDrop(false); setDropTarget(null); } }}
+                onDrop={(e) => {
+                  if (hasFiles(e)) { void dropExternal(e); return; }
+                  setRootDrop(false);
+                  if (!drag.node) return;
+                  const m = drag.node; dragEnd();
+                  if (roots.length > 1 || dirOf(m.path) === roots[0].prefix) return;
+                  e.preventDefault(); moveTo(m, null);
+                }}
                 onContextMenu={(e) => { if (e.target === e.currentTarget || !(e.target as HTMLElement).closest(".tree-row")) treeMenu(e, null); }}>
                 {sectioned ? roots.map((r) => {
                   const h = headNode(r), shut = folded.has(r.prefix);
                   return (
-                    <section key={r.prefix || "main"} className="root-sec" data-new={freshRoot === r.prefix} aria-label={r.name}>
-                      <button className="tree-row root-head" title={rootPath(r)} data-ctx={menu?.path === r.prefix} data-drop={dropHead === r.prefix} aria-expanded={!shut}
+                    <section key={r.prefix || "main"} className="root-sec" data-new={freshRoot === r.prefix} data-drop={dropAt === rootKey(r.prefix) || undefined} aria-label={r.name}
+                      onDragOver={(e) => { if (!drag.node) return; e.stopPropagation(); if (!canDrop(h)) { setDropTarget(null); return; } e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropTarget(rootKey(r.prefix)); }}
+                      onDrop={(e) => { if (!drag.node) return; e.stopPropagation(); const m = drag.node, ok = canDrop(h); dragEnd(); if (!ok) return; e.preventDefault(); moveTo(m, roots.length > 1 ? h : null); }}>
+                      <button className="tree-row root-head" title={rootPath(r)} data-ctx={menu?.path === r.prefix} aria-expanded={!shut}
                         onClick={() => setFolded((p) => { const q = new Set(p); if (q.has(r.prefix)) q.delete(r.prefix); else q.add(r.prefix); return q; })}
                         onContextMenu={(e) => { e.stopPropagation(); treeMenu(e, h); }}
-                        onDragOver={(e) => { if (!canDrop(h)) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; setDropHead(r.prefix); }}
-                        onDragLeave={() => setDropHead((v) => (v === r.prefix ? null : v))}
-                        onDrop={(e) => { if (!canDrop(h)) return; e.preventDefault(); e.stopPropagation(); setDropHead(null); const m = drag.node!; dragEnd(); moveTo(m, roots.length > 1 ? h : null); }}>
+>
                         <ChevronRight className="chev" data-open={!shut} />
                         <Folder className="ico folder" />
                         <span className="truncate">{r.name}</span>
                       </button>
-                      <DropGhost on={dropHead === r.prefix} depth={1} />
                       <div className="collapse" data-open={!shut} inert={shut}>
                         <div className="collapse-inner">
                           <FileTree nodes={r.nodes} activePath={act[fp]} ctxPath={menu?.path ?? null} rev={rev} onOpen={(n, pin) => openOrFocus(n, !!pin)} onContext={(e, n) => treeMenu(e, n)} onMove={moveTo} />
@@ -1602,7 +1623,6 @@ export default function App() {
                 ) : (
                   <FileTree nodes={root.nodes} activePath={act[fp]} ctxPath={menu?.path ?? null} rev={rev} onOpen={(n, pin) => openOrFocus(n, !!pin)} onContext={(e, n) => treeMenu(e, n)} onMove={moveTo} />
                 )}
-                {roots.length === 1 && <DropGhost on={rootDrop && !!drag.node} depth={sectioned ? 1 : 0} />}
               </nav>
               <div className="side-foot" ref={footRef}>
                 {/* 開く・追加は 1 つのボタンにまとめ、押すとボタンの上に項目が広がる。フォルダを開くまでは「開く」だけ */}
@@ -1651,13 +1671,13 @@ export default function App() {
           <div className="work">
             <div className="work-row">
             <div className="panes" data-split={split} data-dragging={dragS} data-moving={moving || undefined}
-              onDragOverCapture={(e) => { if (!st.splitDrop || !dragging() || (drag.tab && (e.target as HTMLElement).closest?.(".tabbar"))) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = drag.tab ? "move" : "copy"; const z = zoneOf(e); setDz((d) => (d && d.pane === z.pane && d.edge === z.edge ? d : z)); }}
+              onDragOverCapture={(e) => { if (!st.splitDrop || !paneDrag() || (drag.tab && (e.target as HTMLElement).closest?.(".tabbar"))) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = drag.tab ? "move" : "copy"; const z = zoneOf(e); setDz((d) => (d && d.pane === z.pane && d.edge === z.edge ? d : z)); }}
               onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as globalThis.Node | null)) setDz(null); }}
-              onDropCapture={(e) => { if (!st.splitDrop || !dragging() || (drag.tab && (e.target as HTMLElement).closest?.(".tabbar"))) return; e.preventDefault(); e.stopPropagation(); dropOnPanes(zoneOf(e)); }}>
+              onDropCapture={(e) => { if (!st.splitDrop || !paneDrag() || (drag.tab && (e.target as HTMLElement).closest?.(".tabbar"))) return; e.preventDefault(); e.stopPropagation(); dropOnPanes(zoneOf(e)); }}>
               {leaves(lay).map((i) => <div key={i} className="slot" data-born={born[i]} style={slot(boxes(lay).get(i)!)}>{pane(i)}</div>)}
               {joints(lay).map((j) => <div key={j.path.join("")} className="split-grip" data-dir={j.dir} data-drag={gripOn === j.path.join(".")} role="separator" aria-orientation={j.dir === "row" ? "horizontal" : "vertical"} style={gripPos(j)}
                 title={i18next.t("ドラッグで幅を変える・ダブルクリックで半分に戻す")} onPointerDown={(e) => gripDown(e, j)} onDoubleClick={() => setLay((l) => setRatio(l, j.path, 50))} />)}
-              {dz && dragging() && <div className="drop-hint" data-edge={dz.edge} style={dropRect(dz)} />}
+              {dz && paneDrag() && <div className="drop-hint" data-edge={dz.edge} style={dropRect(dz)} />}
             </div>
             {br && <ColGrip width={st.brW} def={560} min={280} max={1000} dir={-1} onChange={(w) => update({ brW: w })} />}
             {br && <BrowserDock onClose={() => setBr(false)} />}

@@ -75,11 +75,7 @@ img, svg { -webkit-user-drag: none; user-drag: none; }
 @media (prefers-reduced-motion: reduce) { .slot, .slot[data-born], .slot[data-born] > .paper::before { transition: none; animation: none !important; } }
 
 /* ---- ファイルツリーのドラッグ移動 ---- */
-.tree-row[data-drop="true"] { background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent) inset; }
 .tree[data-drop="true"] { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent) inset; border-radius: 10px; }
-.tree-ghost { height: var(--row-h, 28px); display: flex; align-items: center; gap: 6px; padding-right: 10px; border-radius: 7px; font-size: 13px; line-height: 20px; color: var(--ink); opacity: .5; pointer-events: none; overflow: hidden; background: color-mix(in srgb, var(--accent) 10%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent) inset; animation: ghost-in calc(.18s * var(--sp)) var(--out) both; transition: opacity calc(.16s * var(--sp)) var(--out), transform calc(.16s * var(--sp)) var(--out); }
-.tree-ghost[data-out="true"] { opacity: 0; transform: translateY(-3px); animation: none; }
-@keyframes ghost-in { from { height: 0; opacity: 0; transform: translateY(-4px); } to { height: var(--row-h, 28px); opacity: .5; transform: none; } }
 .tree-row[draggable="true"]:active { cursor: grabbing; }
 
 /* ---- 一時表示のタブ(斜体。編集・保存・ダブルクリックで固定される) ---- */
@@ -89,7 +85,7 @@ img, svg { -webkit-user-drag: none; user-drag: none; }
 /* OS のフォルダ・ファイルを、エクスプローラーへ引きずっている間だけ出すドロップゾーン */
 .sidebar { position: relative; }
 .tree[data-drop="true"] { box-shadow: none; }
-.tree[data-drop="true"]:not(:has(.tree-row[data-drop="true"])) { border-radius: 0; }
+.tree[data-drop="true"]:not(:has(li[data-drop="true"])) { border-radius: 0; }
 .drop-zone {
   position: absolute; inset: 8px; z-index: 6; pointer-events: none; display: grid; place-items: center; padding: 16px;
   border-radius: calc(var(--r-lg) * var(--rk, 1) - 2px);

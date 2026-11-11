@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { ChevronRight, FileText, FileCode2, FileJson, FileType, Folder, FolderOpen, Image as ImageIcon, Film, Music } from "lucide-react";
 import { readDir, type Node } from "@/platform/fs";
 import { useSettings } from "@/features/settings/settings";
-import { drag, dragEnd } from "@/workbench/dnd";
+import { drag, dragEnd, setDragSrc, setDropTarget, useDnd } from "@/workbench/dnd";
 import { dirOf } from "@/workbench/treeops"; import { isOpen, setOpenPath } from "@/workbench/treeOpen";
 
 // ドラッグ中のものを、このフォルダへ移せるか(自分の中・今いる場所へは移せない)
@@ -23,26 +23,19 @@ const iconFor = (name: string) => {
 };
 
 // Git の印(M・A・U など)。親から関数で受ける(未対応のフォルダでは何も返さない)
-// ドラッグ中のファイルを、移動先に半透明で出す(離したあとにここへ来る、という見え方)。外れるときは薄れて消える
-export function DropGhost({ on, depth }: { on: boolean; depth: number }) {
-  const indent = useSettings().treeIndent;
-  const [shown, setShown] = useState<Node | null>(null);
-  const [out, setOut] = useState(false);
-  useEffect(() => {
-    if (on && drag.node) { setShown(drag.node); setOut(false); return; }
-    setOut(true);
-    const t = setTimeout(() => setShown(null), 200);
-    return () => clearTimeout(t);
-  }, [on]);
-  if (!shown) return null;
-  return (
-    <div className="tree-ghost" data-out={out} aria-hidden="true" style={{ paddingLeft: 10 + depth * indent }}>
-      <ChevronRight className="chev" data-hidden />
-      {shown.kind === "dir" ? <Folder className="ico folder" /> : iconFor(shown.name)}
-      <span className="truncate">{shown.name}</span>
-    </div>
-  );
-}
+// 引きずっている間カーソルに付く札。行そのものの半透明の写しより小さく、何を運んでいるかだけが分かる
+export const dragChip = (e: React.DragEvent, row: HTMLElement, name: string) => {
+  const c = document.createElement("div");
+  c.className = "drag-chip";
+  const ico = row.querySelector(".ico");
+  if (ico) c.append(ico.cloneNode(true));
+  const t = document.createElement("span");
+  t.textContent = name;
+  c.append(t);
+  document.body.append(c);
+  e.dataTransfer.setDragImage(c, 14, 16);
+  setTimeout(() => c.remove(), 0);
+};
 
 export type GitMark = "M" | "A" | "D" | "U" | "R" | "C" | "dir";
 export const GitMarks = createContext<(n: Node) => GitMark | undefined>(() => undefined);
@@ -50,10 +43,10 @@ export const GitMarks = createContext<(n: Node) => GitMark | undefined>(() => un
 type Props = { nodes: Node[]; activePath: string | null; ctxPath: string | null; rev: number; onOpen: (n: Node, pin?: boolean) => void; onContext: (e: React.MouseEvent, n: Node) => void; onMove: (n: Node, dest: Node) => void; depth?: number };
 
 export default function FileTree({ nodes: all, activePath, ctxPath, rev, onOpen, onContext, onMove, depth = 0 }: Props) {
-  const showHidden = useSettings().showHidden;
+  const { showHidden, treeIndent } = useSettings();
   const nodes = showHidden ? all : all.filter((n) => !n.name.startsWith("."));
   return (
-    <ul role={depth ? "group" : "tree"} className="m-0 list-none p-0">
+    <ul role={depth ? "group" : "tree"} className="m-0 list-none p-0" style={depth ? { ["--guide" as string]: `${16 + (depth - 1) * treeIndent}px` } : undefined}>
       {nodes.map((n, i) => <Item key={n.path} idx={i} n={n} activePath={activePath} ctxPath={ctxPath} rev={rev} onOpen={onOpen} onContext={onContext} onMove={onMove} depth={depth} />)}
     </ul>
   );
@@ -66,8 +59,7 @@ function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, depth, i
   const [open, setOpenRaw] = useState(restored);
   const setOpen = (v: boolean) => { setOpenRaw(v); setOpenPath(n.path, v); };
   const [loaded, setLoaded] = useState<Node[] | undefined>();
-  const [over, setOver] = useState(false);
-  const hover = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const dnd = useDnd(n.path), over = !!(dnd & 1);
   const isDir = n.kind === "dir";
   const kids = n.handle ? loaded : n.children;
   // 初めて開くフォルダは、中身を読んだ直後に「開いた状態」で現れるため、閉→開の変化が無く一瞬で開いてしまう。
@@ -99,25 +91,35 @@ function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, depth, i
   if (git) lastGit.current = git;
   const shownGit = git ?? lastGit.current;
 
-  const leave = () => { clearTimeout(hover.current); setOver(false); };
-  const dragProps = {
-    draggable: true,
-    onDragStart: (e: React.DragEvent) => { drag.node = n; e.dataTransfer.effectAllowed = "copyMove"; e.dataTransfer.setData("text/plain", n.name); },
-    onDragEnd: () => { dragEnd(); leave(); },
-    ...(isDir ? {
-      onDragOver: (e: React.DragEvent) => {
-        if (!canDrop(n)) return;
-        e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move";
-        if (!over) { setOver(true); if (!open) hover.current = setTimeout(() => { if (!open) click(); }, 700); }
-      },
-      onDragLeave: leave,
-      onDrop: (e: React.DragEvent) => { if (!canDrop(n)) return; e.preventDefault(); e.stopPropagation(); leave(); const m = drag.node!; dragEnd(); onMove(m, n); },
-    } : {}),
-  };
+  // 閉じたフォルダの上で少し待つと開く(中へ落とせるように)
+  useEffect(() => {
+    if (!over || open || !isDir) return;
+    const t = setTimeout(() => { void click(); }, 600);
+    return () => clearTimeout(t);
+  }, [over]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 落とし先はフォルダのかたまり全体(行と開いた中身)。ファイルの上なら、そのファイルがあるフォルダに入る。
+  // いちばん内側のフォルダで受け止め、移せない場所(自分自身・いまの場所)なら外のフォルダへは伝えない
+  const dropProps = isDir ? {
+    onDragOver: (e: React.DragEvent) => {
+      if (!drag.node) return;
+      e.stopPropagation();
+      if (!canDrop(n)) { setDropTarget(null); return; }
+      e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropTarget(n.path);
+    },
+    onDrop: (e: React.DragEvent) => {
+      if (!drag.node) return;
+      e.stopPropagation();
+      if (!canDrop(n)) { dragEnd(); return; }
+      e.preventDefault(); const m = drag.node; dragEnd(); onMove(m, n);
+    },
+  } : {};
 
   return (
-    <li role="treeitem" aria-expanded={isDir ? open : undefined}>
-      <button className="tree-row" data-git={git} data-active={!isDir && activePath === n.path} data-ctx={ctxPath === n.path} data-drop={over} {...dragProps} onClick={click} onDoubleClick={() => { if (!isDir) onOpen(n, true); }}
+    <li role="treeitem" aria-expanded={isDir ? open : undefined} data-drop={over || undefined} {...dropProps}>
+      <button className="tree-row" data-git={git} data-active={!isDir && activePath === n.path} data-ctx={ctxPath === n.path} data-src={!!(dnd & 2) || undefined} draggable
+        onDragStart={(e) => { drag.node = n; e.dataTransfer.effectAllowed = "copyMove"; e.dataTransfer.setData("text/plain", n.name); dragChip(e, e.currentTarget, n.name); setTimeout(() => setDragSrc(n.path), 0); }}
+        onDragEnd={() => dragEnd()} onClick={click} onDoubleClick={() => { if (!isDir) onOpen(n, true); }}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContext(e, n); }}
         style={{ paddingLeft: 10 + depth * indent, ["--i" as string]: idx }}>
         <ChevronRight className="chev" data-open={open} data-hidden={!isDir} />
@@ -125,7 +127,6 @@ function Item({ n, activePath, ctxPath, rev, onOpen, onContext, onMove, depth, i
         <span className="truncate">{n.name}</span>
         {(git || lastGit.current) && <span className="git-badge" data-on={!!git} data-g={shownGit}>{shownGit === "dir" ? "" : shownGit}</span>}
       </button>
-      {isDir && <DropGhost on={over} depth={depth + 1} />}
       {isDir && kids && (
         <div className="collapse" data-open={open && armed}>
           <div className="collapse-inner"><FileTree nodes={kids} activePath={activePath} ctxPath={ctxPath} rev={rev} onOpen={onOpen} onContext={onContext} onMove={onMove} depth={depth + 1} /></div>
