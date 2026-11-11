@@ -206,6 +206,12 @@ mod tests {
         fs::write(d.join("fixit_account_v1.json"), "dpapi:@@@").unwrap();
         assert_eq!(read(&d, "fixit:account:v1"), None);
         assert!(!load(&d).contains_key("fixit:account:v1"));
+        // 前の版が平文で残したものは、読み込んだときに暗号化し直す(値は変わらない)
+        fs::write(d.join("fixit_account_v1.json"), "{\"t\":\"tok\"}").unwrap();
+        assert_eq!(load(&d)["fixit:account:v1"], "{\"t\":\"tok\"}");
+        let raw = fs::read_to_string(d.join("fixit_account_v1.json")).unwrap();
+        assert_eq!(raw.starts_with(SEALED), cfg!(windows));
+        assert_eq!(read(&d, "fixit:account:v1").as_deref(), Some("{\"t\":\"tok\"}"));
         let _ = fs::remove_dir_all(&d);
     }
 }
