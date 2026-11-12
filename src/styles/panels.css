@@ -201,7 +201,10 @@ body:has(.ratio-grip[data-drag="true"]) .ed-pv { transition: none; }
 .ai-md p, .ai-md ul, .ai-md ol, .ai-md blockquote, .ai-md pre, .ai-md table { margin: 0 0 8px; }
 .ai-md table { display: block; max-width: 100%; overflow-x: auto; overscroll-behavior: contain; border-collapse: collapse; }
 .ai-md th { background: var(--s2); font-weight: 600; text-align: left; }
-.ai-md h1, .ai-md h2, .ai-md h3, .ai-md h4 { margin: 12px 0 4px; font: 600 13px/22px var(--font-sans); }
+.ai-md h1, .ai-md h2, .ai-md h3, .ai-md h4 { margin: 16px 0 4px; font: 600 13px/22px var(--font-sans); text-wrap: balance; }
+.ai-md h1, .ai-md h2 { font-size: 15px; line-height: 24px; }
+.ai-md h4 { color: var(--ink-2); }
+.ai-resp > .ai-md:first-child > :is(h1, h2, h3, h4):first-child { margin-top: 0; }
 .ai-md ul, .ai-md ol { padding-left: 20px; }
 .ai-md blockquote { padding-left: 10px; box-shadow: inset 2px 0 0 var(--hair); color: var(--ink-2); }
 .ai-md a { color: var(--accent); text-decoration: underline; }
