@@ -172,8 +172,15 @@ body:has(.ratio-grip[data-drag="true"]) .ed-pv { transition: none; }
 /* 返答の本文: Markdown の塊・コードブロック・コードを含むリストを、同じ間隔で積む */
 .ai-resp { min-width: 0; }
 .ai-resp > * + *, .ai-md-list > li > * + * { margin-top: 8px; }
-.ai-md-list { margin: 0; padding-left: 20px; }
+:where(.ai-md-list) { margin: 0; }
+.ai-md-list { padding-left: 20px; }
+/* 見出しの直後のリストは、本文の見出しと同じ 4px */
+.ai-resp > .ai-md:has(> :is(h1, h2, h3, h4):last-child) + .ai-md-list { margin-top: 4px; }
 .ai-md-list > li + li { margin-top: 4px; }
+/* コードブロックの前後は少し広く、コードブロックどうしはさらに広く空ける(枠どうしが詰まって見えないように) */
+:is(.ai-resp, .ai-md-list > li) > * + .ai-code, :is(.ai-resp, .ai-md-list > li) > .ai-code + * { margin-top: 12px; }
+:is(.ai-resp, .ai-md-list > li) > .ai-code + .ai-code { margin-top: 16px; }
+.ai-md-list > li:has(> .ai-code:last-child) + li { margin-top: 12px; }
 /* コードブロック: 上に言語とコピー、下にエディタと同じ色分けのコード */
 .ai-code { margin: 0; min-width: 0; border-radius: 10px; background: var(--s3); box-shadow: 0 0 0 1px var(--hair); overflow: hidden; }
 .ai-code figcaption { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 4px 0 12px; box-shadow: 0 1px 0 var(--hair); }
