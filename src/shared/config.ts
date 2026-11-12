@@ -21,6 +21,7 @@ export const AI_STORE_KEY = "fixit:ai:v1";
 export const AI_CHATS_KEY = "fixit:ai-chats:v1"; // 会話の履歴。API キーとは別に置く(設定の書き出し・変更履歴・統計には載らない)
 export const AI_CHATS_MAX = 50; // 残す会話の数(古いものから消す)
 export const AI_CHATS_MAX_CHARS = 1_500_000; // 全会話の文字数の上限(localStorage の容量を使い切らないため)
+export const AI_CHATS_MAX_IMAGE_CHARS = 6_000_000; // 履歴に残す画像(base64)の文字数の上限。超えたら古い会話の画像から外す(文章は残す)
 export const AI_MAX_CONTEXT_CHARS = 60_000; // 1 回に送るコードの上限
 export const AI_COMMIT_DIFF_CHARS = 40_000; // コミットメッセージを作るときに送る差分の上限
 export const TREE_PREFETCH_MS = 6000; // フォルダを開くとき、前に開いていたフォルダの中身を先に読んで待つ上限(超えた分は描いてから読む)
@@ -43,6 +44,8 @@ export const AI_IMAGE_MAX_EDGE = 1568; // 長い辺の上限(px)。超えたら�
 export const AI_IMAGE_MAX_BYTES = 3_500_000; // 1 枚の上限。base64 にすると 4/3 倍になり、API の 5MB に収まる
 export const AI_IMAGE_SRC_MAX_BYTES = 30_000_000; // 読み込む元の画像の上限
 export const AI_MAX_IMAGES = 4; // 1 回に添えられる枚数
+export const AI_HISTORY_IMAGE_EDGE = 1024; // 履歴に残す画像の長い辺(px)。これより大きければ縮める
+export const AI_HISTORY_IMAGE_BYTES = 200_000; // 履歴に残す 1 枚の目安。収まる画像は縮めず、そのまま残す
 export const AI_MAX_HISTORY_IMAGES = 8; // 履歴も含めて 1 回のリクエストに載せる枚数(古い画像から外す)
 export const AI_CLI_MAX_BODY = 48 * 1024 * 1024; // 開発サーバーの claude 中継が受け取る大きさ(画像を含む)
 

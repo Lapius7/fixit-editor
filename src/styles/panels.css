@@ -165,6 +165,8 @@ body:has(.ratio-grip[data-drag="true"]) .ed-pv { transition: none; }
 .ai-u { align-self: flex-end; max-width: 92%; padding: 8px 12px; border-radius: 12px; background: var(--accent); color: #fff; }
 .ai-u p { margin: 0; font: 13px/20px var(--font-sans); white-space: pre-wrap; overflow-wrap: anywhere; }
 .ai-u small { display: block; margin-top: 4px; font: 11px/16px var(--font-sans); opacity: .82; overflow-wrap: anywhere; }
+.ai-time { display: block; font: 11px/16px var(--font-sans); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ai-u .ai-time { margin-top: 4px; text-align: right; opacity: .75; }
 .ai-u-imgs { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin: 0 0 6px; }
 .ai-u-imgs .ai-pic-open { width: 72px; height: 72px; }
 .ai-u-imgs img { display: block; width: 100%; height: 100%; border-radius: 8px; object-fit: contain; background: var(--s1); outline: 1px solid var(--hair); outline-offset: -1px; }
@@ -226,6 +228,7 @@ body:has(.ratio-grip[data-drag="true"]) .ed-pv { transition: none; }
 .ai-err { color: #d64545; }
 .ai-done { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-2); }
 .ai-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin: 6px 0 0 -6px; }
+.ai-acts .ai-time { margin-left: auto; padding: 0 6px; color: var(--ink-3); }
 .ai-act-i svg { width: 14px; height: 14px; }
 .ai-act { height: 28px; padding: 0 8px; display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; font: 12px/20px var(--font-sans); color: var(--ink-2); }
 .ai-act:hover { background: var(--s3); color: var(--ink); }

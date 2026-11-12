@@ -5,7 +5,7 @@ import { ArrowDown, ArrowUp, Check, Copy, MousePointerClick, Replace, RotateCcw,
 import i18next from "i18next";
 import { AI_MAX_HISTORY_CHARS, AI_MAX_HISTORY_IMAGES, AI_MAX_IMAGES } from "@/shared/config";
 import { AiError, isAbort, streamChat, type AiErrorKind, type Img, type Msg, type Stop } from "@/features/ai/providers";
-import { isImageFile, toAiImage, type AiImage, type ImgFail } from "@/features/ai/images";
+import { isImageFile, shrinkForHistory, toAiImage, type AiImage, type ImgFail } from "@/features/ai/images";
 import { actionLabel, actionPrompt, replaceable, clipLabel, ctxLabel, systemPrompt, withClips, withCode, type AiJob, type Clip, type Ctx } from "@/features/ai/prompts";
 import { drag, dragEnd } from "@/workbench/dnd";
 import { notify } from "@/shared/notify";
@@ -20,8 +20,16 @@ import { refreshLink } from "@/features/ai/link";
 import { AI_ERR as ERR } from "@/features/ai/oneshot";
 import { deleteChat, getChats, newChatId, saveChat, setCurChat, useChats, type Chat } from "@/features/ai/chats";
 
-type M = { id: number; role: "user" | "assistant"; content: string; label?: string; ctx?: string; imgs?: (Img & { name: string })[]; busy?: boolean; err?: AiErrorKind; note?: Stop; job?: AiJob; applied?: "ok" | "stale" };
+type M = { id: number; role: "user" | "assistant"; content: string; label?: string; ctx?: string; at?: number; imgs?: (Img & { name: string })[]; busy?: boolean; err?: AiErrorKind; note?: Stop; job?: AiJob; applied?: "ok" | "stale" };
 
+
+// 発言の日時。今日なら時刻だけ、別の日なら月日つき、別の年なら年も付ける。title には日付と時刻をすべて入れる
+function Stamp({ t }: { t: number }) {
+  const d = new Date(t), n = new Date(), l = i18next.language;
+  const hm = d.toLocaleTimeString(l, { hour: "2-digit", minute: "2-digit" });
+  const text = d.toDateString() === n.toDateString() ? hm : `${d.toLocaleDateString(l, d.getFullYear() === n.getFullYear() ? { month: "numeric", day: "numeric" } : { year: "numeric", month: "numeric", day: "numeric" })} ${hm}`;
+  return <time className="ai-time" dateTime={d.toISOString()} title={d.toLocaleString(l)}>{text}</time>;
+}
 
 // 返答の本文は、その返答の中身が変わったときだけ描き直す(流れてくる最中も、ほかの返答は描き直さない)。
 // 置き換え・やり直しは渡した m と ref だけを使うので、m と retry が同じなら描き直さなくてよい
@@ -43,6 +51,7 @@ const Reply = memo(function Reply({ m, retry, onReplace, onRetry }: { m: M; retr
           {m.content && m.job && replaceable(m.job.action) && m.job.scope === "selection" && !m.applied && <button className="ai-act" onClick={() => onReplace(m)}><Replace size={14} />{i18next.t("選択範囲を置き換える")}</button>}
           {m.applied === "ok" && <span className="ai-done"><Check size={14} />{i18next.t("置き換えました")}</span>}
           {m.applied === "stale" && <span className="ai-warn">{i18next.t("元のコードが変わっているため置き換えられません")}</span>}
+          {m.at && <Stamp t={m.at} />}
         </div>
       )}
     </div>
@@ -227,18 +236,21 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
     const images = pics.map(({ type, data }) => ({ type, data }));
     const messages = history({ role: "user", content, ...(images.length ? { images } : {}) });
     stick.current = true;
-    setMsgs((a) => [...a, { id: uid, role: "user", content, label: shown, ctx, ...(pics.length ? { imgs: pics.map(({ type, data, name }) => ({ type, data, name })) } : {}) }, { id: aid, role: "assistant", content: "", busy: true, job: j }]);
+    const now = Date.now();
+    setMsgs((a) => [...a, { id: uid, role: "user", content, label: shown, ctx, at: now, ...(pics.length ? { imgs: pics.map(({ type, data, name }) => ({ type, data, name })) } : {}) }, { id: aid, role: "assistant", content: "", busy: true, job: j, at: now }]);
+    // 履歴に残す画像は小さくする。送る画像はそのまま(縮めるのは、送ったあとの発言のほう)
+    if (pics.length) void Promise.all(pics.map(({ type, data, name }) => shrinkForHistory({ type, data, name }))).then((small) => pat(uid, (m) => (m.imgs && small.some((x, k) => x.data !== m.imgs![k]?.data) ? { ...m, imgs: small } : m)));
     const ac = new AbortController(); abort.current = ac; setBusy(true);
     let acc = "", raf = 0;
     const flush = () => { raf = 0; pat(aid, (m) => ({ ...m, content: acc })); };
     try {
       const stop = await streamChat({ provider: p, model: c.models[p], effort: hasEffort(p) ? c.effort : "", key: c.keys[p], system: systemPrompt(), messages, signal: ac.signal, onText: (s) => { acc += s; if (!raf) raf = requestAnimationFrame(flush); } });
       if (raf) cancelAnimationFrame(raf);
-      pat(aid, (m) => ({ ...m, content: acc, busy: false, note: stop === "end" ? undefined : stop }));
+      pat(aid, (m) => ({ ...m, content: acc, busy: false, at: Date.now(), note: stop === "end" ? undefined : stop }));
     } catch (e) {
       if (raf) cancelAnimationFrame(raf);
-      if (isAbort(e, ac.signal)) pat(aid, (m) => ({ ...m, content: acc, busy: false }));
-      else pat(aid, (m) => ({ ...m, content: acc, busy: false, err: e instanceof AiError ? e.kind : "other" }));
+      if (isAbort(e, ac.signal)) pat(aid, (m) => ({ ...m, content: acc, busy: false, at: Date.now() }));
+      else pat(aid, (m) => ({ ...m, content: acc, busy: false, at: Date.now(), err: e instanceof AiError ? e.kind : "other" }));
     } finally { if (gen.current === g) { setBusy(false); abort.current = null; } }
   };
 
@@ -288,7 +300,7 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
   // 会話が変わるたび(送信が終わっているとき)に保存する。空にしたら、その会話の履歴も消える
   useEffect(() => {
     if (msgs === loaded.current || msgs.some((m) => m.busy)) return;
-    saveChat(chatId, msgs.filter((m) => !m.err && (m.role === "user" || m.content)).map(({ id, role, content, label, ctx }) => ({ id, role, content, label, ctx })));
+    saveChat(chatId, msgs.filter((m) => !m.err && (m.role === "user" || m.content)).map(({ id, role, content, label, ctx, at, imgs }) => ({ id, role, content, label, ctx, at, imgs })));
   }, [msgs, chatId]);
 
   // 会話を切り替える(送信中なら止める)
@@ -368,7 +380,7 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
         ) : !msgs.length ? (
           <EmptyChat />
         ) : msgs.map((m) => m.role === "user"
-          ? <div key={m.id} className="ai-u">{m.imgs && <div className="ai-u-imgs">{m.imgs.map((i, k) => <button key={k} className="ai-pic-open" title={i.name} aria-label={i18next.t("{{name}} を大きく見る", { name: i.name })} onClick={() => setPeek({ src: imgSrc(i), name: i.name })}><img src={imgSrc(i)} alt="" /></button>)}</div>}<p>{m.label}</p>{m.ctx && <small>{m.ctx}</small>}</div>
+          ? <div key={m.id} className="ai-u">{m.imgs && <div className="ai-u-imgs">{m.imgs.map((i, k) => <button key={k} className="ai-pic-open" title={i.name} aria-label={i18next.t("{{name}} を大きく見る", { name: i.name })} onClick={() => setPeek({ src: imgSrc(i), name: i.name })}><img src={imgSrc(i)} alt="" /></button>)}</div>}<p>{m.label}</p>{m.ctx && <small>{m.ctx}</small>}{m.at && <Stamp t={m.at} />}</div>
           : <Reply key={m.id} m={m} retry={!busy && m.id === lastId} onReplace={replace} onRetry={retry} />)}
         </div>
       </div>
