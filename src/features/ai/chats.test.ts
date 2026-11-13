@@ -41,3 +41,17 @@ describe("chat history images", () => {
     expect(b.imgs).toBeUndefined();
   });
 });
+
+describe("chat history acts", () => {
+  beforeEach(() => { vi.resetModules(); store.clear(); });
+  it("round-trips tool actions and turns unknown states into rejected", async () => {
+    const c = await import("./chats");
+    const edit = { id: "1-1", pos: 5, k: "edit" as const, path: "/a.ts", line: 3, old: "a", neu: "b", pre: "", post: "", st: "applied" as const };
+    c.saveChat("a", [{ id: 1, role: "assistant", content: "hi", at: 1, acts: [{ id: "1-0", pos: 0, k: "read", path: "/a.ts", from: 1, to: 9 }, edit, { ...edit, id: "1-2", st: "pending" as never }] }]);
+    vi.resetModules(); // 保存した文字から読み直す
+    const m = (await import("./chats")).getChats().chats[0].msgs[0];
+    expect(m.acts).toHaveLength(3);
+    expect(m.acts![1]).toMatchObject({ st: "applied", pos: 5 });
+    expect(m.acts![2]).toMatchObject({ st: "rejected" });
+  });
+});

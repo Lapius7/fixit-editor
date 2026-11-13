@@ -2,10 +2,11 @@ import { kvGet, kvSet, kvWatch, mergeById } from "@/platform/appdata";
 // AI の会話の履歴。会話ごとに残し、いつでも戻れるようにする。
 // API キーなどの接続設定(store.ts)とは別のキーに置く。設定の書き出し・変更履歴・統計には載らない。
 import { useSyncExternalStore } from "react";
+import type { Act } from "@/features/ai/tools";
 import { AI_CHATS_KEY, AI_CHATS_MAX, AI_CHATS_MAX_CHARS, AI_CHATS_MAX_IMAGE_CHARS } from "@/shared/config";
 
 export type SavedImg = { type: string; data: string; name: string };
-export type SavedMsg = { id: number; role: "user" | "assistant"; content: string; label?: string; ctx?: string; at?: number; imgs?: SavedImg[]; tok?: { i: number; o: number; cr: number; cw: number } };
+export type SavedMsg = { id: number; role: "user" | "assistant"; content: string; label?: string; ctx?: string; at?: number; imgs?: SavedImg[]; tok?: { i: number; o: number; cr: number; cw: number }; acts?: Act[] };
 export type Chat = { id: string; title: string; at: number; msgs: SavedMsg[] };
 type State = { cur: string | null; chats: Chat[] };
 
@@ -25,11 +26,27 @@ const tokOf = (v: unknown): SavedMsg["tok"] => {
   return r.i || r.o || r.cr || r.cw ? r : undefined;
 };
 
+// 返答に付いた、ファイルの読み書きの記録。形が合うものだけ残す(保存のとき「許可待ち」だったものは却下として残す)
+const str = (v: unknown, max = 20000) => (typeof v === "string" ? v.slice(0, max) : "");
+const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+const actsOf = (v: unknown): Act[] | undefined => {
+  if (!Array.isArray(v)) return undefined;
+  const out: Act[] = [];
+  for (const a of v.slice(0, 100)) {
+    if (!a || typeof a !== "object" || typeof a.path !== "string") continue;
+    const id = str(a.id, 80) || String(out.length), path = str(a.path, 1000);
+    if (a.k === "read") out.push({ id, pos: num(a.pos), k: "read", path, from: num(a.from), to: num(a.to), err: typeof a.err === "string" ? str(a.err, 300) : undefined });
+    else if (a.k === "list") out.push({ id, pos: num(a.pos), k: "list", path, n: num(a.n), err: typeof a.err === "string" ? str(a.err, 300) : undefined });
+    else if (a.k === "edit") out.push({ id, pos: num(a.pos), k: "edit", path, line: num(a.line) ?? 1, old: str(a.old), neu: str(a.neu), pre: str(a.pre, 2000), post: str(a.post, 2000), st: a.st === "applied" || a.st === "stale" || a.st === "err" ? a.st : "rejected", err: typeof a.err === "string" ? str(a.err, 300) : undefined });
+  }
+  return out.length ? out : undefined;
+};
+
 const load = (raw: string | null = kvGet(AI_CHATS_KEY)): State => {
   try {
     const r = JSON.parse(raw ?? "null");
     if (r && Array.isArray(r.chats)) {
-      const chats = (r.chats as Chat[]).filter((c) => c && typeof c.id === "string" && Array.isArray(c.msgs)).map((c) => ({ id: c.id, title: String(c.title ?? ""), at: Number(c.at) || 0, msgs: c.msgs.filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string").map((m) => ({ id: Number(m.id) || 0, role: m.role, content: m.content, label: typeof m.label === "string" ? m.label : undefined, ctx: typeof m.ctx === "string" ? m.ctx : undefined, at: Number(m.at) > 0 ? Number(m.at) : undefined, imgs: imgsOf(m.imgs), tok: tokOf(m.tok) })) }));
+      const chats = (r.chats as Chat[]).filter((c) => c && typeof c.id === "string" && Array.isArray(c.msgs)).map((c) => ({ id: c.id, title: String(c.title ?? ""), at: Number(c.at) || 0, msgs: c.msgs.filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string").map((m) => ({ id: Number(m.id) || 0, role: m.role, content: m.content, label: typeof m.label === "string" ? m.label : undefined, ctx: typeof m.ctx === "string" ? m.ctx : undefined, at: Number(m.at) > 0 ? Number(m.at) : undefined, imgs: imgsOf(m.imgs), tok: tokOf(m.tok), acts: actsOf(m.acts) })) }));
       return { cur: typeof r.cur === "string" && chats.some((c) => c.id === r.cur) ? r.cur : null, chats };
     }
   } catch { /* 読めなければ空から始める */ }
@@ -38,7 +55,8 @@ const load = (raw: string | null = kvGet(AI_CHATS_KEY)): State => {
 
 let st: State = load();
 const subs = new Set<() => void>();
-const size = (c: Chat) => c.msgs.reduce((n, m) => n + m.content.length + (m.label?.length ?? 0), 0);
+const actSize = (m: SavedMsg) => (m.acts?.reduce((n, a) => n + (a.k === "edit" ? a.old.length + a.neu.length + a.pre.length + a.post.length : 0) + a.path.length, 0) ?? 0);
+const size = (c: Chat) => c.msgs.reduce((n, m) => n + m.content.length + (m.label?.length ?? 0) + actSize(m), 0);
 const imgSize = (c: Chat) => c.msgs.reduce((n, m) => n + (m.imgs?.reduce((a, i) => a + i.data.length, 0) ?? 0), 0);
 const noImgs = (c: Chat): Chat => (imgSize(c) ? { ...c, msgs: c.msgs.map(({ imgs: _, ...m }) => m) } : c);
 const commit = (next: State) => {

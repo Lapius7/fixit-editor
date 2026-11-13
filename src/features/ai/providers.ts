@@ -1,7 +1,8 @@
 // プロバイダーへの送信。ストリームで本文を受け取り、失敗は AiError(種類つき)にそろえる。
 // 画面に出す文言はここに置かず、呼び出し側が kind から選ぶ(多言語のため)。
 import Anthropic from "@anthropic-ai/sdk";
-import { AI_DEFAULT_MODEL, AI_MAX_TOKENS } from "@/shared/config";
+import { AI_DEFAULT_MODEL, AI_MAX_TOKENS, AI_TOOL_ROUNDS } from "@/shared/config";
+import { TOOLS, addToolDelta, doneCalls, newToolAcc, type ToolCall, type ToolDelta } from "@/features/ai/tools";
 import { IS_TAURI } from "@/shared/chrome";
 import { getAi, type Effort, type Link, type Provider } from "@/features/ai/store";
 import { refreshCopilotUsage } from "@/features/ai/copilotUsage";
@@ -17,7 +18,12 @@ export class AiError extends Error {
   constructor(public kind: AiErrorKind, public status?: number) { super(kind); }
 }
 export type Stop = "end" | "refusal" | "length";
-export type Req = { provider: Provider; model: string; effort: Effort; key: string; system: string; messages: Msg[]; signal: AbortSignal; onText: (s: string) => void; onUsage?: (t: Partial<Tok>) => void };
+export type Req = { provider: Provider; model: string; effort: Effort; key: string; system: string; messages: Msg[]; signal: AbortSignal; onText: (s: string) => void; onUsage?: (t: Partial<Tok>) => void;
+  // ファイルの道具。onTool があるときだけ、AI に道具を渡す。結果(文字)を返すまで、次の往復は始まらない(変更の許可待ちもここで待つ)
+  onTool?: (c: ToolCall) => Promise<string>;
+  // 接続先が道具に対応していなかったとき(道具なしで送り直す前に)知らせる
+  onNoTools?: () => void;
+};
 
 type Ev = { type: string; delta?: unknown };
 async function pump(events: AsyncIterable<Ev>, onText: (s: string) => void) {
@@ -43,27 +49,53 @@ const forOpenAi = (ms: Msg[]) => ms.map((m) => ({
 // 使った量を、プロバイダー全体の合計と、この会話(onUsage)の両方へ渡す
 const used = (r: Req, t: Partial<Tok>) => { recordUsage(r.provider, t); r.onUsage?.(t); };
 
+
+// 道具の往復で、前の往復に本文があったときは、次の本文の前に段落の区切りを入れる
+const spaced = (r: Req) => {
+  let had = false, now = false;
+  return { text: (t: string) => { if (had) { r.onText("\n\n"); had = false; } now = true; r.onText(t); }, end: () => { if (now) had = true; now = false; } };
+};
+const aborted = () => new DOMException("aborted", "AbortError");
+
 const anthropicUsage = (r: Req, u: { input_tokens?: number | null; output_tokens?: number | null; cache_read_input_tokens?: number | null; cache_creation_input_tokens?: number | null } | undefined) =>
   u && used(r, { i: u.input_tokens ?? 0, o: u.output_tokens ?? 0, cr: u.cache_read_input_tokens ?? 0, cw: u.cache_creation_input_tokens ?? 0 });
+
+type Fin = { content: { type: string; id?: string; name?: string; input?: unknown }[]; stop_reason: string | null; usage?: Parameters<typeof anthropicUsage>[1] };
 
 async function anthropic(r: Req): Promise<Stop> {
   // ブラウザ(Tauri の WebView を含む)から直接呼ぶので dangerouslyAllowBrowser が要る。キーはこの PC の中にしかない。
   const client = new Anthropic({ apiKey: r.key, dangerouslyAllowBrowser: true, maxRetries: 1 });
-  const base = { model: r.model, max_tokens: AI_MAX_TOKENS, system: r.system, messages: forAnthropic(r.messages), ...(r.effort ? { output_config: { effort: r.effort } } : {}) };
-  try {
+  const tools = r.onTool ? TOOLS.map((t) => ({ name: t.name, description: t.description, input_schema: t.schema })) : undefined;
+  const msgs: unknown[] = forAnthropic(r.messages);
+  const sp = spaced(r);
+  const once = async (last: boolean): Promise<Fin> => {
+    const body = { model: r.model, max_tokens: AI_MAX_TOKENS, system: r.system, messages: msgs, ...(r.effort ? { output_config: { effort: r.effort } } : {}), ...(tools ? { tools, ...(last ? { tool_choice: { type: "none" } } : {}) } : {}) };
     // 既定モデルでは、断られたときにサーバー側で次のモデルへ切り替える設定(fallbacks)を付ける
-    if (r.model === AI_DEFAULT_MODEL.anthropic) {
-      const s = client.beta.messages.stream({ ...base, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" }, { signal: r.signal });
-      await pump(s, r.onText);
-      const m = await s.finalMessage();
-      anthropicUsage(r, m.usage);
-      return m.stop_reason === "refusal" ? "refusal" : m.stop_reason === "max_tokens" ? "length" : "end";
-    }
-    const s = client.messages.stream(base, { signal: r.signal });
-    await pump(s, r.onText);
-    const m = await s.finalMessage();
+    const s = r.model === AI_DEFAULT_MODEL.anthropic
+      ? client.beta.messages.stream({ ...body, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" } as never, { signal: r.signal })
+      : client.messages.stream(body as never, { signal: r.signal });
+    await pump(s as unknown as AsyncIterable<Ev>, sp.text);
+    const m = (await s.finalMessage()) as unknown as Fin;
     anthropicUsage(r, m.usage);
-    return m.stop_reason === "refusal" ? "refusal" : m.stop_reason === "max_tokens" ? "length" : "end";
+    sp.end();
+    return m;
+  };
+  try {
+    for (let round = 0; ; round++) {
+      const m = await once(round >= AI_TOOL_ROUNDS);
+      const uses = m.content.filter((b) => b.type === "tool_use");
+      if (!r.onTool || m.stop_reason !== "tool_use" || !uses.length) return m.stop_reason === "refusal" ? "refusal" : m.stop_reason === "max_tokens" ? "length" : "end";
+      // 考える過程のブロックも含め、返ってきた中身をそのまま次の発言として送り返す(欠けると断られる)
+      msgs.push({ role: "assistant", content: m.content });
+      const results: unknown[] = [];
+      for (const u of uses) {
+        if (r.signal.aborted) throw aborted();
+        const out = await r.onTool({ id: u.id ?? "", name: u.name ?? "", args: u.input });
+        results.push({ type: "tool_result", tool_use_id: u.id, content: out });
+      }
+      if (r.signal.aborted) throw aborted();
+      msgs.push({ role: "user", content: results });
+    }
   } catch (e) {
     if (r.signal.aborted || e instanceof Anthropic.APIUserAbortError) throw e;
     if (e instanceof Anthropic.AuthenticationError) throw new AiError("auth", 401);
@@ -79,51 +111,77 @@ async function anthropic(r: Req): Promise<Stop> {
 
 // OpenAI 互換の chat/completions(OpenAI と GitHub Copilot で共通)。url と認証・追加のヘッダーだけが違う
 async function chatCompletions(r: Req, url: string, headers: Record<string, string>, usage: boolean, send: (url: string, init: RequestInit) => Promise<Response> = fetch): Promise<Stop> {
-  let res: Response;
-  try {
-    res = await send(url, {
-      method: "POST",
-      signal: r.signal,
-      headers: { "Content-Type": "application/json", ...headers },
-      body: JSON.stringify({ model: r.model, stream: true, ...(usage ? { stream_options: { include_usage: true } } : {}), messages: [{ role: "system", content: r.system }, ...forOpenAi(r.messages)] }),
-    });
-  } catch (e) {
-    if (r.signal.aborted) throw e;
-    throw new AiError("network");
-  }
-  if (!res.ok) {
-    const k: AiErrorKind = res.status === 401 ? "auth" : res.status === 403 ? "denied" : res.status === 429 ? "rate" : res.status === 404 ? "model" : res.status === 400 ? "bad" : "other";
-    throw new AiError(k, res.status);
-  }
-  if (!res.body) throw new AiError("other");
-  const reader = res.body.getReader(), dec = new TextDecoder();
-  let buf = "", stop: Stop = "end";
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      const lines = buf.split("\n");
-      buf = lines.pop() ?? "";
-      for (const line of lines) {
-        if (!line.startsWith("data:")) continue;
-        const data = line.slice(5).trim();
-        if (!data || data === "[DONE]") continue;
-        let j: { choices?: { delta?: { content?: string; refusal?: string }; finish_reason?: string | null }[]; usage?: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } } | null };
-        try { j = JSON.parse(data); } catch { continue; }
-        if (j.usage) { const cached = j.usage.prompt_tokens_details?.cached_tokens ?? 0; used(r, { i: Math.max((j.usage.prompt_tokens ?? 0) - cached, 0), o: j.usage.completion_tokens ?? 0, cr: cached }); }
-        const c = j.choices?.[0];
-        if (c?.delta?.content) r.onText(c.delta.content);
-        if (c?.delta?.refusal) stop = "refusal";
-        if (c?.finish_reason === "length") stop = "length";
-        if (c?.finish_reason === "content_filter") stop = "refusal";
-      }
+  const msgs: unknown[] = [{ role: "system", content: r.system }, ...forOpenAi(r.messages)];
+  const sp = spaced(r);
+  let tools = r.onTool ? TOOLS.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.schema } })) : undefined;
+  const post = async (withTools: boolean) => {
+    let res: Response;
+    try {
+      res = await send(url, {
+        method: "POST",
+        signal: r.signal,
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({ model: r.model, stream: true, ...(usage ? { stream_options: { include_usage: true } } : {}), ...(withTools && tools ? { tools } : {}), messages: msgs }),
+      });
+    } catch (e) {
+      if (r.signal.aborted) throw e;
+      throw new AiError("network");
     }
-  } catch (e) {
-    if (r.signal.aborted) throw e;
-    throw new AiError("network");
+    return res;
+  };
+  for (let round = 0; ; round++) {
+    const last = round >= AI_TOOL_ROUNDS;
+    let res = await post(!last);
+    // 道具に対応していない接続先(自分で決めた接続先など)は 400 で断ることがある。道具なしで 1 回だけ送り直す
+    if (res.status === 400 && tools && round === 0) { tools = undefined; r.onNoTools?.(); res = await post(false); }
+    if (!res.ok) {
+      const k: AiErrorKind = res.status === 401 ? "auth" : res.status === 403 ? "denied" : res.status === 429 ? "rate" : res.status === 404 ? "model" : res.status === 400 ? "bad" : "other";
+      throw new AiError(k, res.status);
+    }
+    if (!res.body) throw new AiError("other");
+    const reader = res.body.getReader(), dec = new TextDecoder(), acc = newToolAcc();
+    let buf = "", stop: Stop = "end", finish: string | null = null, said = "";
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          const data = line.slice(5).trim();
+          if (!data || data === "[DONE]") continue;
+          let j: { choices?: { delta?: { content?: string; refusal?: string; tool_calls?: ToolDelta[] }; finish_reason?: string | null }[]; usage?: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } } | null };
+          try { j = JSON.parse(data); } catch { continue; }
+          if (j.usage) { const cached = j.usage.prompt_tokens_details?.cached_tokens ?? 0; used(r, { i: Math.max((j.usage.prompt_tokens ?? 0) - cached, 0), o: j.usage.completion_tokens ?? 0, cr: cached }); }
+          const c = j.choices?.[0];
+          if (c?.delta?.content) { said += c.delta.content; sp.text(c.delta.content); }
+          if (c?.delta?.refusal) stop = "refusal";
+          if (Array.isArray(c?.delta?.tool_calls)) for (const d of c.delta.tool_calls) addToolDelta(acc, d);
+          if (c?.finish_reason) finish = c.finish_reason;
+          if (c?.finish_reason === "length") stop = "length";
+          if (c?.finish_reason === "content_filter") stop = "refusal";
+        }
+      }
+    } catch (e) {
+      if (r.signal.aborted) throw e;
+      throw new AiError("network");
+    }
+    sp.end();
+    const calls = r.onTool && !last ? doneCalls(acc) : [];
+    // 道具の呼び出しがなければ、これで終わり。(finish_reason が tool_calls でないのに呼び出しが来た接続先もあるので、呼び出しの有無で見る)
+    if (!calls.length) return stop;
+    msgs.push({ role: "assistant", content: said || null, tool_calls: calls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: c.raw } })) });
+    for (const c of calls) {
+      if (r.signal.aborted) throw aborted();
+      // 引数の JSON が壊れていたら、道具は動かさず、AI にそう伝えて直させる
+      const out = c.args === undefined ? "The arguments were not valid JSON. Call the tool again with a valid JSON object." : await r.onTool!({ id: c.id, name: c.name, args: c.args });
+      msgs.push({ role: "tool", tool_call_id: c.id, content: out });
+    }
+    if (r.signal.aborted) throw aborted();
+    void finish;
   }
-  return stop;
 }
 
 const openai = (r: Req) => chatCompletions(r, "https://api.openai.com/v1/chat/completions", { Authorization: `Bearer ${r.key}` }, true);

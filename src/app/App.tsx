@@ -10,6 +10,7 @@ import { wave } from "@/shared/wave";
 import { CHROME } from "@/shared/chrome";
 import { notify, type NoticeKind } from "@/shared/notify";
 import { OUTLINE_EVENT } from "@/editor/Crumbs";
+import { reindent } from "@/editor/reindent";
 import LangUI from "@/editor/LangUI";
 import { openFiles, isScript, type Edit, type Loc } from "@/editor/ts/client";
 import Editor, { dropStates, cursorsNow, seedCursors, type Cursor, type Jump } from "@/editor/Editor";
@@ -66,15 +67,16 @@ import { listShells, type ShellOpt } from "@/platform/pty";
 import { RemoteFile, checkDir, connKey, isRemote, remoteSig, connLabel, lastDir, normConn, showPath, pushRecent, rootHandle, sshUrl, type Conn, type RemoteDir } from "@/platform/remote";
 import { DEMO_NAME, DEMO_TREE } from "@/shared/demo";
 import { IS_TAURI } from "@/shared/chrome";
-import { canMove, copyInto, createDir, createFile, freeEntryName, moveEntry, pickFolder, pickPcFolder, readDir, removeEntry, renameFile, supportsFs, writeFile, writeBlob, freeName, type Node } from "@/platform/fs";
-import { diskText, getFile, isImageName, load } from "@/platform/load";
+import { canMove, copyInto, createDir, createFile, freeEntryName, moveEntry, pickFolder, pickPcFolder, isJunk, readDir, removeEntry, renameFile, supportsFs, writeFile, writeBlob, freeName, type Node } from "@/platform/fs";
+import { diskText, getFile, isImageName, load, norm } from "@/platform/load";
 import { copyImage } from "@/shared/clipimage";
 import { langName } from "@/editor/lang";
-import { APP_NAME } from "@/shared/config";
+import { APP_NAME, MAX_OPEN_BYTES, SKIP_DIRS } from "@/shared/config";
 import BrowserDock from "@/features/browser/BrowserDock";
 import { AiDock, type AiPic, type AiQuote } from "@/features/ai/AiDock";
 import { GitPanel } from "@/features/git/GitPanel";
 import type { AiAction, AiJob, Ctx } from "@/features/ai/prompts";
+import { applyAnchor, secretName, type FileHost } from "@/features/ai/tools";
 import Preview, { previewKind } from "@/features/preview/Preview";
 import { KEYS, DEF, chips, comboOf, keyOf, rec, table } from "@/features/settings/keys";
 import { EDIT } from "@/editor/edit-cmds";
@@ -474,6 +476,7 @@ export default function App() {
     if (!isText(t)) { if (t.view.kind === "image") window.dispatchEvent(new CustomEvent(IMAGE_SAVE, { detail: t.node.path })); return false; }
     let text = t.text;
     if (st.trimOnSave) text = text.replace(/[ \t]+$/gm, "");
+    if (st.reindentOnSave) text = reindent(text, t.node.path, { size: st.tabSize, spaces: st.insertSpaces });
     if (st.finalNewline && text && !text.endsWith("\n")) text += "\n";
     const mark = () => { setTabs((p) => p.map((x) => (x.node.path === t.node.path ? { ...x, text: x.text === t.text ? text : x.text, saved: text } : x))); setPreview((v) => (v === t.node.path ? null : v)); };
     if (!t.node.handle) { mark(); if (!quiet) flash(i18next.t("デモのファイルは、保存先がありません")); return false; }
@@ -489,7 +492,7 @@ export default function App() {
     conflicts.current.delete(t.node.path);
     try { await writeFile(t.node.handle as FileSystemFileHandle, t.eol === "crlf" && st.remoteKeepEol ? text.replace(/\n/g, "\r\n") : text); mark(); noteSave(); recordSave(t.node.path, text, t.saved); setGitTick((n) => n + 1); if (!quiet) flash(i18next.t("保存しました")); return true; }
     catch (e) { flash(i18next.t("保存できませんでした: {{m}}", { m: (e as Error).message }), "error"); return false; }
-  }, [st.trimOnSave, st.finalNewline, st.remoteKeepEol]);
+  }, [st.trimOnSave, st.reindentOnSave, st.tabSize, st.insertSpaces, st.finalNewline, st.remoteKeepEol]);
   // 改行コードの切り替え。保存し直すまでは、ファイルは変わらない(未保存の印をつける)
   const toggleEol = () => { if (!tab || !isText(tab)) return; const eol = tab.eol === "crlf" ? "lf" : "crlf"; setTabs((p) => p.map((x) => (x.node.path === tab.node.path ? { ...x, eol, saved: x.saved + "\u0000" } : x))); flash(i18next.t("改行コードを {{arg0}} にしました。保存すると反映されます", { arg0: eol === "crlf" ? "CRLF" : "LF" })); };
   const save = useCallback(async () => { if (tab) await saveTab(tab); }, [tab, saveTab]);
@@ -1684,6 +1687,62 @@ export default function App() {
     if (n && n.kind !== "dir" && isImageName(n.name)) { try { return { name: n.name, blob: await getFile(n) }; } catch { return null; } }
     return clipOf(x);
   };
+  // AI に読み書きさせる窓口。触れるのは、開いているフォルダ(先頭のルート)の中だけ。
+  // 読むときは、エディタで開いている(未保存の)中身を優先する。直すときは、エディタの中の文字を置き換える(保存は利用者が行う)
+  const tabsRef = useRef(tabs); tabsRef.current = tabs;
+  const openRef = useRef(open); openRef.current = open;
+  const mainDir = roots.find((r) => !r.prefix && r.handle)?.handle ?? null;
+  const aiFiles = useMemo<FileHost | null>(() => {
+    if (!mainDir) return null;
+    const bad = (path: string) => path.split("/").some((s) => secretName(s));
+    const dirAt = async (path: string) => { let d = mainDir; for (const s of path.split("/").filter(Boolean)) d = await d.getDirectoryHandle(s); return d; };
+    const fileAt = async (path: string) => {
+      const at = path.lastIndexOf("/"), name = path.slice(at + 1), dir = await dirAt(path.slice(0, at));
+      return { name, dir, handle: await dir.getFileHandle(name) };
+    };
+    const read: FileHost["read"] = async (path) => {
+      if (bad(path)) return { err: "denied" };
+      const t = tabsRef.current.find((x) => x.node.path === path);
+      if (t) return t.view.kind === "text" ? { text: t.text } : { err: "binary" };
+      try {
+        const f = await (await fileAt(path)).handle.getFile();
+        if (f.size > MAX_OPEN_BYTES) return { err: "big" };
+        const raw = await f.text();
+        return raw.includes("\u0000") ? { err: "binary" } : { text: norm(raw).text };
+      } catch (e) { return { err: (e as DOMException)?.name === "TypeMismatchError" ? "dir" : "none" }; }
+    };
+    return {
+      async list(dir) {
+        if (bad(dir)) return null;
+        try {
+          const out: { name: string; dir: boolean }[] = [];
+          for await (const [name, h] of (await dirAt(dir) as any).entries() as AsyncIterable<[string, FileSystemHandle]>) {
+            const isDir = h.kind === "directory";
+            if (secretName(name) || (isDir ? SKIP_DIRS.has(name) : isJunk(name))) continue;
+            out.push({ name, dir: isDir });
+          }
+          return out.sort((a, b) => (a.dir === b.dir ? a.name.localeCompare(b.name) : a.dir ? -1 : 1));
+        } catch { return null; }
+      },
+      read,
+      async apply(path, old, neu) {
+        if (bad(path)) return "fail";
+        const replace = () => setTabs((p) => p.map((t) => { if (t.node.path !== path || t.view.kind !== "text") return t; const n = applyAnchor(t.text, old, neu); return n === null ? t : { ...t, text: n }; }));
+        const t = tabsRef.current.find((x) => x.node.path === path);
+        if (t) { if (t.view.kind !== "text") return "fail"; if (applyAnchor(t.text, old, neu) === null) return "stale"; replace(); return "ok"; }
+        // まだ開いていないファイルは、開いてから置き換える(開けば、利用者にも変更が見える)
+        const r = await read(path);
+        if ("err" in r) return "fail";
+        if (applyAnchor(r.text, old, neu) === null) return "stale";
+        try {
+          const f = await fileAt(path);
+          await openRef.current({ name: f.name, path, kind: "file", handle: f.handle, parent: f.dir });
+        } catch { return "fail"; }
+        replace();
+        return "ok";
+      },
+    };
+  }, [mainDir]);
   const fileToAi = async (n: Node) => {
     const c = await aiSource(n);
     if (!c) { notify(i18next.t("このファイルは文字として読めないため、添えられません"), "error"); return; }
@@ -2248,7 +2307,7 @@ export default function App() {
             {br && <ColGrip width={st.brW} def={560} min={280} max={1000} dir={-1} onChange={(w) => update({ brW: w })} />}
             {br && <BrowserDock onClose={() => setBr(false)} />}
             {ai && <ColGrip width={st.aiW} def={440} min={280} max={900} dir={-1} onChange={(w) => update({ aiW: w })} />}
-            <AiDock open={ai} job={aiJob} quote={aiQuote} resolve={aiSource} onClose={() => setAi(false)} onSettings={() => setSetts("ai")} />
+            <AiDock open={ai} job={aiJob} quote={aiQuote} resolve={aiSource} files={aiFiles} onClose={() => setAi(false)} onSettings={() => setSetts("ai")} />
             {gitOpen && <ColGrip width={st.gitW} def={440} min={280} max={900} dir={-1} onChange={(w) => update({ gitW: w })} />}
             <GitPanel open={gitOpen} conn={gitView?.conn ?? null} root={gitView?.root} dir={gitView?.dir}
               canDrop={() => drag.node?.kind === "dir" && !!rootOf(drag.node).conn}

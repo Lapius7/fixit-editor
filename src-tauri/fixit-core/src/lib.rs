@@ -7,6 +7,7 @@ pub mod git;
 pub mod local;
 pub mod lsp;
 pub mod run;
+pub mod wslpool;
 pub mod store;
 pub mod fonts;
 pub mod update;

@@ -4,7 +4,7 @@ import { Trash2, Check, RefreshCw, LogIn, Copy } from "lucide-react";
 import i18next from "i18next";
 import { copyWithNotice } from "@/platform/clipboard";
 import { Trans } from "react-i18next";
-import { PROVIDERS, PROVIDER_NAME, WHERES, cleanBase, setBase, setEnabled, setKey, setModel, setProvider, setWhere, tail, useAi, useLink, type Provider, type Where } from "@/features/ai/store";
+import { PROVIDERS, PROVIDER_NAME, WHERES, cleanBase, setAutoApply, setBase, setEnabled, setKey, setModel, setProvider, setWhere, tail, useAi, useLink, type Provider, type Where } from "@/features/ai/store";
 import { UsageRows } from "@/features/ai/UsageView";
 import { IS_TAURI } from "@/shared/chrome";
 import { login, refreshLink } from "@/features/ai/link";
@@ -225,6 +225,15 @@ export function AiSettings() {
     <section className="set-sec ai-set">
       <p className="ai-set-note"><Trans i18nKey="AI パネルと、エディタを右クリックして出る「AI」のメニューで使います。コードは、あなたが操作したときだけ、オンにしたプロバイダーのサーバーに送られます。" /></p>
       {PROVIDERS.map((x) => <ProviderCard key={x} p={x} many={many} />)}
+      <section className="ai-prov" data-on={cfg.autoApply} aria-labelledby="ai-auto">
+        <div className="ai-prov-h">
+          <div className="ai-prov-t">
+            <strong id="ai-auto">{i18next.t("ファイルの変更を自動で適用")}</strong>
+            <small>{i18next.t("オフでは、AI が提案した変更を差分で見て、許可したものだけ適用します")}</small>
+          </div>
+          <button className="switch" role="switch" aria-checked={cfg.autoApply} aria-labelledby="ai-auto" onClick={() => setAutoApply(!cfg.autoApply)} />
+        </div>
+      </section>
     </section>
   );
 }

@@ -127,6 +127,19 @@ impl Runner {
 
     // sh と同じだが、終了コードも返す
     pub fn sh_code(&self, script: &str, input: Option<Vec<u8>>, ms: u64, max: usize, ok: &[i32]) -> Result<(Vec<u8>, i32), FsError> {
+        // Windows の exe では、WSL の中に立てたままのワーカーに流す(1回ごとに wsl.exe を起動すると 0.2 秒以上かかる)。使えないときは、下の 1 回ごとの起動に任せる
+        if cfg!(windows) && matches!(self, Runner::Wsl) {
+            match crate::wslpool::exec(script, input.as_deref(), ms, max) {
+                crate::wslpool::Done::Ran(r) => {
+                    if ok.contains(&r.code) {
+                        return Ok((r.out, r.code));
+                    }
+                    return Err(Self::local_error(&r.err, r.code));
+                }
+                crate::wslpool::Done::Failed(e) => return Err(e),
+                crate::wslpool::Done::Unavailable => {}
+            }
+        }
         let (cmd, wait) = match self {
             Runner::Ssh { host, timeout } => {
                 let mut c = Command::new("ssh");
@@ -296,7 +309,13 @@ pub fn ssh_hosts() -> Value {
 
 fn runner_for(q: &Q) -> Result<Runner, FsError> {
     match q.get("kind").map(|s| s.as_str()).unwrap_or("wsl") {
-        "wsl" => Ok(Runner::Wsl),
+        "wsl" => {
+            // 常駐ワーカーを閉じるまでの時間(分)。設定の変更はここで反映する
+            if let Some(m) = q.get("idle").and_then(|s| s.trim().parse::<u64>().ok()) {
+                crate::wslpool::set_idle_minutes(m);
+            }
+            Ok(Runner::Wsl)
+        }
         "ssh" => {
             let host = q.get("host").cloned().unwrap_or_default();
             if !is_host(&host) || host.starts_with('-') {

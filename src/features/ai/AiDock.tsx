@@ -1,6 +1,6 @@
 // AI チャットのパネル。右側に出す(アプリ内ブラウザと同じ置き場所)。
 // 送るのは「利用者が操作したとき」だけ。送る前に、相手と送る範囲を画面に出し、初回は同意を取る。
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Check, Copy, MousePointerClick, Replace, RotateCcw, Settings as Cog, Square, Trash2, X, History, SquarePen, ChevronLeft, FileText, Quote as QuoteIcon, FileDown, ImagePlus } from "lucide-react";
 import i18next from "i18next";
 import { AI_MAX_HISTORY_CHARS, AI_MAX_HISTORY_IMAGES, AI_MAX_IMAGES } from "@/shared/config";
@@ -21,9 +21,11 @@ import { addTok, type Tok } from "@/features/ai/usage";
 import { ImgPeek, type Peek } from "@/features/ai/ImgPeek";
 import { refreshLink } from "@/features/ai/link";
 import { AI_ERR as ERR } from "@/features/ai/oneshot";
+import { ActCard, type Decide } from "@/features/ai/ActCards";
+import { ANCHOR_ERR, actsText, around, findAnchor, listTree, parseCall, readRange, type Act, type FileHost, type ToolCall } from "@/features/ai/tools";
 import { deleteChat, getChats, newChatId, saveChat, setCurChat, useChats, type Chat } from "@/features/ai/chats";
 
-type M = { id: number; role: "user" | "assistant"; content: string; label?: string; ctx?: string; at?: number; imgs?: (Img & { name: string })[]; busy?: boolean; err?: AiErrorKind; note?: Stop; job?: AiJob; applied?: "ok" | "stale"; tok?: Tok };
+type M = { id: number; role: "user" | "assistant"; content: string; label?: string; ctx?: string; at?: number; imgs?: (Img & { name: string })[]; busy?: boolean; err?: AiErrorKind; note?: Stop; job?: AiJob; applied?: "ok" | "stale"; tok?: Tok; acts?: Act[]; noTools?: boolean };
 
 
 // 発言の日時。今日なら時刻だけ、別の日なら月日つき、別の年なら年も付ける。title には日付と時刻をすべて入れる
@@ -36,14 +38,31 @@ function Stamp({ t }: { t: number }) {
 
 // 返答の本文は、その返答の中身が変わったときだけ描き直す(流れてくる最中も、ほかの返答は描き直さない)。
 // 置き換え・やり直しは渡した m と ref だけを使うので、m と retry が同じなら描き直さなくてよい
-const Reply = memo(function Reply({ m, retry, onReplace, onRetry }: { m: M; retry: boolean; onReplace: (m: M) => void; onRetry: (m: M) => void }) {
+// 本文の途中に、AI のファイル操作のカードを差し込む(pos は、その操作の前までの本文の文字数)
+function Body({ m, onDecide }: { m: M; onDecide: Decide }) {
+  const acts = m.acts;
+  if (!acts?.length) return m.content ? <Response text={m.content} streaming={!!m.busy} /> : null;
+  const parts: ReactNode[] = [];
+  let at = 0;
+  for (const a of acts) {
+    const to = Math.min(a.pos ?? m.content.length, m.content.length);
+    if (to > at) { const t = m.content.slice(at, to).trim(); if (t) parts.push(<Response key={`t${at}`} text={t} streaming={false} />); at = to; }
+    parts.push(<ActCard key={a.id} a={a} onDecide={onDecide} />);
+  }
+  const rest = m.content.slice(at).trim();
+  if (rest) parts.push(<Response key="end" text={rest} streaming={!!m.busy} />);
+  return <>{parts}</>;
+}
+
+const Reply = memo(function Reply({ m, retry, onReplace, onRetry, onDecide }: { m: M; retry: boolean; onReplace: (m: M) => void; onRetry: (m: M) => void; onDecide: Decide }) {
   const [copied, copy] = useCopy();
-  const stopped = !m.busy && !m.err && !m.note && !m.content;
+  const stopped = !m.busy && !m.err && !m.note && !m.content && !m.acts?.length;
   return (
     <div className="ai-a" aria-busy={m.busy || undefined}>
-      {m.content && <Response text={m.content} streaming={!!m.busy} />}
-      {m.busy && !m.content && <p className="ai-wait">{i18next.t("考え中…")}</p>}
+      <Body m={m} onDecide={onDecide} />
+      {m.busy && !m.content && !m.acts?.length && <p className="ai-wait">{i18next.t("考え中…")}</p>}
       {stopped && <p className="ai-warn">{i18next.t("止めました")}</p>}
+      {m.noTools && <p className="ai-warn">{i18next.t("このモデルはファイルの操作に対応していないため、会話だけで答えました")}</p>}
       {m.note === "refusal" && <p className="ai-warn">{i18next.t("モデルが応答を断りました")}</p>}
       {m.note === "length" && <p className="ai-warn">{i18next.t("長さの上限で途中で切れました")}</p>}
       {m.err && <p className="ai-err" role="alert">{i18next.t(ERR[m.err])}</p>}
@@ -104,7 +123,7 @@ const excerpt = (c: Chat) => {
 // 同意画面に出す、接続先の host(ポート込み)。URL でなければ空
 const baseHost = (b: string) => { try { return new URL(b).host; } catch { return ""; } };
 
-export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { open: boolean; job: AiJob | null; quote: AiQuote | null; resolve: (x: NonNullable<typeof drag.node> | string) => Promise<Ctx | AiPic | null>; onClose: () => void; onSettings: () => void }) {
+export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }: { open: boolean; job: AiJob | null; quote: AiQuote | null; resolve: (x: NonNullable<typeof drag.node> | string) => Promise<Ctx | AiPic | null>; files?: FileHost | null; onClose: () => void; onSettings: () => void }) {
   const cfg = useAi();
   const link = useLink();
   useUsagePoll();
@@ -177,6 +196,10 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
   const abort = useRef<AbortController | null>(null);
   const seq = useRef(init.current.msgs.reduce((n, m) => Math.max(n, m.id), 0)), done = useRef(0), list = useRef<HTMLDivElement>(null), box = useRef<HTMLTextAreaElement>(null);
   const msgsRef = useRef(msgs); msgsRef.current = msgs;
+  const filesRef = useRef(files ?? null); filesRef.current = files ?? null;
+  // 変更の許可待ち(操作の id → 許可/却下を受け取る関数)。ボタンは、この ref を通して返事をする
+  const waits = useRef(new Map<string, (d: "apply" | "reject") => void>()), actSeq = useRef(0);
+  const decide = useCallback<Decide>((id, d) => { waits.current.get(id)?.(d); }, []);
 
   useEffect(() => { if (open) { box.current?.focus(); void refreshLink(); } }, [open]);
   // 一番下を見ているときだけ、新しい返答に合わせて下へ送る。上を読んでいる間は動かさない(送信したときは下へ戻す)。
@@ -221,7 +244,7 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
   // 履歴を API 用に。古い発言から外して、送る量に上限をかける
   // 画像は新しいものから AI_MAX_HISTORY_IMAGES 枚まで載せ、古い発言の画像から外す
   const history = (extra: Msg): Msg[] => {
-    const h: Msg[] = msgsRef.current.filter((m) => !m.busy && !m.err && m.content).map((m) => ({ role: m.role, content: m.content, ...(m.imgs?.length ? { images: m.imgs.map(({ type, data }) => ({ type, data })) } : {}) }));
+    const h: Msg[] = msgsRef.current.filter((m) => !m.busy && !m.err && (m.content || m.acts?.length)).map((m) => ({ role: m.role, content: m.content + actsText(m.acts), ...(m.imgs?.length ? { images: m.imgs.map(({ type, data }) => ({ type, data })) } : {}) }));
     h.push(extra);
     let n = h.reduce((s, m) => s + m.content.length, 0);
     while (h.length > 1 && n > AI_MAX_HISTORY_CHARS) n -= h.shift()!.content.length;
@@ -249,16 +272,59 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
     if (pics.length) void Promise.all(pics.map(({ type, data, name }) => shrinkForHistory({ type, data, name }))).then((small) => pat(uid, (m) => (m.imgs && small.some((x, k) => x.data !== m.imgs![k]?.data) ? { ...m, imgs: small } : m)));
     const ac = new AbortController(); abort.current = ac; setBusy(true);
     let acc = "", raf = 0;
+    const host = p === "claude-cli" ? null : filesRef.current;
+    // AI のファイル操作。読む・一覧は結果を返すだけ。変更は、差分を見せて許可を待ち(自動適用がオンなら待たない)、結果を AI に返す
+    const onTool = host ? async (call: ToolCall): Promise<string> => {
+      const pr = parseCall(call);
+      if (pr.k === "bad") return pr.err;
+      const id = `${aid}-${++actSeq.current}`, pos = acc.length;
+      const add = (a: Act) => pat(aid, (m) => ({ ...m, acts: [...(m.acts ?? []), a] }));
+      const set = (st: "applied" | "rejected" | "stale", err?: string) => pat(aid, (m) => ({ ...m, acts: m.acts?.map((x) => (x.id === id && x.k === "edit" ? { ...x, st, err } : x)) }));
+      if (pr.k === "list") {
+        const t = await listTree(host.list, pr.path, pr.depth);
+        add({ id, pos, k: "list", path: pr.path, err: t.startsWith("[folder not found]") ? "none" : undefined });
+        return t;
+      }
+      const r = await host.read(pr.path);
+      const why = "err" in r ? { none: "File not found.", binary: "Not a text file.", big: "File is too large to open.", dir: "That is a folder. Use list_files.", denied: "That path is not allowed." }[r.err] : "";
+      if (pr.k === "read") {
+        if ("err" in r) { add({ id, pos, k: "read", path: pr.path, err: r.err }); return why; }
+        const rr = readRange(r.text, pr.start, pr.end);
+        add({ id, pos, k: "read", path: pr.path, from: rr.from, to: rr.to });
+        return rr.out;
+      }
+      const fail = (err: string) => { add({ id, pos, k: "edit", path: pr.path, line: 1, old: "", neu: "", pre: "", post: "", st: "err", err }); return err; };
+      if ("err" in r) return fail(why);
+      if (pr.old === pr.neu) return fail("old_text and new_text are the same. Nothing to change.");
+      const a = findAnchor(r.text, pr.old);
+      if (!a.ok) return fail(ANCHOR_ERR[a.why]);
+      const d = around(r.text, a.at, pr.old, pr.neu);
+      add({ id, pos, k: "edit", path: pr.path, line: d.line, old: d.old, neu: d.neu, pre: d.pre, post: d.post, st: "pending" });
+      const choice = getAi().autoApply ? "apply" : await new Promise<"apply" | "reject">((res) => {
+        waits.current.set(id, res);
+        ac.signal.addEventListener("abort", () => res("reject"), { once: true });
+      });
+      waits.current.delete(id);
+      if (ac.signal.aborted) { set("rejected"); return "Stopped by the user."; }
+      if (choice === "reject") { set("rejected"); return "The user rejected this change. Do not retry the same change; ask what they want instead."; }
+      const res = await host.apply(pr.path, pr.old, pr.neu);
+      if (res === "ok") { set("applied"); return "Applied in the editor (the user saves it). Line numbers after this change may have shifted; read the file again before the next edit."; }
+      set("stale"); return "Could not apply: the file changed meanwhile. Read the file again and propose the change again.";
+    } : undefined;
     const flush = () => { raf = 0; pat(aid, (m) => ({ ...m, content: acc })); };
     try {
-      const stop = await streamChat({ provider: p, model: c.models[p], effort: hasEffort(p) ? c.effort : "", key: c.keys[p], system: systemPrompt(), messages, signal: ac.signal, onText: (s) => { acc += s; if (!raf) raf = requestAnimationFrame(flush); }, onUsage: (t) => pat(aid, (m) => ({ ...m, tok: addTok(m.tok, t) })) });
+      const stop = await streamChat({ provider: p, model: c.models[p], effort: hasEffort(p) ? c.effort : "", key: c.keys[p], system: systemPrompt(!!host), messages, signal: ac.signal, onTool, onNoTools: () => pat(aid, (m) => ({ ...m, noTools: true })), onText: (s) => { acc += s; if (!raf) raf = requestAnimationFrame(flush); }, onUsage: (t) => pat(aid, (m) => ({ ...m, tok: addTok(m.tok, t) })) });
       if (raf) cancelAnimationFrame(raf);
       pat(aid, (m) => ({ ...m, content: acc, busy: false, at: Date.now(), note: stop === "end" ? undefined : stop }));
     } catch (e) {
       if (raf) cancelAnimationFrame(raf);
       if (isAbort(e, ac.signal)) pat(aid, (m) => ({ ...m, content: acc, busy: false, at: Date.now() }));
       else pat(aid, (m) => ({ ...m, content: acc, busy: false, at: Date.now(), err: e instanceof AiError ? e.kind : "other" }));
-    } finally { if (gen.current === g) { setBusy(false); abort.current = null; } }
+    } finally {
+      // 許可待ちのまま終わった変更は、却下として残す
+      pat(aid, (m) => (m.acts?.some((x) => x.k === "edit" && x.st === "pending") ? { ...m, acts: m.acts.map((x) => (x.k === "edit" && x.st === "pending" ? { ...x, st: "rejected" as const } : x)) } : m));
+      if (gen.current === g) { setBusy(false); abort.current = null; }
+    }
   };
 
   // 初回は、送る相手と送る内容を示して同意を取る
@@ -307,7 +373,7 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
   // 会話が変わるたび(送信が終わっているとき)に保存する。空にしたら、その会話の履歴も消える
   useEffect(() => {
     if (msgs === loaded.current || msgs.some((m) => m.busy)) return;
-    saveChat(chatId, msgs.filter((m) => !m.err && (m.role === "user" || m.content)).map(({ id, role, content, label, ctx, at, imgs, tok }) => ({ id, role, content, label, ctx, at, imgs, tok })));
+    saveChat(chatId, msgs.filter((m) => !m.err && (m.role === "user" || m.content || m.acts?.length)).map(({ id, role, content, label, ctx, at, imgs, tok, acts }) => ({ id, role, content, label, ctx, at, imgs, tok, acts })));
   }, [msgs, chatId]);
 
   // 会話を切り替える(送信中なら止める)
@@ -391,7 +457,7 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
           <EmptyChat />
         ) : msgs.map((m) => m.role === "user"
           ? <div key={m.id} className="ai-u">{m.imgs && <div className="ai-u-imgs">{m.imgs.map((i, k) => <button key={k} className="ai-pic-open" title={i.name} aria-label={i18next.t("{{name}} を大きく見る", { name: i.name })} onClick={() => setPeek({ src: imgSrc(i), name: i.name })}><img src={imgSrc(i)} alt="" /></button>)}</div>}<p>{m.label}</p>{m.ctx && <small>{m.ctx}</small>}{m.at && <Stamp t={m.at} />}</div>
-          : <Reply key={m.id} m={m} retry={!busy && m.id === lastId} onReplace={replace} onRetry={retry} />)}
+          : <Reply key={m.id} m={m} retry={!busy && m.id === lastId} onReplace={replace} onRetry={retry} onDecide={decide} />)}
         </div>
       </div>
       <button className="icon-btn ai-latest" data-on={away && msgs.length > 0} tabIndex={away ? 0 : -1} aria-hidden={!away} aria-label={i18next.t("最新のメッセージへ")} title={i18next.t("最新のメッセージへ")} onClick={toLatest}><ArrowDown /></button>
@@ -402,7 +468,8 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
             ? i18next.t("選んだコード・画像・入力した文章は、この PC の claude コマンドを通して Anthropic のサーバーに送られます。利用は、あなたの Claude の契約の枠に数えられます。このエディタの開発元には送られません")
             : pending.p === "custom"
             ? i18next.t("選んだコード・画像・入力した文章は、あなたが設定した接続先({{host}})に送られます。送った内容の扱いは、その接続先の運営者に従います。このエディタの開発元には送られません", { host: baseHost(getAi().base) })
-            : i18next.t("選んだコード・画像・入力した文章は、{{name}} のサーバーに送られます。送った内容の扱いは、各社の規約に従います。このエディタの開発元には送られません", { name: i18next.t(PROVIDER_NAME[pending.p]) })}</p>
+            : i18next.t("選んだコード・画像・入力した文章は、{{name}} のサーバーに送られます。送った内容の扱いは、各社の規約に従います。このエディタの開発元には送られません", { name: i18next.t(PROVIDER_NAME[pending.p]) })}
+            {files && pending.p !== "claude-cli" && <> {i18next.t("AI が求めたときは、開いているフォルダの中のファイルの中身も送られます(.git や .env など、秘密になりうるものは除きます)")}</>}</p>
           <div>
             <button className="btn" onClick={() => setPending(null)}>{i18next.t("やめる")}</button>
             <button className="btn" data-primary="true" onClick={() => { const g = pending.go; setConsent(pending.p, true); setPending(null); g(); }}>{i18next.t("同意して送る")}</button>

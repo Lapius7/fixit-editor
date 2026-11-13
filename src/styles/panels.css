@@ -687,3 +687,46 @@ body:has(.git-vgrip[data-drag="true"]) { cursor: row-resize; user-select: none; 
 
 /* ファイルを読み込んでいる間 */
 body.opening, body.opening .tree-row { cursor: progress; }
+
+/* AI のファイル操作(読む・一覧・変更の提案) */
+.ai-fop { display: flex; align-items: center; gap: 6px; margin: 6px 0 0; min-width: 0; font: 12px/20px var(--font-sans); color: var(--ink-3); }
+.ai-fop svg { flex: none; width: 14px; height: 14px; }
+.ai-fop-t { min-width: 0; flex: 0 1 auto; }
+.ai-fop small { flex: none; font: 11px/20px var(--font-sans); font-variant-numeric: tabular-nums; }
+.ai-fop[data-err] { color: var(--danger, #d93b3b); }
+.ai-edit { margin: 8px 0 0; min-width: 0; border-radius: 10px; background: var(--field); box-shadow: 0 0 0 1px var(--hair) inset; overflow: hidden; }
+.ai-edit-h { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; font: 12px/20px var(--font-sans); color: var(--ink-2); }
+.ai-edit-h svg { flex: none; width: 14px; height: 14px; }
+.ai-edit-h small { flex: none; margin-left: auto; font: 11px/20px var(--font-sans); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.ai-diff { max-height: 260px; overflow: auto; overscroll-behavior: contain; padding: 4px 0; border-top: 1px solid var(--hair); font: 12px/18px var(--font-mono); }
+.ai-diff-l { display: flex; min-width: max-content; padding-right: 10px; }
+.ai-diff-l span { flex: none; width: 22px; text-align: center; color: var(--ink-3); user-select: none; }
+.ai-diff-l code { font: inherit; white-space: pre; color: var(--ink); }
+.ai-diff-l[data-k="ctx"] code { color: var(--ink-3); }
+.ai-diff-l[data-k="del"] { background: color-mix(in oklab, var(--git-del, #d93b3b) 16%, transparent); }
+.ai-diff-l[data-k="add"] { background: color-mix(in oklab, var(--git-add, #3fb950) 16%, transparent); }
+.ai-diff-l[data-k="del"] span { color: var(--git-del, #d93b3b); }
+.ai-diff-l[data-k="add"] span { color: var(--git-add, #3fb950); }
+.ai-edit-f { display: flex; justify-content: flex-end; align-items: center; gap: 6px; min-height: 36px; padding: 0 8px; border-top: 1px solid var(--hair); }
+.ai-edit:not(:has(.ai-diff)) .ai-edit-f { border-top: 0; }
+.ai-edit-b { height: 26px; display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; border-radius: 7px; font: 12px/20px var(--font-sans); color: var(--ink-2); background: transparent; box-shadow: 0 0 0 1px var(--hair) inset; }
+.ai-edit-b svg { flex: none; width: 14px; height: 14px; }
+.ai-edit-b:hover { color: var(--ink); background: var(--field-on); }
+.ai-edit-b[data-primary] { background: var(--accent); color: #fff; box-shadow: none; }
+.ai-edit-b[data-primary]:hover { background: color-mix(in oklab, var(--accent) 88%, #fff); }
+.ai-edit-s { display: inline-flex; align-items: center; gap: 4px; font: 12px/20px var(--font-sans); color: var(--ink-3); }
+.ai-edit-s svg { width: 14px; height: 14px; }
+.ai-edit-s[data-st="applied"] { color: var(--ink-2); }
+.ai-edit-s[data-st="stale"], .ai-edit-s[data-st="err"] { color: var(--danger, #d93b3b); }
+
+/* パレット等の窓: 開くとき一瞬ちらつく問題への対処。
+   親を opacity で動かすと、子の backdrop-filter が背景を拾えない状態になり、
+   アニメーションの終わりで急に背景が見えて点滅する。
+   親は背景色とぼかしだけを動かし、子は filter を使わない。 */
+@keyframes veil-in { from { background-color: transparent; -webkit-backdrop-filter: blur(0) saturate(1); backdrop-filter: blur(0) saturate(1); } }
+@keyframes veil-out { to { background-color: transparent; -webkit-backdrop-filter: blur(0) saturate(1); backdrop-filter: blur(0) saturate(1); } }
+@keyframes pop-flat { from { opacity: 0; transform: scale(.96) translateY(-6px); } to { opacity: 1; transform: none; } }
+.qo-backdrop { animation: veil-in calc(.25s * var(--sp)) var(--out) both; }
+.qo-backdrop[data-closing="true"] { animation: veil-out calc(.18s * var(--sp)) var(--out) forwards; }
+.qo { animation: pop-flat calc(.2s * var(--sp)) var(--out) both; }
+.qo-backdrop[data-closing="true"] .qo { animation: none; filter: none; transition: opacity calc(.16s * var(--sp)) var(--out), transform calc(.18s * var(--sp)) var(--out); }

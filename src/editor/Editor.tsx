@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Crumbs, { lastFocus } from "@/editor/Crumbs";
-import { EditorState, Compartment } from "@codemirror/state";
+import { EditorState, Compartment, Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { LanguageDescription } from "@codemirror/language";
@@ -129,7 +129,15 @@ export default function Editor({ path, docKey, name, value, onChange, onCursor, 
     const v = view.current;
     if (!v || value === emitted.current) return;
     emitted.current = value;
-    if (v.state.doc.toString() !== value) v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: value } });
+    // 外から変わったときは、変わった範囲だけを置き換える(全部を置き換えると、元に戻す履歴とカーソルの位置が失われる)
+    const cur = v.state.doc.toString();
+    if (cur !== value) {
+      let s = 0; const max = Math.min(cur.length, value.length);
+      while (s < max && cur.charCodeAt(s) === value.charCodeAt(s)) s++;
+      let e = 0;
+      while (e < max - s && cur.charCodeAt(cur.length - 1 - e) === value.charCodeAt(value.length - 1 - e)) e++;
+      v.dispatch({ changes: { from: s, to: cur.length - e, insert: value.slice(s, value.length - e) } });
+    }
   }, [value]);
 
   // Emmet: ファイルの種類に合う書き方(html / css / jsx など)で、Tab で展開する。使うときに初めて読み込む
@@ -137,7 +145,7 @@ export default function Editor({ path, docKey, name, value, onChange, onCursor, 
     const syntax = emmetSyntax(name);
     let live = true;
     if (!syntax || !st.emmet) { view.current?.dispatch({ effects: EMMET.reconfigure([]) }); return; }
-    void import("@emmetio/codemirror6-plugin").then((m) => { if (live) view.current?.dispatch({ effects: EMMET.reconfigure([m.emmetConfig.of({ syntax: syntax as never }), m.abbreviationTracker({ syntax: syntax as never })]) }); });
+    void import("@emmetio/codemirror6-plugin").then((m) => { if (live) view.current?.dispatch({ effects: EMMET.reconfigure([m.emmetConfig.of({ syntax: syntax as never }), m.abbreviationTracker({ syntax: syntax as never }), ...(syntax === "html" ? [Prec.high(keymap.of([{ key: "Enter", run: (v) => { const r = v.state.selection.main; const ln = v.state.doc.lineAt(r.head); return r.empty && /^\s*!$/.test(ln.text.slice(0, r.head - ln.from)) ? m.expandAbbreviation(v) : false; } }]))] : [])]) }); });
     return () => { live = false; };
   }, [docKey, name, st.emmet]);
   useEffect(() => {

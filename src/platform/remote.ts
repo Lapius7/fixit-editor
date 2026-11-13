@@ -33,7 +33,7 @@ async function callTauri(op: string, q: Record<string, string>, body?: BodyInit)
 }
 
 async function call(c: Conn, op: string, params: Record<string, string> = {}, init: RequestInit = {}): Promise<Response> {
-  const q = new URLSearchParams({ kind: c.kind, timeout: String(get().sshTimeout), maxMB: String(get().remoteMaxMB), ...(c.host ? { host: c.host } : {}), ...params });
+  const q = new URLSearchParams({ kind: c.kind, timeout: String(get().sshTimeout), maxMB: String(get().remoteMaxMB), idle: String(get().wslIdleMin), ...(c.host ? { host: c.host } : {}), ...params });
   if (IS_TAURI) return callTauri(op, Object.fromEntries(q), init.method === "POST" ? (init.body ?? new Blob([])) : undefined);
   let r: Response;
   try { r = await fetch(`/__fs/${op}?${q}`, { ...init, headers: { "X-Fixit": "1" }, cache: "no-store" }); }
