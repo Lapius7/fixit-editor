@@ -19,8 +19,11 @@ const call = async <T>(cmd: "device" | "poll" | "token", args: Record<string, st
 };
 
 const wait = (ms: number, signal: AbortSignal) => new Promise<void>((ok, ng) => {
-  const t = setTimeout(ok, ms);
-  signal.addEventListener("abort", () => { clearTimeout(t); ng(new DOMException("aborted", "AbortError")); }, { once: true });
+  // すでに中止されているときは abort が二度と来ないので、待たずに止める
+  if (signal.aborted) return ng(new DOMException("aborted", "AbortError"));
+  const onAbort = () => { clearTimeout(t); ng(new DOMException("aborted", "AbortError")); };
+  const t = setTimeout(() => { signal.removeEventListener("abort", onAbort); ok(); }, ms);
+  signal.addEventListener("abort", onAbort, { once: true });
 });
 
 export type LoginResult = { ok: true; token: string } | { ok: false; why: "denied" | "expired" | "network" | "cancel" };
@@ -72,6 +75,7 @@ export async function copilotFetch(url: string, token: string, body: string, sig
   if (!IS_TAURI) {
     return fetch("/__copilot/chat", { method: "POST", signal, headers: { "X-Fixit": "1", "Content-Type": "application/json" }, body: JSON.stringify({ url, token, body }) });
   }
+  if (signal.aborted) throw new DOMException("aborted", "AbortError");
   const { Channel, invoke } = await import("@tauri-apps/api/core");
   type Ev = { t: "head"; status: number } | { t: "data"; s: string } | { t: "end" } | { t: "err" };
   const id = crypto.randomUUID(), enc = new TextEncoder();
@@ -87,6 +91,11 @@ export async function copilotFetch(url: string, token: string, body: string, sig
       else if (e.t === "end") { over = true; try { ctl?.close(); } catch { /* 閉じ済み */ } }
       else if (e.t === "err") { over = true; if (!got) ng(new Error("network")); else { try { ctl?.error(new Error("network")); } catch { /* 閉じ済み */ } } }
     };
-    invoke("copilot_chat", { id, url, token, body, onEvent: ch }).catch(() => { if (!got) ng(new Error("network")); });
+    // 失敗で返ったとき、本文の途中なら流れを閉じる(閉じないと読み手が待ち続ける)
+    invoke("copilot_chat", { id, url, token, body, onEvent: ch }).catch(() => {
+      if (over) return;
+      over = true;
+      if (!got) ng(new Error("network")); else { try { ctl?.error(new Error("network")); } catch { /* 閉じ済み */ } }
+    });
   });
 }

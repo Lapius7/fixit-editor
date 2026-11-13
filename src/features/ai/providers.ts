@@ -142,28 +142,31 @@ async function chatCompletions(r: Req, url: string, headers: Record<string, stri
     const reader = res.body.getReader(), dec = new TextDecoder(), acc = newToolAcc();
     let buf = "", stop: Stop = "end", finish: string | null = null, said = "";
     try {
+      const handle = (line: string) => {
+        if (!line.startsWith("data:")) return;
+        const data = line.slice(5).trim();
+        if (!data || data === "[DONE]") return;
+        let j: { choices?: { delta?: { content?: string; refusal?: string; tool_calls?: ToolDelta[] }; finish_reason?: string | null }[]; usage?: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } } | null };
+        try { j = JSON.parse(data); } catch { return; }
+        if (j.usage) { const cached = j.usage.prompt_tokens_details?.cached_tokens ?? 0; used(r, { i: Math.max((j.usage.prompt_tokens ?? 0) - cached, 0), o: j.usage.completion_tokens ?? 0, cr: cached }); }
+        const c = j.choices?.[0];
+        if (c?.delta?.content) { said += c.delta.content; sp.text(c.delta.content); }
+        if (c?.delta?.refusal) stop = "refusal";
+        if (Array.isArray(c?.delta?.tool_calls)) for (const d of c.delta.tool_calls) addToolDelta(acc, d);
+        if (c?.finish_reason) finish = c.finish_reason;
+        if (c?.finish_reason === "length") stop = "length";
+        if (c?.finish_reason === "content_filter") stop = "refusal";
+      };
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         buf += dec.decode(value, { stream: true });
         const lines = buf.split("\n");
         buf = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.startsWith("data:")) continue;
-          const data = line.slice(5).trim();
-          if (!data || data === "[DONE]") continue;
-          let j: { choices?: { delta?: { content?: string; refusal?: string; tool_calls?: ToolDelta[] }; finish_reason?: string | null }[]; usage?: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } } | null };
-          try { j = JSON.parse(data); } catch { continue; }
-          if (j.usage) { const cached = j.usage.prompt_tokens_details?.cached_tokens ?? 0; used(r, { i: Math.max((j.usage.prompt_tokens ?? 0) - cached, 0), o: j.usage.completion_tokens ?? 0, cr: cached }); }
-          const c = j.choices?.[0];
-          if (c?.delta?.content) { said += c.delta.content; sp.text(c.delta.content); }
-          if (c?.delta?.refusal) stop = "refusal";
-          if (Array.isArray(c?.delta?.tool_calls)) for (const d of c.delta.tool_calls) addToolDelta(acc, d);
-          if (c?.finish_reason) finish = c.finish_reason;
-          if (c?.finish_reason === "length") stop = "length";
-          if (c?.finish_reason === "content_filter") stop = "refusal";
-        }
+        lines.forEach(handle);
       }
+      // 最後の行に改行がないまま終わる接続先でも、残りを読む
+      handle(buf + dec.decode());
     } catch (e) {
       if (r.signal.aborted) throw e;
       throw new AiError("network");
@@ -235,7 +238,8 @@ async function claudeCliTauri(r: Req): Promise<Stop> {
     await invoke("claude_chat", { id, system: r.system, model: r.model, effort: r.effort, wh: claudeWhere(), messages: r.messages, onEvent: ch });
   } catch {
     if (r.signal.aborted) throw new DOMException("aborted", "AbortError");
-    throw new AiError("other");
+    // Rust 側が種類つきの err を送ってから失敗で返したときは、その種類を優先する
+    throw (fail as AiError | null) ?? new AiError("other");
   } finally {
     r.signal.removeEventListener("abort", cancel);
   }
