@@ -101,7 +101,7 @@ Un panel de Git a la derecha (con el botón de rama o con el nombre de la rama e
 - **Chat:** ábrelo con `Ctrl+Alt+A`. Elige el modelo y el nivel de razonamiento (de low a max). Adjunta código con «Citar en el chat de IA» (`Ctrl+Alt+Q`) o arrastra archivos y pestañas (hasta 8). Adjunta imágenes (hasta 4; PNG, JPEG, GIF y WebP; los demás formatos se convierten y las imágenes grandes se reducen).
 - **Conversaciones:** un historial agrupado por día, la hora en cada mensaje, las imágenes adjuntas conservadas en el historial, regenerar y un botón para ir al último mensaje. Los bloques de código se colorean como en el editor, con botones de copiar, y se muestran Mermaid y fórmulas. Los enlaces se abren en tu navegador predeterminado.
 - **Acciones:** resumir, explicar, traducir (japonés, inglés, coreano), buscar problemas y añadir comentarios desde el menú contextual del editor. Un botón del panel de Git redacta un mensaje de confirmación a partir de los cambios preparados, con el idioma y el estilo de las confirmaciones recientes.
-- **Archivos:** la IA puede listar, leer y modificar archivos dentro de la carpeta abierta. La lectura es automática. Cada cambio se muestra como una tarjeta de diferencias que apruebas antes, o activas «Aplicar los cambios de archivos automáticamente» (desactivado por defecto). Las rutas fuera de la carpeta, `.git` y los archivos que parecen secretos, como `.env` y las claves, quedan fuera de su alcance. No está disponible con la suscripción de Claude.
+- **Archivos y comandos:** la IA puede listar, leer, buscar, crear, editar, mover y eliminar archivos y carpetas dentro de la carpeta abierta y, solo en la aplicación de escritorio (carpetas de PC, WSL y SSH), ejecutar un comando de terminal cada vez. La lectura y la búsqueda son automáticas. Todo lo demás se muestra como una tarjeta (diferencias para las ediciones, el comando completo para los comandos) que apruebas antes. Un botón junto al cuadro del chat cambia el modo: «Confirmar» espera tu aprobación para todo (por defecto), «Automático» crea y edita solo y sigue preguntando para mover, eliminar y ejecutar comandos, y «Totalmente automático» no pregunta nada. Los comandos tienen la entrada estándar cerrada y se detienen a los 30 segundos por defecto (120 como máximo). Las rutas fuera de la carpeta, `.git` y los archivos que parecen secretos, como `.env` y las claves, quedan fuera de su alcance. No está disponible con la suscripción de Claude.
 - **Uso:** el uso de 5 horas y semanal de la suscripción de Claude y la cuota de Copilot, actualizados cada 5 minutos, y el número de tokens para las claves de API. Las cifras cubren solo lo enviado desde este editor.
 - Mientras la IA responde, un resplandor de color recorre el borde de la ventana (se puede desactivar en Ajustes).
 
@@ -130,7 +130,7 @@ Un panel de Git a la derecha (con el botón de rama o con el nombre de la rama e
 
 - Las claves de API de IA y los datos de inicio de sesión de Lapount se cifran con Windows (solo en el exe).
 - La aplicación restringe lo que puede cargar, y la vista previa de HTML está aislada del editor.
-- La IA solo puede tocar la carpeta abierta y nunca los archivos que parecen secretos.
+- La IA solo puede tocar la carpeta abierta y nunca los archivos que parecen secretos. El contenido de los comandos que ejecuta no se filtra: ves el comando completo y apruebas cada uno (salvo en el modo Totalmente automático).
 
 <p align="center">
   <img src="docs/screenshots/en-split.png" alt="Vista dividida" width="49%">

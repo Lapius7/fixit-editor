@@ -19,9 +19,14 @@ export const EFFORTS: Effort[] = ["", "low", "medium", "high", "xhigh", "max"];
 export const hasEffort = (p: Provider) => p === "anthropic" || p === "claude-cli";
 
 // claude コマンドの場所。"auto" は Windows を先に探し、なければ WSL。アカウントを分けているときに固定する
+// AI のファイル操作の承認。ask=すべて確認 / auto=作成・編集は自動、移動・削除は確認 / full=すべて自動
+export type AgentMode = "ask" | "auto" | "full";
+export const AGENT_MODES: AgentMode[] = ["ask", "auto", "full"];
+export const MODE_NAME = { ask: "確認", auto: "自動", full: "完全自動" } as const;
+export const MODE_HINT = { ask: "AI の操作は、すべて許可を待ちます", auto: "ファイルの作成と編集は自動で行い、移動・削除・コマンドの実行は許可を待ちます", full: "移動・削除・コマンドの実行も含め、許可を待たずに行います" } as const;
 export type Where = "auto" | "windows" | "wsl";
 export const WHERES: Where[] = ["auto", "windows", "wsl"];
-type Cfg = { provider: Provider; models: Record<Provider, string>; keys: Record<Provider, string>; consent: Record<Provider, boolean>; enabled: Record<Provider, boolean>; effort: Effort; where: Where; base: string; autoApply: boolean };
+type Cfg = { provider: Provider; models: Record<Provider, string>; keys: Record<Provider, string>; consent: Record<Provider, boolean>; enabled: Record<Provider, boolean>; effort: Effort; where: Where; base: string; mode: AgentMode };
 
 // OpenAI 互換の接続先の整え方。https か、この PC 内(localhost・127.0.0.1・[::1])の http だけを受ける。末尾の / と /chat/completions は外す。使えなければ ""
 export const cleanBase = (v: string): string => {
@@ -43,7 +48,7 @@ const blank = (): Cfg => ({
   effort: "",
   where: "auto",
   base: "",
-  autoApply: false, // AI が提案したファイルの変更を、確認なしで適用する(初期はオフ)
+  mode: "ask", // AI のファイル操作をどこまで確認なしで行うか(初期はすべて確認)
 });
 
 const load = (): Cfg => {
@@ -54,7 +59,8 @@ const load = (): Cfg => {
     if (PROVIDERS.includes(r.provider)) d.provider = r.provider;
     if (EFFORTS.includes(r.effort)) d.effort = r.effort;
     if (WHERES.includes(r.where)) d.where = r.where;
-    d.autoApply = r.autoApply === true;
+    // 以前の「自動で適用」は、作成・編集だけ自動の「auto」に引き継ぐ
+    d.mode = AGENT_MODES.includes(r.mode) ? r.mode : r.autoApply === true ? "auto" : "ask";
     if (typeof r.base === "string" && cleanBase(r.base)) d.base = cleanBase(r.base);
     for (const p of PROVIDERS) {
       if (typeof r.models?.[p] === "string" && r.models[p].trim()) d.models[p] = r.models[p].trim();
@@ -94,7 +100,7 @@ export const setEnabled = (p: Provider, on: boolean) => {
 export const setConsent = (p: Provider, v: boolean) => commit({ ...cfg, consent: { ...cfg.consent, [p]: v } });
 // 場所を変えたら接続の確認が古くなる。呼び出し側(AiSettings)で確かめ直す
 export const setWhere = (where: Where) => commit({ ...cfg, where });
-export const setAutoApply = (autoApply: boolean) => commit({ ...cfg, autoApply });
+export const setMode = (mode: AgentMode) => commit({ ...cfg, mode });
 export const setEffort = (effort: Effort) => commit({ ...cfg, effort });
 export const setModel = (p: Provider, m: string) => commit({ ...cfg, models: { ...cfg.models, [p]: m.trim() || AI_DEFAULT_MODEL[p] } });
 // 送り先とモデルを一度に切り替える(別のプロバイダーのモデルも選べる)

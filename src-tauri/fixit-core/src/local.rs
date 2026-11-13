@@ -221,6 +221,22 @@ pub fn dispatch(op: &str, q: &Q, body: Option<Vec<u8>>) -> Result<Reply, FsError
             }
             Ok(Reply::Json(json!({ "code": r.code, "out": String::from_utf8_lossy(&out) })))
         }
+        "exec" => {
+            // この PC のフォルダで、AI が頼んだコマンドを 1 回だけ走らせる(Windows は cmd、それ以外は sh)。標準入力は空
+            let dir = abs(q, "path")?;
+            let (cmd, secs) = crate::run::exec_args(&body.ok_or_else(|| FsError::new("本文がありません", 400, "EARG"))?)?;
+            let mut c = if cfg!(windows) { let mut c = std::process::Command::new("cmd.exe"); c.args(["/D", "/C", &cmd]); c } else { let mut c = std::process::Command::new("sh"); c.args(["-c", &cmd]); c };
+            c.current_dir(&dir).env("GIT_TERMINAL_PROMPT", "0");
+            let r = match crate::run::run(c, Some(Vec::new()), std::time::Duration::from_secs(secs), 8 * 1024 * 1024) {
+                Ok(r) => r,
+                Err(e) if e.code == "ETIMEDOUT" => return Ok(Reply::Json(json!({ "code": 124, "out": "", "timedOut": true }))),
+                Err(e) => return Err(e),
+            };
+            let mut out = r.out;
+            out.extend_from_slice(r.err.as_bytes());
+            let cut = out.len().saturating_sub(crate::run::EXEC_CAP);
+            Ok(Reply::Json(json!({ "code": r.code, "out": String::from_utf8_lossy(&out[cut..]), "timedOut": false })))
+        }
         "gitstatus" => {
             // 状態は porcelain(-z)の生のまま返す。リポジトリでなければ repo: false
             let dir = abs(q, "path")?;

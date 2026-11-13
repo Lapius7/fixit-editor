@@ -50,6 +50,11 @@ export const AI_TOOL_READ_MAX_LINES = 800; // 同じく、範囲を指定した�
 export const AI_TOOL_READ_CHARS = 40_000; // 同じく、文字数の上限
 export const AI_TOOL_LIST_MAX = 300; // list_files が返す項目数の上限
 export const AI_TOOL_EDIT_CHARS = 20_000; // edit_file の old_text / new_text の上限
+export const AI_TOOL_CREATE_CHARS = 100_000; // create_file の content の上限
+export const AI_TOOL_SEARCH_MAX = 100; // search_files が返す行数の上限
+export const AI_TOOL_EXEC_OUT = 20_000; // run_command の出力を AI に返す文字数の上限(多いときは、先頭と末尾を残す)
+export const AI_TOOL_EXEC_SECS = 30; // run_command の既定の制限時間(秒)。上限は 120
+export const AI_TOOL_SEARCH_FILES = 3000; // search_files が調べるファイル数の上限
 export const AI_MAX_HISTORY_CHARS = 120_000; // 会話の履歴として送る量の上限(古い発言から外す)
 // AI に添える画像。API が受け付ける形式(これ以外は PNG に描き直す)と、縮める大きさ
 export const AI_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;

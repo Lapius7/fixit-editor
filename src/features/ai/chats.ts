@@ -33,10 +33,19 @@ const actsOf = (v: unknown): Act[] | undefined => {
   if (!Array.isArray(v)) return undefined;
   const out: Act[] = [];
   for (const a of v.slice(0, 100)) {
-    if (!a || typeof a !== "object" || typeof a.path !== "string") continue;
-    const id = str(a.id, 80) || String(out.length), path = str(a.path, 1000);
+    if (!a || typeof a !== "object") continue;
+    const id = str(a.id, 80) || String(out.length), fin = a.st === "applied" || a.st === "err" ? a.st : "rejected";
+    // コマンドだけは path を持たない
+    if (a.k === "run") {
+      if (typeof a.cmd === "string") out.push({ id, pos: num(a.pos), k: "run", cmd: str(a.cmd, 4000), st: fin, code: typeof a.code === "number" ? a.code : undefined, out: typeof a.out === "string" ? str(a.out, 4000) : undefined, timedOut: a.timedOut === true ? true : undefined, err: typeof a.err === "string" ? str(a.err, 300) : undefined });
+      continue;
+    }
+    if (typeof a.path !== "string") continue;
+    const path = str(a.path, 1000);
     if (a.k === "read") out.push({ id, pos: num(a.pos), k: "read", path, from: num(a.from), to: num(a.to), err: typeof a.err === "string" ? str(a.err, 300) : undefined });
     else if (a.k === "list") out.push({ id, pos: num(a.pos), k: "list", path, n: num(a.n), err: typeof a.err === "string" ? str(a.err, 300) : undefined });
+    else if (a.k === "search") out.push({ id, pos: num(a.pos), k: "search", query: str(a.query, 500), path, n: num(a.n), err: typeof a.err === "string" ? str(a.err, 300) : undefined });
+    else if (a.k === "create" || a.k === "mkdir" || a.k === "move" || a.k === "delete") out.push({ id, pos: num(a.pos), k: a.k, path, to: typeof a.to === "string" ? str(a.to, 1000) : undefined, size: typeof a.size === "number" ? a.size : undefined, st: fin, err: typeof a.err === "string" ? str(a.err, 300) : undefined });
     else if (a.k === "edit") out.push({ id, pos: num(a.pos), k: "edit", path, line: num(a.line) ?? 1, old: str(a.old), neu: str(a.neu), pre: str(a.pre, 2000), post: str(a.post, 2000), st: a.st === "applied" || a.st === "stale" || a.st === "err" ? a.st : "rejected", err: typeof a.err === "string" ? str(a.err, 300) : undefined });
   }
   return out.length ? out : undefined;
@@ -55,7 +64,7 @@ const load = (raw: string | null = kvGet(AI_CHATS_KEY)): State => {
 
 let st: State = load();
 const subs = new Set<() => void>();
-const actSize = (m: SavedMsg) => (m.acts?.reduce((n, a) => n + (a.k === "edit" ? a.old.length + a.neu.length + a.pre.length + a.post.length : 0) + a.path.length, 0) ?? 0);
+const actSize = (m: SavedMsg) => (m.acts?.reduce((n, a) => n + (a.k === "edit" ? a.old.length + a.neu.length + a.pre.length + a.post.length : 0) + (a.k === "run" ? a.cmd.length + (a.out?.length ?? 0) : a.path.length), 0) ?? 0);
 const size = (c: Chat) => c.msgs.reduce((n, m) => n + m.content.length + (m.label?.length ?? 0) + actSize(m), 0);
 const imgSize = (c: Chat) => c.msgs.reduce((n, m) => n + (m.imgs?.reduce((a, i) => a + i.data.length, 0) ?? 0), 0);
 const noImgs = (c: Chat): Chat => (imgSize(c) ? { ...c, msgs: c.msgs.map(({ imgs: _, ...m }) => m) } : c);

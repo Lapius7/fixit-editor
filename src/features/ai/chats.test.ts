@@ -54,4 +54,22 @@ describe("chat history acts", () => {
     expect(m.acts![1]).toMatchObject({ st: "applied", pos: 5 });
     expect(m.acts![2]).toMatchObject({ st: "rejected" });
   });
+  it("keeps search / create / move / delete / run actions after reload", async () => {
+    const c = await import("./chats");
+    c.saveChat("b", [{ id: 1, role: "assistant", content: "hi", at: 1, acts: [
+      { id: "1-0", pos: 0, k: "search", query: "foo", path: "/", n: 3 },
+      { id: "1-1", pos: 1, k: "create", path: "/a.ts", size: 10, st: "applied" },
+      { id: "1-2", pos: 2, k: "move", path: "/a.ts", to: "/b.ts", st: "pending" as never },
+      { id: "1-3", pos: 3, k: "delete", path: "/b.ts", st: "err", err: "x" },
+      { id: "1-4", pos: 4, k: "run", cmd: "pnpm test", st: "applied", code: 1, out: "fail", timedOut: true },
+    ] }]);
+    vi.resetModules();
+    const a = (await import("./chats")).getChats().chats[0].msgs[0].acts!;
+    expect(a).toHaveLength(5);
+    expect(a[0]).toMatchObject({ k: "search", query: "foo", n: 3 });
+    expect(a[1]).toMatchObject({ k: "create", st: "applied", size: 10 });
+    expect(a[2]).toMatchObject({ k: "move", to: "/b.ts", st: "rejected" });
+    expect(a[3]).toMatchObject({ k: "delete", st: "err", err: "x" });
+    expect(a[4]).toMatchObject({ k: "run", cmd: "pnpm test", code: 1, out: "fail", timedOut: true, st: "applied" });
+  });
 });

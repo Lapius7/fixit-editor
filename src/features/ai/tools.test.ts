@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addToolDelta, around, applyAnchor, cleanPath, doneCalls, findAnchor, newToolAcc, parseCall, readRange, secretName } from "./tools";
+import { addToolDelta, around, applyAnchor, cleanPath, doneCalls, findAnchor, newToolAcc, actsText, execResult, parseCall, readRange, searchRe, searchText, secretName } from "./tools";
 
 describe("cleanPath", () => {
   it("normalizes paths inside the folder", () => {
@@ -67,5 +67,88 @@ describe("OpenAI tool call stream", () => {
     const c = doneCalls(acc);
     expect(c[0]).toMatchObject({ id: "c1", name: "read_file", args: { path: "/a" } });
     expect(c[1]).toMatchObject({ name: "list_files", args: undefined, raw: "{}" });
+  });
+});
+
+describe("parseCall: 作る・移す・消す・検索", () => {
+  const c = (name: string, args: unknown) => parseCall({ id: "1", name, args });
+  it("create_file は内容を受け取り、改行を LF にそろえる", () => {
+    expect(c("create_file", { path: "/a/b.ts", content: "x\r\ny" })).toEqual({ k: "create", path: "/a/b.ts", content: "x\ny" });
+    expect(c("create_file", { path: "/a.ts" }).k).toBe("bad");
+    expect(c("create_file", { path: "/.env", content: "" }).k).toBe("bad");
+    expect(c("create_file", { path: "/a.ts", content: "x".repeat(100_001) }).k).toBe("bad");
+  });
+  it("create_folder と delete_path はパスだけ", () => {
+    expect(c("create_folder", { path: "/src/new" })).toEqual({ k: "mkdir", path: "/src/new" });
+    expect(c("delete_path", { path: "/src/old.ts" })).toEqual({ k: "delete", path: "/src/old.ts" });
+    expect(c("delete_path", { path: "/" }).k).toBe("bad");
+    expect(c("delete_path", { path: "../x" }).k).toBe("bad");
+  });
+  it("move_path は同じ場所・自分の中・秘密のファイルを断る", () => {
+    expect(c("move_path", { from: "/a.ts", to: "/b/a.ts" })).toEqual({ k: "move", path: "/a.ts", to: "/b/a.ts" });
+    expect(c("move_path", { from: "/a", to: "/a" }).k).toBe("bad");
+    expect(c("move_path", { from: "/a", to: "/a/b" }).k).toBe("bad");
+    expect(c("move_path", { from: "/a.ts", to: "/.env" }).k).toBe("bad");
+  });
+  it("search_files は空の検索語と不正な正規表現を断る", () => {
+    expect(c("search_files", { query: "foo" })).toEqual({ k: "search", query: "foo", path: "/", regex: false, icase: false });
+    expect(c("search_files", { query: "" }).k).toBe("bad");
+    expect(c("search_files", { query: "(", regex: true }).k).toBe("bad");
+  });
+});
+
+describe("searchText", () => {
+  it("記号を含む検索語もそのまま探す", () => {
+    expect(searchText("/a.ts", "x\nfoo(1)\ny", searchRe("foo(1)", false, false), 10)).toEqual(["/a.ts:2: foo(1)"]);
+  });
+  it("大文字小文字の無視と、件数の上限", () => {
+    const t = "Foo\nfoo\nFOO";
+    expect(searchText("/a", t, searchRe("foo", false, true), 10)).toHaveLength(3);
+    expect(searchText("/a", t, searchRe("foo", false, true), 2)).toHaveLength(2);
+  });
+  it("長い行は切る", () => {
+    expect(searchText("/a", "x".repeat(500), searchRe("x", false, false), 1)[0].length).toBeLessThan(230);
+  });
+});
+
+describe("actsText", () => {
+  it("作成・移動・削除・検索の結果を文章にする", () => {
+    const t = actsText([
+      { id: "1", pos: 0, k: "create", path: "/a.ts", size: 3, st: "applied" },
+      { id: "2", pos: 0, k: "move", path: "/a.ts", to: "/b.ts", st: "rejected" },
+      { id: "3", pos: 0, k: "delete", path: "/c.ts", st: "err", err: "nope" },
+      { id: "4", pos: 0, k: "search", query: "foo", path: "/", n: 2 },
+    ]);
+    expect(t).toContain("create file /a.ts: done");
+    expect(t).toContain("move /a.ts to /b.ts: rejected by the user");
+    expect(t).toContain("delete /c.ts: failed: nope");
+    expect(t).toContain('searched "foo"');
+  });
+});
+
+describe("run_command", () => {
+  const c = (args: unknown) => parseCall({ id: "1", name: "run_command", args });
+  it("検査と、秒数の丸め", () => {
+    expect(c({ command: "pnpm test" })).toEqual({ k: "run", cmd: "pnpm test", secs: 30 });
+    expect(c({ command: "ls", timeout_seconds: 9999 })).toEqual({ k: "run", cmd: "ls", secs: 120 });
+    expect(c({ command: "ls", timeout_seconds: 0 })).toEqual({ k: "run", cmd: "ls", secs: 1 });
+    expect(c({ command: "  " }).k).toBe("bad");
+    expect(c({}).k).toBe("bad");
+    expect(c({ command: "a\0b" }).k).toBe("bad");
+    expect(c({ command: "x".repeat(4001) }).k).toBe("bad");
+  });
+  it("結果の文字。長い出力は先頭と末尾を残す", () => {
+    expect(execResult({ code: 0, out: "ok\n", timedOut: false })).toBe("exit code: 0\nok");
+    expect(execResult({ code: 124, out: "", timedOut: true })).toBe("[timed out and was stopped]\nexit code: 124\n[no output]");
+    const long = `HEAD${"x".repeat(30_000)}TAIL`;
+    const r = execResult({ code: 1, out: long, timedOut: false });
+    expect(r).toContain("HEAD");
+    expect(r.endsWith("TAIL")).toBe(true);
+    expect(r).toContain("characters omitted");
+    expect(r.length).toBeLessThan(21_000);
+  });
+  it("会話に残す記録", () => {
+    expect(actsText([{ id: "1", k: "run", cmd: "pnpm test", st: "applied", code: 1 }])).toContain("ran command `pnpm test`: exit code 1");
+    expect(actsText([{ id: "1", k: "run", cmd: "rm x", st: "rejected" }])).toContain("rejected by the user");
   });
 });

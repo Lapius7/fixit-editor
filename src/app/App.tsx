@@ -64,14 +64,14 @@ import { clearSel, isMulti, isSelectedPath, selectedNodes } from "@/workbench/se
 import { clearTreeClip, getTreeClip, hasTreeClip, setTreeClip, treeClipFor } from "@/workbench/treeclip";
 import { leaveRows } from "@/workbench/treeAnim";
 import { listShells, type ShellOpt } from "@/platform/pty";
-import { RemoteFile, checkDir, connKey, isRemote, remoteSig, connLabel, lastDir, normConn, showPath, pushRecent, rootHandle, sshUrl, type Conn, type RemoteDir } from "@/platform/remote";
+import { RemoteFile, checkDir, execCmd, connKey, isRemote, remoteSig, connLabel, lastDir, normConn, showPath, pushRecent, rootHandle, sshUrl, type Conn, type RemoteDir } from "@/platform/remote";
 import { DEMO_NAME, DEMO_TREE } from "@/shared/demo";
 import { IS_TAURI } from "@/shared/chrome";
 import { canMove, copyInto, createDir, createFile, freeEntryName, moveEntry, pickFolder, pickPcFolder, isJunk, readDir, removeEntry, renameFile, supportsFs, writeFile, writeBlob, freeName, type Node } from "@/platform/fs";
 import { diskText, getFile, isImageName, load, norm } from "@/platform/load";
 import { copyImage } from "@/shared/clipimage";
 import { langName } from "@/editor/lang";
-import { APP_NAME, MAX_OPEN_BYTES, SKIP_DIRS } from "@/shared/config";
+import { AI_TOOL_SEARCH_FILES, APP_NAME, MAX_OPEN_BYTES, SKIP_DIRS } from "@/shared/config";
 import BrowserDock from "@/features/browser/BrowserDock";
 import { AiDock, type AiPic, type AiQuote } from "@/features/ai/AiDock";
 import { GitPanel } from "@/features/git/GitPanel";
@@ -1604,6 +1604,9 @@ export default function App() {
   // 受け取る側を 1 度だけ登録し、未保存の数と設定は ref で最新を見る
   const exitRef = useRef({ dirty: 0, on: true });
   exitRef.current = { dirty: dirtyList.length, on: st.confirmExit };
+  // 「保存して閉じる」用。1 つでも保存できなければ(上書きの確認でやめた・書き込み失敗)、閉じない
+  const saveDirtyRef = useRef<() => Promise<boolean>>(async () => true);
+  saveDirtyRef.current = async () => { for (const t of dirtyList) if (!(await saveTab(t))) return false; return true; };
   // ブラウザのタブ・窓を閉じるときは、未保存があれば確かめる(beforeunload が唯一の手段)。
   // 再読み込みでは確かめない: F5・Ctrl+R と、Vite の自動再読み込みの直前に印を付けて通す。
   // ブラウザの再読み込みボタンは見分けられないので、そのときは確認が出る
@@ -1625,8 +1628,8 @@ export default function App() {
       .then(({ getCurrentWindow }) => getCurrentWindow().onCloseRequested(async (e) => {
         const { dirty, on } = exitRef.current;
         if (!on || !dirty) return;
-        const ok = await ask({ message: i18next.t("保存していない変更が {{n}} 件あります。閉じると失われます。閉じますか?", { n: dirty }), ok: i18next.t("保存せずに閉じる"), danger: true });
-        if (!ok) e.preventDefault();
+        const c = await askChoice({ message: i18next.t("保存していない変更が {{n}} 件あります。閉じると失われます。閉じますか?", { n: dirty }), ok: i18next.t("保存せずに閉じる"), alt: i18next.t("保存して閉じる"), danger: true });
+        if (c === "cancel" || (c === "alt" && !(await saveDirtyRef.current()))) e.preventDefault();
       }))
       .then((f) => { if (dead) f(); else off = f; })
       .catch(() => { /* 受け取れなければ、確かめずに閉じる(これまでどおり) */ });
@@ -1692,6 +1695,9 @@ export default function App() {
   const tabsRef = useRef(tabs); tabsRef.current = tabs;
   const openRef = useRef(open); openRef.current = open;
   const mainDir = roots.find((r) => !r.prefix && r.handle)?.handle ?? null;
+  // ファイルを作る・移す・消したあとに、ツリーの読み直しとタブの整理をするための最新の関数(useMemo の中から呼ぶ)
+  const aiSync = useRef({ reload, closeMany, dirty: [] as string[] });
+  aiSync.current = { reload, closeMany, dirty: dirtyList.map((t) => t.node.path) };
   const aiFiles = useMemo<FileHost | null>(() => {
     if (!mainDir) return null;
     const bad = (path: string) => path.split("/").some((s) => secretName(s));
@@ -1700,6 +1706,13 @@ export default function App() {
       const at = path.lastIndexOf("/"), name = path.slice(at + 1), dir = await dirAt(path.slice(0, at));
       return { name, dir, handle: await dir.getFileHandle(name) };
     };
+    // そのパスにあるものの種類(なければ null)
+    const kind = async (path: string): Promise<"file" | "dir" | null> => {
+      try { await fileAt(path); return "file"; } catch { /* ファイルではない */ }
+      try { await dirAt(path); return "dir"; } catch { return null; }
+    };
+    // フォルダを、途中の分も含めて作りながらたどる
+    const ensureDir = async (path: string) => { let d = mainDir; for (const s of path.split("/").filter(Boolean)) d = await createDir(d, s); return d; };
     const read: FileHost["read"] = async (path) => {
       if (bad(path)) return { err: "denied" };
       const t = tabsRef.current.find((x) => x.node.path === path);
@@ -1741,6 +1754,85 @@ export default function App() {
         replace();
         return "ok";
       },
+      async create(path, content) {
+        if (bad(path)) return "That path is not allowed.";
+        if (await kind(path)) return "Already exists. Use edit_file to change an existing file.";
+        try {
+          const at = path.lastIndexOf("/");
+          const dir = await ensureDir(path.slice(0, at));
+          await writeFile(await createFile(dir, path.slice(at + 1)), content);
+        } catch (e) { return (e as Error).message || "Could not create the file."; }
+        await aiSync.current.reload().catch(() => {});
+        return "ok";
+      },
+      async mkdir(path) {
+        if (bad(path)) return "That path is not allowed.";
+        const k = await kind(path);
+        if (k === "file") return "A file with that name already exists.";
+        if (k === "dir") return "ok";
+        try { await ensureDir(path); } catch (e) { return (e as Error).message || "Could not create the folder."; }
+        await aiSync.current.reload().catch(() => {});
+        return "ok";
+      },
+      async move(from, to) {
+        if (bad(from) || bad(to)) return "That path is not allowed.";
+        const k = await kind(from);
+        if (!k) return "The source does not exist.";
+        if (await kind(to)) return "The destination already exists.";
+        const under = (x: string) => x === from || x.startsWith(from + "/");
+        if (aiSync.current.dirty.some(under)) return "The source has unsaved changes in the editor. Ask the user to save first.";
+        try {
+          const a = from.lastIndexOf("/"), b = to.lastIndexOf("/");
+          const src = await dirAt(from.slice(0, a)), name = from.slice(a + 1), toName = to.slice(b + 1);
+          const h = k === "file" ? await src.getFileHandle(name) : await src.getDirectoryHandle(name);
+          const dest = await ensureDir(to.slice(0, b));
+          // 同じフォルダの中での名前の変更か、別のフォルダへの移動か
+          if (dest === src || (await dest.isSameEntry(src))) await renameFile(src, h, toName);
+          else if (toName === name) await moveEntry(src, h, dest);
+          else { await renameFile(src, h, toName); await moveEntry(src, await (k === "file" ? src.getFileHandle(toName) : src.getDirectoryHandle(toName)), dest); }
+        } catch (e) { return (e as Error).message || "Could not move it."; }
+        aiSync.current.closeMany(tabsRef.current.map((t) => t.node.path).filter(under), true);
+        await aiSync.current.reload().catch(() => {});
+        return "ok";
+      },
+      async remove(path) {
+        if (bad(path)) return "That path is not allowed.";
+        if (!(await kind(path))) return "It does not exist.";
+        const under = (x: string) => x === path || x.startsWith(path + "/");
+        if (aiSync.current.dirty.some(under)) return "It has unsaved changes in the editor. Ask the user to save first.";
+        try {
+          const at = path.lastIndexOf("/");
+          await removeEntry(await dirAt(path.slice(0, at)), path.slice(at + 1));
+        } catch (e) { return (e as Error).message || "Could not delete it."; }
+        aiSync.current.closeMany(tabsRef.current.map((t) => t.node.path).filter(under), true);
+        await aiSync.current.reload().catch(() => {});
+        return "ok";
+      },
+      async walk(dir, each) {
+        let n = 0;
+        const go = async (path: string, d: FileSystemDirectoryHandle): Promise<boolean> => {
+          const items: [string, FileSystemHandle][] = [];
+          for await (const e of (d as any).entries() as AsyncIterable<[string, FileSystemHandle]>) items.push(e);
+          items.sort((x, y) => x[0].localeCompare(y[0]));
+          for (const [name, h] of items) {
+            const p = `${path === "/" ? "" : path}/${name}`;
+            if (secretName(name)) continue;
+            if (h.kind === "directory") { if (!SKIP_DIRS.has(name) && !(await go(p, h as FileSystemDirectoryHandle))) return false; continue; }
+            if (isJunk(name) || n >= AI_TOOL_SEARCH_FILES) { if (n >= AI_TOOL_SEARCH_FILES) return false; continue; }
+            n++;
+            const r = await read(p);
+            if ("text" in r && !each(p, r.text)) return false;
+          }
+          return true;
+        };
+        try { await go(dir, await dirAt(dir)); } catch { /* 読めないフォルダは飛ばす */ }
+      },
+      // コマンドは exe(Tauri)で、PC・WSL・SSH のフォルダを開いているときだけ動かす(ブラウザ版の開発サーバーには動かす道を作っていない)
+      ...(IS_TAURI && isRemote(mainDir) ? {
+        async exec(cmd: string, secs: number) {
+          try { return await execCmd(mainDir.conn, mainDir.path, cmd, secs); } catch (e) { return (e as Error).message || "Could not run the command."; }
+        },
+      } : {}),
     };
   }, [mainDir]);
   const fileToAi = async (n: Node) => {

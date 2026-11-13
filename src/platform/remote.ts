@@ -195,6 +195,8 @@ export async function gitStatusRaw(c: Conn, dir: string): Promise<string | null>
 export async function gitRun(c: Conn, dir: string, body: Record<string, unknown>): Promise<{ code: number; out: string }> {
   return (await post(c, "git", { path: dir }, JSON.stringify(body))).json();
 }
+// AI が頼んだコマンドを、そのフォルダ(dir)で動かす。timedOut は時間切れで止めたとき。Tauri(exe)だけで使える
+export async function execCmd(c: Conn, dir: string, cmd: string, secs: number): Promise<{ code: number; out: string; timedOut: boolean }> { return (await post(c, "exec", { path: dir }, JSON.stringify({ cmd, secs }))).json(); }
 // HEAD にあるファイルの中身。HEAD に無い(新しいファイル・大きすぎる)ときは null
 export async function gitHeadText(c: Conn, file: string): Promise<string | null> {
   return (await json<{ text: string | null }>(c, "githead", { path: file })).text;

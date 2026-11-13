@@ -22,7 +22,7 @@
 .side-head { height: calc(var(--tab-h, 32px) + 20px); flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 18px; }
 .title { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; letter-spacing: 0.01em; color: var(--ink); }
 .tools { display: flex; gap: 2px; }
-.tree { font-family: var(--font-tree, var(--font-sans)); flex: 1; min-height: 0; padding: 4px 8px 8px; }
+.tree { font-family: var(--font-tree, var(--font-sans)); flex: 1; min-height: 0; padding: 4px 8px 8px; overflow-x: hidden; }
 .side-foot { flex: none; padding: 8px 12px 12px; }
 
 .tree-row { width: 100%; height: var(--row-h, 28px); display: flex; align-items: center; gap: 6px; padding-right: 10px; border-radius: 7px; text-align: left; font-size: 13px; line-height: 20px; transition: background-color calc(0.12s * var(--sp)) var(--ease); }

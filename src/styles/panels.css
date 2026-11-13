@@ -707,13 +707,23 @@ body.opening, body.opening .tree-row { cursor: progress; }
 .ai-diff-l[data-k="add"] { background: color-mix(in oklab, var(--git-add, #3fb950) 16%, transparent); }
 .ai-diff-l[data-k="del"] span { color: var(--git-del, #d93b3b); }
 .ai-diff-l[data-k="add"] span { color: var(--git-add, #3fb950); }
+.ai-run-c, .ai-run-o { margin: 0; max-height: 120px; overflow: auto; padding: 6px 10px; font: 12px/18px var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+.ai-run-c { padding-top: 2px; }
+.ai-run-o { max-height: 200px; border-top: 1px solid var(--hair); color: var(--ink-2); background: var(--field-on); }
 .ai-edit-f { display: flex; justify-content: flex-end; align-items: center; gap: 6px; min-height: 36px; padding: 0 8px; border-top: 1px solid var(--hair); }
 .ai-edit:not(:has(.ai-diff)) .ai-edit-f { border-top: 0; }
+.ai-edit-ht { min-width: 0; flex: 0 1 auto; }
+.ai-op-p { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 2px 10px 8px; font: 12px/20px var(--font-mono); color: var(--ink); }
+.ai-op-p code { font: inherit; min-width: 0; flex: 0 1 auto; }
+.ai-op-p svg { flex: none; width: 14px; height: 14px; color: var(--ink-3); }
+.ai-edit[data-op="delete"] .ai-edit-h svg { color: var(--danger, #d93b3b); }
 .ai-edit-b { height: 26px; display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; border-radius: 7px; font: 12px/20px var(--font-sans); color: var(--ink-2); background: transparent; box-shadow: 0 0 0 1px var(--hair) inset; }
 .ai-edit-b svg { flex: none; width: 14px; height: 14px; }
 .ai-edit-b:hover { color: var(--ink); background: var(--field-on); }
 .ai-edit-b[data-primary] { background: var(--accent); color: #fff; box-shadow: none; }
 .ai-edit-b[data-primary]:hover { background: color-mix(in oklab, var(--accent) 88%, #fff); }
+.ai-edit-b[data-primary][data-danger] { background: var(--danger, #d93b3b); }
+.ai-edit-b[data-primary][data-danger]:hover { background: color-mix(in oklab, var(--danger, #d93b3b) 88%, #fff); }
 .ai-edit-s { display: inline-flex; align-items: center; gap: 4px; font: 12px/20px var(--font-sans); color: var(--ink-3); }
 .ai-edit-s svg { width: 14px; height: 14px; }
 .ai-edit-s[data-st="applied"] { color: var(--ink-2); }

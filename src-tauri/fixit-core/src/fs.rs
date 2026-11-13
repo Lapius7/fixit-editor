@@ -328,7 +328,7 @@ fn runner_for(q: &Q) -> Result<Runner, FsError> {
 }
 
 const READ: [&str; 10] = ["hosts", "home", "list", "read", "stat", "sig", "find", "grep", "gitstatus", "githead"];
-const WRITE: [&str; 5] = ["write", "mkdir", "rm", "mv", "git"];
+const WRITE: [&str; 6] = ["write", "mkdir", "rm", "mv", "git", "exec"];
 
 // body は write のときだけ使う
 pub fn dispatch(op: &str, q: &Q, body: Option<Vec<u8>>) -> Result<Reply, FsError> {
@@ -426,6 +426,18 @@ pub fn dispatch(op: &str, q: &Q, body: Option<Vec<u8>>) -> Result<Reply, FsError
             let out = r.sh(&script, None, 30000, BIG, &[0])?;
             let o = String::from_utf8_lossy(&out).into_owned();
             Ok(Reply::Json(if o == "NOREPO" { json!({ "repo": false }) } else { json!({ "repo": true, "raw": o }) }))
+        }
+        "exec" => {
+            // AI が頼んだコマンドを、開いているフォルダで 1 回だけ走らせる。標準入力は空、出力は標準・エラーをまとめて末尾を残す
+            let dir = abs_path(q, "path")?;
+            let (cmd, secs) = crate::run::exec_args(&body.ok_or_else(|| FsError::new("本文がありません", 400, "EARG"))?)?;
+            let script = format!(
+                "cd -- {d} 2>/dev/null || {{ echo 'フォルダを開けません'; exit 128; }}; o=$(mktemp) || exit 125; timeout -k 2 {secs} sh -c {c} </dev/null >\"$o\" 2>&1; rc=$?; if [ \"$(wc -c <\"$o\")\" -gt {cap} ]; then tail -c {cap} \"$o\"; else cat \"$o\"; fi; rm -f \"$o\"; exit $rc",
+                d = sq(&dir), c = sq(&cmd), cap = crate::run::EXEC_CAP
+            );
+            let codes: Vec<i32> = (0..=255).collect();
+            let (out, code) = r.sh_code(&script, None, (secs + 5) * 1000, BIG, &codes)?;
+            Ok(Reply::Json(json!({ "code": code, "out": String::from_utf8_lossy(&out), "timedOut": code == 124 })))
         }
         "githead" => {
             let p = abs_path(q, "path")?;

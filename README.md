@@ -101,7 +101,7 @@ A Git panel on the right (branch button, or the branch name in the status bar) w
 - **Chat:** open it with `Ctrl+Alt+A`. Choose the model and the thinking effort (low to max). Attach code with "Quote in AI chat" (`Ctrl+Alt+Q`), or drag files and tabs in (up to 8). Attach images (up to 4, PNG, JPEG, GIF, and WebP; other formats are converted and large ones are resized).
 - **Conversations:** a history view grouped by day, a timestamp on every message, attached images kept in the history, regenerate, a jump-to-latest button, code blocks colored like the editor with copy buttons, and Mermaid and math rendering. Links open in your default browser.
 - **Actions:** summarize, explain, translate (Japanese, English, Korean), find problems, and add comments from the editor context menu. A button in the Git panel writes a commit message from the staged changes, matching the language and style of recent commits.
-- **Files:** the AI can list, read, and change files inside the opened folder. Reading is automatic. Each change is shown as a diff card you approve first, or turn on "Apply file changes automatically" (off by default). Paths outside the folder, `.git`, and secret-looking files such as `.env` and keys are off limits. This is not available through the Claude subscription route.
+- **Files and commands:** the AI can list, read, search, create, edit, move, and delete files and folders inside the opened folder, and (desktop app only, for PC, WSL, and SSH folders) run one terminal command at a time. Reading and searching are automatic. Every other action is shown as a card (a diff for edits, the full command for commands) that you approve first. A button next to the chat input switches the mode: Ask (approve everything, the default), Auto (create and edit automatically; move, delete, and commands still ask), or Full auto (nothing asks). Commands have stdin closed and stop after 30 seconds by default (120 at most). Paths outside the folder, `.git`, and secret-looking files such as `.env` and keys are off limits. This is not available through the Claude subscription route.
 - **Usage:** 5-hour and weekly usage for the Claude subscription and the quota of Copilot, refreshed every 5 minutes, and token counts for API keys. Numbers cover only what was sent from this editor.
 - A color glow follows the window edge while the AI answers (it can be turned off in Settings).
 
@@ -130,7 +130,7 @@ A Git panel on the right (branch button, or the branch name in the status bar) w
 
 - AI API keys and Lapount login data are encrypted with Windows (exe only).
 - The app restricts what it can load, and the HTML preview is isolated from the editor.
-- The AI can touch only the opened folder and never secret-looking files.
+- The AI can touch only the opened folder and never secret-looking files. Terminal commands it runs are not filtered: you see the full command and approve each one (unless you choose Full auto).
 
 <p align="center">
   <img src="docs/screenshots/en-split.png" alt="Split view" width="49%">

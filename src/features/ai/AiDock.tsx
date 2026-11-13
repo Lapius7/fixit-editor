@@ -1,9 +1,9 @@
 // AI チャットのパネル。右側に出す(アプリ内ブラウザと同じ置き場所)。
 // 送るのは「利用者が操作したとき」だけ。送る前に、相手と送る範囲を画面に出し、初回は同意を取る。
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, Check, Copy, MousePointerClick, Replace, RotateCcw, Settings as Cog, Square, Trash2, X, History, SquarePen, ChevronLeft, FileText, Quote as QuoteIcon, FileDown, ImagePlus } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Copy, MousePointerClick, Replace, RotateCcw, Settings as Cog, Square, Trash2, X, History, SquarePen, ChevronLeft, FileText, Quote as QuoteIcon, FileDown, ImagePlus, Hand, Zap, ShieldOff } from "lucide-react";
 import i18next from "i18next";
-import { AI_MAX_HISTORY_CHARS, AI_MAX_HISTORY_IMAGES, AI_MAX_IMAGES } from "@/shared/config";
+import { AI_MAX_HISTORY_CHARS, AI_TOOL_SEARCH_MAX, AI_MAX_HISTORY_IMAGES, AI_MAX_IMAGES } from "@/shared/config";
 import { AiError, isAbort, streamChat, type AiErrorKind, type Img, type Msg, type Stop } from "@/features/ai/providers";
 import { isImageFile, shrinkForHistory, toAiImage, type AiImage, type ImgFail } from "@/features/ai/images";
 import { actionLabel, actionPrompt, replaceable, clipLabel, ctxLabel, systemPrompt, withClips, withCode, type AiJob, type Clip, type Ctx } from "@/features/ai/prompts";
@@ -14,7 +14,7 @@ import { useCopy } from "@/features/ai/CodeBlock";
 import { MAX_OPEN_BYTES } from "@/shared/config";
 import { ms } from "@/features/settings/settings";
 import { useUsagePoll } from "@/features/ai/useUsagePoll";
-import { getAi, hasEffort, ready, PROVIDER_NAME, setConsent, useAi, useLink, type Provider } from "@/features/ai/store";
+import { getAi, hasEffort, ready, AGENT_MODES, MODE_HINT, MODE_NAME, PROVIDER_NAME, setConsent, setMode, useAi, useLink, type Provider } from "@/features/ai/store";
 import { ModelPicker } from "@/features/ai/ModelPicker";
 import { UsageStrip } from "@/features/ai/UsageView";
 import { addTok, type Tok } from "@/features/ai/usage";
@@ -22,7 +22,7 @@ import { ImgPeek, type Peek } from "@/features/ai/ImgPeek";
 import { refreshLink } from "@/features/ai/link";
 import { AI_ERR as ERR } from "@/features/ai/oneshot";
 import { ActCard, type Decide } from "@/features/ai/ActCards";
-import { ANCHOR_ERR, actsText, around, findAnchor, listTree, parseCall, readRange, type Act, type FileHost, type ToolCall } from "@/features/ai/tools";
+import { ANCHOR_ERR, actsText, around, execResult, findAnchor, listTree, parseCall, readRange, searchRe, searchText, type Act, type FileHost, type ToolCall } from "@/features/ai/tools";
 import { deleteChat, getChats, newChatId, saveChat, setCurChat, useChats, type Chat } from "@/features/ai/chats";
 
 type M = { id: number; role: "user" | "assistant"; content: string; label?: string; ctx?: string; at?: number; imgs?: (Img & { name: string })[]; busy?: boolean; err?: AiErrorKind; note?: Stop; job?: AiJob; applied?: "ok" | "stale"; tok?: Tok; acts?: Act[]; noTools?: boolean };
@@ -122,6 +122,9 @@ const excerpt = (c: Chat) => {
 
 // 同意画面に出す、接続先の host(ポート込み)。URL でなければ空
 const baseHost = (b: string) => { try { return new URL(b).host; } catch { return ""; } };
+
+// 操作モードのアイコン(名前と説明は store.ts)
+const MODE_ICON = { ask: Hand, auto: Zap, full: ShieldOff } as const;
 
 export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }: { open: boolean; job: AiJob | null; quote: AiQuote | null; resolve: (x: NonNullable<typeof drag.node> | string) => Promise<Ctx | AiPic | null>; files?: FileHost | null; onClose: () => void; onSettings: () => void }) {
   const cfg = useAi();
@@ -279,11 +282,46 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
       if (pr.k === "bad") return pr.err;
       const id = `${aid}-${++actSeq.current}`, pos = acc.length;
       const add = (a: Act) => pat(aid, (m) => ({ ...m, acts: [...(m.acts ?? []), a] }));
-      const set = (st: "applied" | "rejected" | "stale", err?: string) => pat(aid, (m) => ({ ...m, acts: m.acts?.map((x) => (x.id === id && x.k === "edit" ? { ...x, st, err } : x)) }));
+      const set = (st: "applied" | "rejected" | "stale" | "err", err?: string) => pat(aid, (m) => ({ ...m, acts: m.acts?.map((x) => (x.id === id && (x.k === "edit" || x.k === "create" || x.k === "mkdir" || x.k === "move" || x.k === "delete" || x.k === "run") ? { ...x, st: st as never, err } : x)) }));
+      // 確認が要る操作は、カードの許可・却下を待つ。mode に応じて待たずに進める
+      const ask = (auto: boolean) => (auto ? Promise.resolve<"apply" | "reject">("apply") : new Promise<"apply" | "reject">((res) => {
+        waits.current.set(id, res);
+        ac.signal.addEventListener("abort", () => res("reject"), { once: true });
+      })).then((c) => { waits.current.delete(id); return c; });
+      const mode = getAi().mode;
       if (pr.k === "list") {
         const t = await listTree(host.list, pr.path, pr.depth);
         add({ id, pos, k: "list", path: pr.path, err: t.startsWith("[folder not found]") ? "none" : undefined });
         return t;
+      }
+      if (pr.k === "search") {
+        const re = searchRe(pr.query, pr.regex, pr.icase);
+        const hits: string[] = [];
+        try { await host.walk(pr.path, (p, text) => { hits.push(...searchText(p, text, re, AI_TOOL_SEARCH_MAX - hits.length)); return hits.length < AI_TOOL_SEARCH_MAX; }); } catch { /* 読めなかった分は飛ばす */ }
+        add({ id, pos, k: "search", query: pr.query, path: pr.path, n: hits.length });
+        return hits.length ? `${hits.join("\n")}${hits.length >= AI_TOOL_SEARCH_MAX ? `\n[stopped at ${AI_TOOL_SEARCH_MAX} matches; narrow the query or path]` : ""}` : "No matches.";
+      }
+      // コマンドの実行。ask / auto のモードでは必ず許可を待つ(full だけ待たない)
+      if (pr.k === "run") {
+        if (!host.exec) return "Commands cannot be run in this environment.";
+        add({ id, pos, k: "run", cmd: pr.cmd, st: "pending" });
+        const choice = await ask(mode === "full");
+        if (ac.signal.aborted) { set("rejected"); return "Stopped by the user."; }
+        if (choice === "reject") { set("rejected"); return "The user rejected this command. Do not retry it; ask what they want instead."; }
+        const res = await host.exec(pr.cmd, pr.secs);
+        if (typeof res === "string") { set("err", res); return `Failed: ${res}`; }
+        pat(aid, (m) => ({ ...m, acts: m.acts?.map((x) => (x.id === id && x.k === "run" ? { ...x, st: "applied", code: res.code, out: res.out.slice(-4000), timedOut: res.timedOut } : x)) }));
+        return execResult(res);
+      }
+      // 作る・移す・消す
+      if (pr.k === "create" || pr.k === "mkdir" || pr.k === "move" || pr.k === "delete") {
+        add({ id, pos, k: pr.k, path: pr.path, ...(pr.k === "move" ? { to: pr.to } : {}), ...(pr.k === "create" ? { size: pr.content.length } : {}), st: "pending" });
+        const choice = await ask(mode === "full" || (mode === "auto" && (pr.k === "create" || pr.k === "mkdir")));
+        if (ac.signal.aborted) { set("rejected"); return "Stopped by the user."; }
+        if (choice === "reject") { set("rejected"); return "The user rejected this. Do not retry it; ask what they want instead."; }
+        const res = pr.k === "create" ? await host.create(pr.path, pr.content) : pr.k === "mkdir" ? await host.mkdir(pr.path) : pr.k === "move" ? await host.move(pr.path, pr.to) : await host.remove(pr.path);
+        if (res === "ok") { set("applied"); return pr.k === "create" ? "File created." : pr.k === "mkdir" ? "Folder created." : pr.k === "move" ? "Moved." : "Deleted."; }
+        set("err", res); return `Failed: ${res}`;
       }
       const r = await host.read(pr.path);
       const why = "err" in r ? { none: "File not found.", binary: "Not a text file.", big: "File is too large to open.", dir: "That is a folder. Use list_files.", denied: "That path is not allowed." }[r.err] : "";
@@ -300,11 +338,7 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
       if (!a.ok) return fail(ANCHOR_ERR[a.why]);
       const d = around(r.text, a.at, pr.old, pr.neu);
       add({ id, pos, k: "edit", path: pr.path, line: d.line, old: d.old, neu: d.neu, pre: d.pre, post: d.post, st: "pending" });
-      const choice = getAi().autoApply ? "apply" : await new Promise<"apply" | "reject">((res) => {
-        waits.current.set(id, res);
-        ac.signal.addEventListener("abort", () => res("reject"), { once: true });
-      });
-      waits.current.delete(id);
+      const choice = await ask(mode !== "ask");
       if (ac.signal.aborted) { set("rejected"); return "Stopped by the user."; }
       if (choice === "reject") { set("rejected"); return "The user rejected this change. Do not retry the same change; ask what they want instead."; }
       const res = await host.apply(pr.path, pr.old, pr.neu);
@@ -313,7 +347,7 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
     } : undefined;
     const flush = () => { raf = 0; pat(aid, (m) => ({ ...m, content: acc })); };
     try {
-      const stop = await streamChat({ provider: p, model: c.models[p], effort: hasEffort(p) ? c.effort : "", key: c.keys[p], system: systemPrompt(!!host), messages, signal: ac.signal, onTool, onNoTools: () => pat(aid, (m) => ({ ...m, noTools: true })), onText: (s) => { acc += s; if (!raf) raf = requestAnimationFrame(flush); }, onUsage: (t) => pat(aid, (m) => ({ ...m, tok: addTok(m.tok, t) })) });
+      const stop = await streamChat({ provider: p, model: c.models[p], effort: hasEffort(p) ? c.effort : "", key: c.keys[p], system: systemPrompt(!!host, !!host?.exec), messages, signal: ac.signal, onTool, exec: !!host?.exec, onNoTools: () => pat(aid, (m) => ({ ...m, noTools: true })), onText: (s) => { acc += s; if (!raf) raf = requestAnimationFrame(flush); }, onUsage: (t) => pat(aid, (m) => ({ ...m, tok: addTok(m.tok, t) })) });
       if (raf) cancelAnimationFrame(raf);
       pat(aid, (m) => ({ ...m, content: acc, busy: false, at: Date.now(), note: stop === "end" ? undefined : stop }));
     } catch (e) {
@@ -322,7 +356,7 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
       else pat(aid, (m) => ({ ...m, content: acc, busy: false, at: Date.now(), err: e instanceof AiError ? e.kind : "other" }));
     } finally {
       // 許可待ちのまま終わった変更は、却下として残す
-      pat(aid, (m) => (m.acts?.some((x) => x.k === "edit" && x.st === "pending") ? { ...m, acts: m.acts.map((x) => (x.k === "edit" && x.st === "pending" ? { ...x, st: "rejected" as const } : x)) } : m));
+      pat(aid, (m) => (m.acts?.some((x) => "st" in x && x.st === "pending") ? { ...m, acts: m.acts.map((x) => ("st" in x && x.st === "pending" ? { ...x, st: "rejected" as const } : x)) } : m));
       if (gen.current === g) { setBusy(false); abort.current = null; }
     }
   };
@@ -507,6 +541,7 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
           <div className="ai-row">
             <button className="chipbtn" onClick={() => picker.current?.click()} title={i18next.t("画像を選んで、質問と一緒に送ります。貼り付けやドロップでも添えられます")}><ImagePlus size={14} />{i18next.t("画像")}</button>
             <input ref={picker} type="file" accept="image/*" multiple hidden onChange={(e) => { const fs = Array.from(e.target.files ?? []); e.target.value = ""; void (async () => { for (const f of fs) await addImage(f, f.name); })(); }} />
+            {cfg.provider !== "claude-cli" && <button className="chipbtn" data-mode={cfg.mode} aria-label={i18next.t("AI の操作モード: {{m}}", { m: i18next.t(MODE_NAME[cfg.mode]) })} title={`${i18next.t(MODE_HINT[cfg.mode])} ${i18next.t("(クリックで切り替え)")}`} onClick={() => setMode(AGENT_MODES[(AGENT_MODES.indexOf(cfg.mode) + 1) % AGENT_MODES.length])}>{(() => { const I = MODE_ICON[cfg.mode]; return <I size={14} />; })()}{i18next.t(MODE_NAME[cfg.mode])}</button>}
             <span className="ai-to" />
             {busy
               ? <button className="icon-btn ai-send" aria-label={i18next.t("止める")} title={i18next.t("止める")} onClick={() => abort.current?.abort()}><Square /></button>

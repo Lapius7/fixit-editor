@@ -2,7 +2,7 @@
 // 画面に出す文言はここに置かず、呼び出し側が kind から選ぶ(多言語のため)。
 import Anthropic from "@anthropic-ai/sdk";
 import { AI_DEFAULT_MODEL, AI_MAX_TOKENS, AI_TOOL_ROUNDS } from "@/shared/config";
-import { TOOLS, addToolDelta, doneCalls, newToolAcc, type ToolCall, type ToolDelta } from "@/features/ai/tools";
+import { EXEC_TOOL, TOOLS, addToolDelta, doneCalls, newToolAcc, type ToolCall, type ToolDelta } from "@/features/ai/tools";
 import { IS_TAURI } from "@/shared/chrome";
 import { getAi, type Effort, type Link, type Provider } from "@/features/ai/store";
 import { refreshCopilotUsage } from "@/features/ai/copilotUsage";
@@ -21,6 +21,8 @@ export type Stop = "end" | "refusal" | "length";
 export type Req = { provider: Provider; model: string; effort: Effort; key: string; system: string; messages: Msg[]; signal: AbortSignal; onText: (s: string) => void; onUsage?: (t: Partial<Tok>) => void;
   // ファイルの道具。onTool があるときだけ、AI に道具を渡す。結果(文字)を返すまで、次の往復は始まらない(変更の許可待ちもここで待つ)
   onTool?: (c: ToolCall) => Promise<string>;
+  // コマンドを動かす道具(run_command)も渡すか
+  exec?: boolean;
   // 接続先が道具に対応していなかったとき(道具なしで送り直す前に)知らせる
   onNoTools?: () => void;
 };
@@ -65,7 +67,7 @@ type Fin = { content: { type: string; id?: string; name?: string; input?: unknow
 async function anthropic(r: Req): Promise<Stop> {
   // ブラウザ(Tauri の WebView を含む)から直接呼ぶので dangerouslyAllowBrowser が要る。キーはこの PC の中にしかない。
   const client = new Anthropic({ apiKey: r.key, dangerouslyAllowBrowser: true, maxRetries: 1 });
-  const tools = r.onTool ? TOOLS.map((t) => ({ name: t.name, description: t.description, input_schema: t.schema })) : undefined;
+  const tools = r.onTool ? (r.exec ? [...TOOLS, EXEC_TOOL] : TOOLS).map((t) => ({ name: t.name, description: t.description, input_schema: t.schema })) : undefined;
   const msgs: unknown[] = forAnthropic(r.messages);
   const sp = spaced(r);
   const once = async (last: boolean): Promise<Fin> => {
@@ -113,7 +115,7 @@ async function anthropic(r: Req): Promise<Stop> {
 async function chatCompletions(r: Req, url: string, headers: Record<string, string>, usage: boolean, send: (url: string, init: RequestInit) => Promise<Response> = fetch): Promise<Stop> {
   const msgs: unknown[] = [{ role: "system", content: r.system }, ...forOpenAi(r.messages)];
   const sp = spaced(r);
-  let tools = r.onTool ? TOOLS.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.schema } })) : undefined;
+  let tools = r.onTool ? (r.exec ? [...TOOLS, EXEC_TOOL] : TOOLS).map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.schema } })) : undefined;
   const post = async (withTools: boolean) => {
     let res: Response;
     try {

@@ -104,3 +104,49 @@ pub fn run(mut cmd: Command, input: Option<Vec<u8>>, timeout: Duration, max: usi
     }
     Ok(Run { out, err, code: status.and_then(|s| s.code()).unwrap_or(1) })
 }
+
+/// AI のコマンド実行で、返す出力の最大バイト数(超えた分は先頭を捨てて末尾を残す)
+pub const EXEC_CAP: usize = 60_000;
+
+/// exec の本文({"cmd": "...", "secs": 30})を調べる。コマンドは空・長すぎ・NUL 入りを断り、秒数は 1〜120 に収める
+pub fn exec_args(body: &[u8]) -> Result<(String, u64), FsError> {
+    let v: serde_json::Value = serde_json::from_slice(body).map_err(|_| FsError::new("本文が正しくありません", 400, "EARG"))?;
+    let cmd = v.get("cmd").and_then(|x| x.as_str()).unwrap_or("").to_string();
+    if cmd.trim().is_empty() || cmd.len() > 4000 || cmd.contains('\0') {
+        return Err(FsError::new("コマンドが正しくありません", 400, "EARG"));
+    }
+    let secs = v.get("secs").and_then(|x| x.as_u64()).unwrap_or(30).clamp(1, 120);
+    Ok((cmd, secs))
+}
+
+#[cfg(test)]
+mod exec_tests {
+    use super::*;
+
+    #[test]
+    fn exec_args_checks_command_and_clamps_secs() {
+        assert_eq!(exec_args(br#"{"cmd":"ls"}"#).unwrap(), ("ls".to_string(), 30));
+        assert_eq!(exec_args(br#"{"cmd":"ls","secs":9999}"#).unwrap().1, 120);
+        assert_eq!(exec_args(br#"{"cmd":"ls","secs":0}"#).unwrap().1, 1);
+        assert!(exec_args(br#"{"cmd":"  "}"#).is_err());
+        assert!(exec_args(br#"{}"#).is_err());
+        assert!(exec_args(b"nope").is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pc_exec_runs_in_dir_and_reports_code() {
+        let mut q = std::collections::HashMap::new();
+        q.insert("kind".to_string(), "pc".to_string());
+        q.insert("path".to_string(), "/tmp".to_string());
+        let body = br#"{"cmd":"pwd; echo err 1>&2; exit 3"}"#.to_vec();
+        match crate::local::dispatch("exec", &q, Some(body)).unwrap() {
+            crate::fs::Reply::Json(v) => {
+                assert_eq!(v["code"], 3);
+                assert!(v["out"].as_str().unwrap().contains("/tmp"));
+                assert!(v["out"].as_str().unwrap().contains("err"));
+            }
+            _ => panic!("json expected"),
+        }
+    }
+}
