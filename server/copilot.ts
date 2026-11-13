@@ -3,7 +3,7 @@ import { body, check } from "./fsapi";
 
 // GitHub Copilot のログイン(デバイスフロー)の橋渡し(開発サーバー専用)。
 // github.com は CORS を許さないので、コードの発行と確認だけをここで行う。src-tauri/fixit-core/src/copilot.rs と同じ動き。
-// トークンの交換と会話は、ブラウザから api.github.com / api.githubcopilot.com へ直接送る。
+// トークンの交換は、ブラウザから api.github.com へ直接送る。会話(api.githubcopilot.com)は CORS を通さないので、/chat が代わりに送って返事をそのまま流す。
 const CLIENT_ID = "Iv1.b507a08c87ecfe98";
 
 const post = async (url: string, form: Record<string, string>) => {
@@ -39,6 +39,9 @@ export const tokenOut = (code: number, v: Record<string, unknown>) => {
   return typeof t === "string" && t && t.length <= 4096 ? { token: t, expires_at: exp, api } : { error: "other" };
 };
 
+// 会話の送り先は *.githubcopilot.com の /chat/completions だけ(Rust 側 chat_url_ok と同じ)
+export const chatUrlOk = (u: string) => /^https:\/\/([a-z0-9-]+\.)*githubcopilot\.com\/chat\/completions$/.test(u);
+
 export function copilotBridge(): Plugin {
   return {
     name: "fixit-copilot",
@@ -56,6 +59,24 @@ export function copilotBridge(): Plugin {
             const d = str(j.device_code);
             if (!d) { send({ error: "bad" }, 400); return; }
             send(pollOut(await post("https://github.com/login/oauth/access_token", { client_id: CLIENT_ID, device_code: d, grant_type: "urn:ietf:params:oauth:grant-type:device_code" })));
+            return;
+          }
+          if (path === "/chat") {
+            const j = JSON.parse((await body(req, 20 * 1024 * 1024)).toString("utf8")) as { url?: unknown; token?: unknown; body?: unknown };
+            const url = typeof j.url === "string" ? j.url : "", tok = typeof j.token === "string" ? j.token : "", payload = typeof j.body === "string" ? j.body : "";
+            if (!chatUrlOk(url) || !tok || tok.length > 4096 || /[\s\x00-\x1f]/.test(tok) || !payload) { send({ error: "bad" }, 400); return; }
+            const ac = new AbortController();
+            res.on("close", () => ac.abort());
+            let up: Response;
+            try {
+              up = await fetch(url, { method: "POST", signal: ac.signal, body: payload, headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json", Accept: "text/event-stream", "Copilot-Integration-Id": "vscode-chat", "Editor-Version": "Fixit/dev", "Editor-Plugin-Version": "fixit-copilot/dev", "Openai-Intent": "conversation-panel", "X-Initiator": "user", "User-Agent": "Fixit-Editor/dev" } });
+            } catch { if (!res.writableEnded) send({ error: "network" }, 502); return; }
+            res.statusCode = up.status;
+            res.setHeader("content-type", up.headers.get("content-type") ?? "text/event-stream");
+            res.setHeader("cache-control", "no-store");
+            if (!up.body) { res.end(); return; }
+            try { for await (const c of up.body as unknown as AsyncIterable<Uint8Array>) res.write(c); } catch { /* 中断 */ }
+            res.end();
             return;
           }
           if (path === "/token") {

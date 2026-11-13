@@ -1,6 +1,5 @@
 // GitHub Copilot の接続。ログイン(デバイスフロー)と、会話に使う短い期限のトークンへの交換。
-// github.com と api.github.com(交換)はブラウザから直接呼べないので、exe は Rust(copilot_*)、開発サーバーは /__copilot が代わりに送る。
-// 会話そのもの(api.githubcopilot.com)は providers.ts がブラウザから直接送る。
+// github.com と api.github.com(交換)、会話(api.githubcopilot.com)はブラウザから直接呼べない(CORS)ので、exe は Rust(copilot_*)、開発サーバーは /__copilot が代わりに送る。
 import { IS_TAURI } from "@/shared/chrome";
 import { AiError } from "@/features/ai/providers";
 
@@ -66,3 +65,28 @@ export async function copilotSession(oauth: string): Promise<Session> {
   return cache.s;
 }
 export const forgetCopilot = () => { cache = null; };
+
+// 会話の送信。api.githubcopilot.com は CORS を通さないので、exe は Rust(copilot_chat)、開発サーバーは /__copilot/chat が代わりに送る。
+// 返すのは fetch の Response と同じ形(本文は逐次流れる)。ヘッダーは中継側が固定で付ける。
+export async function copilotFetch(url: string, token: string, body: string, signal: AbortSignal): Promise<Response> {
+  if (!IS_TAURI) {
+    return fetch("/__copilot/chat", { method: "POST", signal, headers: { "X-Fixit": "1", "Content-Type": "application/json" }, body: JSON.stringify({ url, token, body }) });
+  }
+  const { Channel, invoke } = await import("@tauri-apps/api/core");
+  type Ev = { t: "head"; status: number } | { t: "data"; s: string } | { t: "end" } | { t: "err" };
+  const id = crypto.randomUUID(), enc = new TextEncoder();
+  return new Promise<Response>((ok, ng) => {
+    let ctl: ReadableStreamDefaultController<Uint8Array> | null = null, got = false, over = false;
+    const stream = new ReadableStream<Uint8Array>({ start: (c) => { ctl = c; }, cancel: () => stop() });
+    const stop = () => { if (!over) { over = true; void invoke("claude_cancel", { id }); } };
+    signal.addEventListener("abort", () => { stop(); if (!got) ng(new DOMException("aborted", "AbortError")); else { try { ctl?.error(new DOMException("aborted", "AbortError")); } catch { /* 閉じ済み */ } } }, { once: true });
+    const ch = new Channel<Ev>();
+    ch.onmessage = (e) => {
+      if (e.t === "head") { got = true; ok(new Response(stream, { status: e.status })); }
+      else if (e.t === "data") { try { ctl?.enqueue(enc.encode(e.s)); } catch { /* 閉じ済み */ } }
+      else if (e.t === "end") { over = true; try { ctl?.close(); } catch { /* 閉じ済み */ } }
+      else if (e.t === "err") { over = true; if (!got) ng(new Error("network")); else { try { ctl?.error(new Error("network")); } catch { /* 閉じ済み */ } } }
+    };
+    invoke("copilot_chat", { id, url, token, body, onEvent: ch }).catch(() => { if (!got) ng(new Error("network")); });
+  });
+}

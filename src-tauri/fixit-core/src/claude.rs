@@ -61,6 +61,9 @@ pub struct Job {
     cancelled: AtomicBool,
 }
 impl Job {
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::SeqCst)
+    }
     pub fn cancel(&self) {
         self.cancelled.store(true, Ordering::SeqCst);
         if let Some(c) = self.child.lock().unwrap().as_mut() {

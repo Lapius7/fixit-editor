@@ -157,3 +157,91 @@ mod tests {
         assert_eq!(poll_out(&json!({}))["status"], "other");
     }
 }
+
+// ---- 会話(api.githubcopilot.com) ----
+// この API は CORS のプリフライトを通さないので、WebView から直接送れない。Rust 側が送り、返事を 1 行ずつ画面へ渡す。
+// 送り先は *.githubcopilot.com の /chat/completions だけ。ヘッダーは固定で、画面からは渡せない。
+#[derive(serde::Serialize, Clone, Debug, PartialEq)]
+#[serde(tag = "t", rename_all = "lowercase")]
+pub enum ChatEv {
+    Head { status: u16 },
+    Data { s: String },
+    End,
+    Err,
+}
+
+pub fn chat_url_ok(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("https://") else { return false };
+    let (host, path) = match rest.split_once('/') { Some((h, p)) => (h, p), None => return false };
+    path == "chat/completions"
+        && !host.is_empty()
+        && host.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+        && (host == "api.githubcopilot.com" || host.ends_with(".githubcopilot.com"))
+}
+
+pub fn chat(url: &str, token: &str, body: &str, job: &crate::claude::Job, emit: &mut dyn FnMut(ChatEv)) {
+    use std::io::BufRead;
+    if !chat_url_ok(url) || token.is_empty() || token.len() > 4096 || token.chars().any(|c| c.is_control() || c == ' ') || body.len() > 20 * 1024 * 1024 {
+        emit(ChatEv::Err);
+        return;
+    }
+    let ag = ureq::AgentBuilder::new().timeout_connect(Duration::from_secs(15)).timeout_read(Duration::from_secs(90)).build();
+    let r = ag
+        .post(url)
+        .set("Authorization", &format!("Bearer {token}"))
+        .set("Content-Type", "application/json")
+        .set("Accept", "text/event-stream")
+        .set("Copilot-Integration-Id", "vscode-chat")
+        .set("Editor-Version", concat!("Fixit/", env!("CARGO_PKG_VERSION")))
+        .set("Editor-Plugin-Version", concat!("fixit-copilot/", env!("CARGO_PKG_VERSION")))
+        .set("Openai-Intent", "conversation-panel")
+        .set("X-Initiator", "user")
+        .set("User-Agent", concat!("Fixit-Editor/", env!("CARGO_PKG_VERSION")))
+        .send_string(body);
+    let resp = match r {
+        Ok(x) => x,
+        Err(ureq::Error::Status(c, _)) => {
+            emit(ChatEv::Head { status: c });
+            emit(ChatEv::End);
+            return;
+        }
+        Err(_) => {
+            emit(ChatEv::Err);
+            return;
+        }
+    };
+    emit(ChatEv::Head { status: resp.status() });
+    let mut rd = std::io::BufReader::new(resp.into_reader());
+    let mut line = Vec::new();
+    loop {
+        if job.is_cancelled() {
+            break;
+        }
+        line.clear();
+        match rd.by_ref().take(1024 * 1024).read_until(b'\n', &mut line) {
+            Ok(0) => break,
+            Ok(_) => emit(ChatEv::Data { s: String::from_utf8_lossy(&line).into_owned() }),
+            Err(_) => {
+                emit(ChatEv::Err);
+                return;
+            }
+        }
+    }
+    emit(ChatEv::End);
+}
+
+#[cfg(test)]
+mod chat_tests {
+    use super::*;
+    #[test]
+    fn url_allowlist() {
+        assert!(chat_url_ok("https://api.githubcopilot.com/chat/completions"));
+        assert!(chat_url_ok("https://api.individual.githubcopilot.com/chat/completions"));
+        assert!(!chat_url_ok("http://api.githubcopilot.com/chat/completions"));
+        assert!(!chat_url_ok("https://evil.com/chat/completions"));
+        assert!(!chat_url_ok("https://api.githubcopilot.com.evil.com/chat/completions"));
+        assert!(!chat_url_ok("https://user@api.githubcopilot.com/chat/completions"));
+        assert!(!chat_url_ok("https://api.githubcopilot.com:444/chat/completions"));
+        assert!(!chat_url_ok("https://api.githubcopilot.com/other"));
+    }
+}

@@ -369,6 +369,20 @@ fn claude_cancel(state: State<Jobs>, id: String) {
     if let Some(j) = state.0.lock().unwrap().get(&id) { j.cancel(); }
 }
 
+// Copilot の会話は CORS を通さないので、ここから送って返事を 1 行ずつ渡す(id は claude_cancel で止められる)
+#[tauri::command]
+async fn copilot_chat(state: State<'_, Jobs>, id: String, url: String, token: String, body: String, on_event: Channel<copilot::ChatEv>) -> Result<(), String> {
+    let job = Arc::new(claude::Job::default());
+    state.0.lock().unwrap().insert(id.clone(), job.clone());
+    let j = job.clone();
+    let r = tauri::async_runtime::spawn_blocking(move || {
+        copilot::chat(&url, &token, &body, &j, &mut |e| { let _ = on_event.send(e); });
+    })
+    .await;
+    state.0.lock().unwrap().remove(&id);
+    r.map_err(|e| e.to_string())
+}
+
 // ---- GitHub Copilot のログイン(デバイスフロー)。ブラウザ版の /__copilot と同じ ----
 #[tauri::command]
 async fn copilot_device() -> Result<serde_json::Value, String> {
@@ -570,7 +584,7 @@ fn main() {
             tauri::webview::PermissionKind::ClipboardRead => tauri::webview::PermissionResponse::Allow,
             _ => tauri::webview::PermissionResponse::Default,
         })
-        .invoke_handler(tauri::generate_handler![pv_put, pv_drop, clip_read, clip_write, clip_files, pty_open, pty_shells, pty_write, pty_resize, pty_close, lsp_start, lsp_send, lsp_stats, lsp_stop, launch_target, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_usage, claude_login, claude_cancel, copilot_device, copilot_poll, copilot_token, store_load, store_read, store_stamps, store_save, apply_update, list_fonts, open_url, os_open])
+        .invoke_handler(tauri::generate_handler![pv_put, pv_drop, clip_read, clip_write, clip_files, pty_open, pty_shells, pty_write, pty_resize, pty_close, lsp_start, copilot_chat, lsp_send, lsp_stats, lsp_stop, launch_target, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_usage, claude_login, claude_cancel, copilot_device, copilot_poll, copilot_token, store_load, store_read, store_stamps, store_save, apply_update, list_fonts, open_url, os_open])
         .build(tauri::generate_context!())
         .expect("フィクシットエディタを起動できませんでした")
         .run(|app, ev| {

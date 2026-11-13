@@ -6,7 +6,7 @@ import { IS_TAURI } from "@/shared/chrome";
 import { getAi, type Effort, type Link, type Provider } from "@/features/ai/store";
 import { refreshCopilotUsage } from "@/features/ai/copilotUsage";
 import { glow } from "@/shared/glow";
-import { copilotSession, forgetCopilot } from "@/features/ai/copilot";
+import { copilotFetch, copilotSession, forgetCopilot } from "@/features/ai/copilot";
 import { recordLimit, recordUsage, type Tok } from "@/features/ai/usage";
 
 // 画像は base64(data: の前置きなし)。type は AI_IMAGE_TYPES のどれか
@@ -78,10 +78,10 @@ async function anthropic(r: Req): Promise<Stop> {
 }
 
 // OpenAI 互換の chat/completions(OpenAI と GitHub Copilot で共通)。url と認証・追加のヘッダーだけが違う
-async function chatCompletions(r: Req, url: string, headers: Record<string, string>, usage: boolean): Promise<Stop> {
+async function chatCompletions(r: Req, url: string, headers: Record<string, string>, usage: boolean, send: (url: string, init: RequestInit) => Promise<Response> = fetch): Promise<Stop> {
   let res: Response;
   try {
-    res = await fetch(url, {
+    res = await send(url, {
       method: "POST",
       signal: r.signal,
       headers: { "Content-Type": "application/json", ...headers },
@@ -141,14 +141,8 @@ const custom = (r: Req) => {
 // GitHub Copilot。ログインで得たトークンを、短い期限のトークンに替えてから送る。エディタ用の拡張が送るのと同じ形のヘッダーを付ける
 async function copilot(r: Req): Promise<Stop> {
   let s = await copilotSession(r.key);
-  const go = () => chatCompletions(r, `${s.api}/chat/completions`, {
-    Authorization: `Bearer ${s.token}`,
-    "Copilot-Integration-Id": "vscode-chat",
-    "Editor-Version": "Fixit/1",
-    "Editor-Plugin-Version": "fixit-copilot/1",
-    "Openai-Intent": "conversation-panel",
-    "X-Initiator": "user",
-  }, true);
+  // api.githubcopilot.com は CORS を通さないので、送信は中継(exe は Rust、開発サーバーは /__copilot/chat)に任せる。ヘッダーは中継側が固定で付ける
+  const go = () => chatCompletions(r, `${s.api}/chat/completions`, {}, true, (url, init) => copilotFetch(url, s.token, String(init.body), r.signal));
   try { return await go(); } catch (e) {
     // 期限のトークンが切れていたときだけ、取り直して 1 回やり直す
     if (e instanceof AiError && e.status === 401) {
