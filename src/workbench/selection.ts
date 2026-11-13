@@ -24,7 +24,7 @@ const syncEdges = () => {
   });
 };
 // 描き直しの直後(次の描画の前)に反映する。1 フレーム遅れると、古い端の線と新しい端の線が重なって見える
-const later = () => { if (!raf) raf = 1, queueMicrotask(syncEdges); };
+const later = () => { if (!raf) { raf = 1; queueMicrotask(syncEdges); } };
 let observed: Element | null = null;
 const watch = () => {
   later();

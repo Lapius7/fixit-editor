@@ -31,7 +31,7 @@ export const secretName = (name: string) => { const n = name.toLowerCase(); retu
 
 // AI が指定したパスを、/ から始まる形に直す。使えないパスは null(.. ・ \ ・ : ・ NUL ・ 触らせない名前)
 export function cleanPath(p: unknown): string | null {
-  if (typeof p !== "string" || p.length > 1000 || /[\u0000\\:]/.test(p)) return null;
+  if (typeof p !== "string" || p.length > 1000 || ["\0", "\\", ":"].some((c) => p.includes(c))) return null;
   const seg = p.split("/").filter((s) => s !== "" && s !== ".");
   if (seg.some((s) => s === ".." || secretName(s))) return null;
   return "/" + seg.join("/");

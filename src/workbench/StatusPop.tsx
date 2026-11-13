@@ -106,7 +106,6 @@ function RunningList() {
 function LspList({ lspKey, sel, onSel, onSettings }: { lspKey: string | null; sel: string | null; onSel: (id: string | null) => void; onSettings?: (cat: string) => void }) {
   const s = useSettings();
   const run = useLspRunning();
-  const feats = [["tsLspDiag", i18next.t("エラーの波線")], ["tsLspComplete", i18next.t("補完")], ["tsLspHover", i18next.t("ホバーで型を表示")], ["tsLspDef", i18next.t("定義へ移動")], ["tsLspSig", i18next.t("引数のヒント")], ["tsLspRefs", i18next.t("参照の検索")], ["tsLspRename", i18next.t("名前の変更")], ["tsLspAction", i18next.t("コードアクション")], ["tsLspInlay", i18next.t("インレイヒント")]] as const;
   // 言語ごとの状態。開いているフォルダのものを先に、なければ動いているものの先頭を使う
   const of = (id: string) => run.find((r) => r.server === id && r.key === lspKey) ?? run.find((r) => r.server === id);
   return (
