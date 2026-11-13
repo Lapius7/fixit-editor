@@ -12,8 +12,8 @@ export type Cmd = { id: string; label: string; group: string; keys?: string; ico
 export default function Palette({ cmds, onClose, out }: { cmds: Cmd[]; onClose: () => void; out?: boolean }) {
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(0);
-  const [closing, setClosing] = useState(false);
   const list = useRef<HTMLUListElement>(null);
+  const field = useRef<HTMLInputElement>(null);
 
   const hits = useMemo(() => {
     const s = q.trim();
@@ -23,14 +23,17 @@ export default function Palette({ cmds, onClose, out }: { cmds: Cmd[]; onClose: 
 
   useEffect(() => setSel(0), [q]);
   useEffect(() => { list.current?.children[sel]?.scrollIntoView({ block: "nearest" }); }, [sel]);
-  const close = (after?: () => void) => { setClosing(true); setTimeout(() => { onClose(); after?.(); }, ms(180)); };
+  // 閉じる状態は呼び出し側(usePresence)が持つ。ここで遅れて onClose を呼ぶと、閉じる途中で開き直したときに、新しく開いた窓まで閉じてしまう
+  const close = (after?: () => void) => { onClose(); if (after) setTimeout(after, ms(180)); };
+  // 開き直しで同じ窓が使い回されても、入力欄に必ずカーソルを置く
+  useEffect(() => { if (!out) field.current?.focus(); }, [out]);
 
   return (
-    <div className="qo-backdrop" data-closing={closing || !!out} onMouseDown={() => close()}>
+    <div className="qo-backdrop" data-closing={!!out} onMouseDown={() => close()}>
       <div className="qo" role="dialog" aria-label={i18next.t("コマンドパレット")} onMouseDown={(e) => e.stopPropagation()}>
         <div className="qo-input">
           <Search />
-          <input autoFocus placeholder={i18next.t("コマンドを入力")} value={q} onChange={(e) => setQ(e.target.value)}
+          <input ref={field} autoFocus placeholder={i18next.t("コマンドを入力")} value={q} onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Escape") close();
               else if (e.key === "ArrowDown") { e.preventDefault(); setSel((s) => Math.min(s + 1, hits.length - 1)); }

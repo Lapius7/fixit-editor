@@ -48,6 +48,10 @@ pub enum Event {
     Err { kind: &'static str },
     // ログイン画面の URL(ブラウザが開かないときに、本人がコピーして開く)
     Url { s: String },
+    // 使った量(トークン数)。i=入力 o=出力 cr=キャッシュ読み込み cw=キャッシュ書き込み
+    Usage { i: u64, o: u64, cr: u64, cw: u64 },
+    // 上限の使用率。id は five_hour / seven_day など、u は 0〜1、r は戻る時刻(UNIX 秒)
+    Limit { id: String, u: f64, r: u64 },
 }
 
 // 動いている 1 回分。中断(キャンセル)のために子プロセスを持つ
@@ -128,6 +132,25 @@ pub fn find_native() -> Option<PathBuf> {
     }
     c.into_iter().find(is_file)
 }
+// どの claude を使うか。"" と "auto" は Windows の claude を先に探して、なければ WSL。"windows" と "wsl" は、その片方だけ
+pub fn where_ok(w: &str) -> bool {
+    matches!(w, "" | "auto" | "windows" | "wsl")
+}
+enum Target {
+    Native(PathBuf),
+    Wsl,
+}
+fn pick(wh: &str) -> Option<Target> {
+    if wh != "wsl" {
+        if let Some(b) = find_native() {
+            return Some(Target::Native(b));
+        }
+    }
+    if wh != "windows" && has_wsl() {
+        return Some(Target::Wsl);
+    }
+    None
+}
 fn has_wsl() -> bool {
     cfg!(windows) && std::env::var_os("PATH").map_or(false, |p| std::env::split_paths(&p).any(|d| d.join("wsl.exe").is_file()))
 }
@@ -171,6 +194,30 @@ fn wsl_script(model: &str, effort: &str, json_in: bool) -> String {
     )
 }
 
+// rate_limit_event の中身から、窓(five_hour / seven_day など)ごとの使用率を取り出す。unifiedWindows がなければ、最上位の 1 つだけ見る
+fn limit_events(e: &serde_json::Value) -> Vec<Event> {
+    let info = &e["rate_limit_info"];
+    if let Some(w) = info["unifiedWindows"].as_object() {
+        return w
+            .iter()
+            .filter_map(|(id, v)| Some(Event::Limit { id: id.clone(), u: v["utilization"].as_f64()?, r: v["resetsAt"].as_u64().unwrap_or(0) }))
+            .collect();
+    }
+    match (info["rateLimitType"].as_str(), info["utilization"].as_f64()) {
+        (Some(id), Some(u)) => vec![Event::Limit { id: id.to_string(), u, r: info["resetsAt"].as_u64().unwrap_or(0) }],
+        _ => vec![],
+    }
+}
+// result の usage から、1 回の呼び出しで使ったトークン数を取り出す
+fn usage_event(e: &serde_json::Value) -> Option<Event> {
+    let u = &e["usage"];
+    if !u.is_object() {
+        return None;
+    }
+    let n = |k: &str| u[k].as_u64().unwrap_or(0);
+    Some(Event::Usage { i: n("input_tokens"), o: n("output_tokens"), cr: n("cache_read_input_tokens"), cw: n("cache_creation_input_tokens") })
+}
+
 fn classify(err: &str) -> &'static str {
     let e = err.to_lowercase();
     let any = |l: &[&str]| l.iter().any(|k| e.contains(k));
@@ -186,8 +233,8 @@ fn classify(err: &str) -> &'static str {
 }
 
 // 会話を 1 回送り、返事を emit に流す。終わると必ず Done か Err を 1 回出す
-pub fn chat(system: &str, model: &str, effort: &str, messages: &[Msg], job: &Job, emit: &mut dyn FnMut(Event)) {
-    if messages.is_empty() || messages.iter().any(|m| (m.role != "user" && m.role != "assistant") || !m.images.iter().all(img_ok)) || (!model.is_empty() && !model_ok(model)) || !effort_ok(effort) {
+pub fn chat(system: &str, model: &str, effort: &str, wh: &str, messages: &[Msg], job: &Job, emit: &mut dyn FnMut(Event)) {
+    if messages.is_empty() || messages.iter().any(|m| (m.role != "user" && m.role != "assistant") || !m.images.iter().all(img_ok)) || (!model.is_empty() && !model_ok(model)) || !effort_ok(effort) || !where_ok(wh) {
         return emit(Event::Err { kind: "other" });
     }
     if RUNNING.fetch_add(1, Ordering::SeqCst) >= MAX_RUNNING {
@@ -195,21 +242,23 @@ pub fn chat(system: &str, model: &str, effort: &str, messages: &[Msg], job: &Job
         return emit(Event::Err { kind: "rate" });
     }
     let dir = temp_dir();
-    run_inner(system, model, effort, messages, job, dir.as_ref(), emit);
+    run_inner(system, model, effort, wh, messages, job, dir.as_ref(), emit);
     if let Some(d) = dir {
         let _ = std::fs::remove_dir_all(d);
     }
     RUNNING.fetch_sub(1, Ordering::SeqCst);
 }
 
-fn run_inner(system: &str, model: &str, effort: &str, messages: &[Msg], job: &Job, dir: Option<&PathBuf>, emit: &mut dyn FnMut(Event)) {
+fn run_inner(system: &str, model: &str, effort: &str, wh: &str, messages: &[Msg], job: &Job, dir: Option<&PathBuf>, emit: &mut dyn FnMut(Event)) {
     let Some(dir) = dir else { return emit(Event::Err { kind: "other" }) };
     let (json_in, text) = stdin_payload(messages);
-    let mut cmd = if let Some(bin) = find_native() {
-        let mut c = Command::new(bin);
-        c.args(claude_args(system, model, effort, json_in));
-        c
-    } else if has_wsl() {
+    let mut cmd = match pick(wh) {
+        Some(Target::Native(bin)) => {
+            let mut c = Command::new(bin);
+            c.args(claude_args(system, model, effort, json_in));
+            c
+        }
+        Some(Target::Wsl) => {
         let mut c = Command::new("wsl.exe");
         c.args(["-e", "sh", "-c", "eval \"$FIXIT_SH\""]);
         c.env("FIXIT_SH", wsl_script(model, effort, json_in)).env("FIXIT_SYS", system);
@@ -219,8 +268,8 @@ fn run_inner(system: &str, model: &str, effort: &str, messages: &[Msg], job: &Jo
         };
         c.env("WSLENV", wslenv);
         c
-    } else {
-        return emit(Event::Err { kind: "nocli" });
+        }
+        None => return emit(Event::Err { kind: "nocli" }),
     };
     cmd.current_dir(dir).env_remove("ANTHROPIC_API_KEY").env_remove("ANTHROPIC_AUTH_TOKEN");
     no_window(&mut cmd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -280,8 +329,16 @@ fn run_inner(system: &str, model: &str, effort: &str, messages: &[Msg], job: &Jo
                     },
                     _ => {}
                 }
-            } else if ty == "result" && e["is_error"] == true {
-                err_text = format!("{}\n{}", e["result"].as_str().unwrap_or(""), err_text);
+            } else if ty == "rate_limit_event" {
+                // 5 時間と週間の使用率。claude が毎回の呼び出しで返すものを、そのまま画面へ渡す
+                limit_events(&e).into_iter().for_each(&mut *emit);
+            } else if ty == "result" {
+                if let Some(u) = usage_event(&e) {
+                    emit(u);
+                }
+                if e["is_error"] == true {
+                    err_text = format!("{}\n{}", e["result"].as_str().unwrap_or(""), err_text);
+                }
             }
         }
         let _ = done_tx.send(());
@@ -302,14 +359,11 @@ fn run_inner(system: &str, model: &str, effort: &str, messages: &[Msg], job: &Jo
 }
 
 // claude コマンドを、この PC か WSL で呼ぶ準備。引数は固定の語だけ(利用者の入力は入れない)
-fn cli_cmd(args: &[&str]) -> Option<Command> {
-    if let Some(bin) = find_native() {
+fn cli_cmd(args: &[&str], wh: &str) -> Option<Command> {
+    if let Target::Native(bin) = pick(wh)? {
         let mut c = Command::new(bin);
         c.args(args);
         return Some(c);
-    }
-    if !has_wsl() {
-        return None;
     }
     let a = args.iter().map(|x| sq(x)).collect::<Vec<_>>().join(" ");
     let mut c = Command::new("wsl.exe");
@@ -319,8 +373,11 @@ fn cli_cmd(args: &[&str]) -> Option<Command> {
 
 // 接続の状態。"ready"(ログイン済み) / "login"(未ログイン) / "nocli"(claude がない) / "unknown"(確かめられない)
 // `claude auth status --json` の loggedIn だけを見る。メールアドレスやトークンは読まない・返さない
-pub fn status() -> &'static str {
-    let Some(mut cmd) = cli_cmd(&["auth", "status", "--json"]) else { return "nocli" };
+pub fn status(wh: &str) -> &'static str {
+    if !where_ok(wh) {
+        return "unknown";
+    }
+    let Some(mut cmd) = cli_cmd(&["auth", "status", "--json"], wh) else { return "nocli" };
     cmd.env_remove("ANTHROPIC_API_KEY").env_remove("ANTHROPIC_AUTH_TOKEN");
     no_window(&mut cmd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
     let mut child = match cmd.spawn() {
@@ -363,8 +420,11 @@ fn login_url(line: &str) -> Option<String> {
 }
 
 // ログイン(`claude auth login --claudeai`)を、利用者が押したときだけ動かす。ブラウザでの認証を待ち、終わると Done か Err を 1 回出す
-pub fn login(job: &Job, emit: &mut dyn FnMut(Event)) {
-    let Some(mut cmd) = cli_cmd(&["auth", "login", "--claudeai"]) else { return emit(Event::Err { kind: "nocli" }) };
+pub fn login(wh: &str, job: &Job, emit: &mut dyn FnMut(Event)) {
+    if !where_ok(wh) {
+        return emit(Event::Err { kind: "other" });
+    }
+    let Some(mut cmd) = cli_cmd(&["auth", "login", "--claudeai"], wh) else { return emit(Event::Err { kind: "nocli" }) };
     cmd.env_remove("ANTHROPIC_API_KEY").env_remove("ANTHROPIC_AUTH_TOKEN");
     no_window(&mut cmd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
     let mut child = match cmd.spawn() {
@@ -402,6 +462,89 @@ pub fn login(job: &Job, emit: &mut dyn FnMut(Event)) {
     } else {
         emit(Event::Err { kind: "login" });
     }
+}
+
+// ---- 使用量(5 時間/週間)を、会話なしで取る ----
+// claude のログイン情報(.credentials.json)から、読み取り用のトークンだけを取り出し、Anthropic の使用量の窓口に問い合わせる。
+// トークンはこの関数の中だけで使い、画面にも保存にも渡さない。返すのは使用率とリセット時刻だけ。
+const USAGE_IDS: [&str; 4] = ["five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet"];
+
+fn token_of(cred: &[u8]) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_slice(cred).ok()?;
+    let t = v.get("claudeAiOauth")?.get("accessToken")?.as_str()?;
+    (!t.is_empty() && t.len() <= 2048 && !t.chars().any(|c| c.is_control() || c == ' ')).then(|| t.to_string())
+}
+
+/// { id: { u: 使用率(0〜1), r: リセット時刻(ISO の文字列) } }。数字と日時の形でないものは捨てる
+pub fn usage_out(v: &serde_json::Value) -> serde_json::Value {
+    let mut m = serde_json::Map::new();
+    for id in USAGE_IDS {
+        let Some(o) = v.get(id).filter(|x| x.is_object()) else { continue };
+        let Some(u) = o.get("utilization").and_then(|x| x.as_f64()).filter(|x| x.is_finite() && *x >= 0.0) else { continue };
+        let r = o.get("resets_at").and_then(|x| x.as_str()).filter(|x| x.len() <= 40).unwrap_or("");
+        m.insert(id.into(), serde_json::json!({ "u": (u / 100.0).min(1.0), "r": r }));
+    }
+    serde_json::Value::Object(m)
+}
+
+fn cred_native() -> Option<Vec<u8>> {
+    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })?;
+    let mut f = std::fs::File::open(PathBuf::from(home).join(".claude").join(".credentials.json")).ok()?;
+    let mut b = Vec::new();
+    (&mut f).take(65536).read_to_end(&mut b).ok()?;
+    Some(b)
+}
+
+fn cred_wsl() -> Option<Vec<u8>> {
+    if !has_wsl() {
+        return None;
+    }
+    let mut c = Command::new("wsl.exe");
+    c.args(["-e", "sh", "-c", "cat \"$HOME/.claude/.credentials.json\" 2>/dev/null"]);
+    let o = no_window(&mut c).stdin(Stdio::null()).stderr(Stdio::null()).output().ok()?;
+    (o.status.success() && o.stdout.len() <= 65536).then_some(o.stdout)
+}
+
+fn fetch_usage(tok: &str) -> Result<serde_json::Value, &'static str> {
+    let r = ureq::AgentBuilder::new().timeout_connect(Duration::from_secs(15)).timeout_read(Duration::from_secs(30)).build()
+        .get("https://api.anthropic.com/api/oauth/usage")
+        .set("Authorization", &format!("Bearer {tok}"))
+        .set("anthropic-beta", "oauth-2025-04-20")
+        .set("Accept", "application/json")
+        .set("User-Agent", "Fixit-Editor")
+        .call();
+    match r {
+        Ok(x) => {
+            let mut b = Vec::new();
+            x.into_reader().take(65536).read_to_end(&mut b).map_err(|_| "network")?;
+            serde_json::from_slice(&b).map_err(|_| "other")
+        }
+        Err(ureq::Error::Status(401 | 403, _)) => Err("login"),
+        Err(_) => Err("network"),
+    }
+}
+
+/// { limits: {...} } か { error: "nocli"|"login"|"network"|"other" }。wh は status と同じ指定
+pub fn usage(wh: &str) -> serde_json::Value {
+    if !where_ok(wh) {
+        return serde_json::json!({ "error": "other" });
+    }
+    let mut srcs: Vec<Vec<u8>> = Vec::new();
+    if wh != "wsl" {
+        srcs.extend(cred_native());
+    }
+    if wh != "windows" && srcs.is_empty() {
+        srcs.extend(cred_wsl());
+    }
+    let mut err = "nocli";
+    for c in srcs {
+        let Some(t) = token_of(&c) else { continue };
+        match fetch_usage(&t) {
+            Ok(v) => return serde_json::json!({ "limits": usage_out(&v) }),
+            Err(e) => err = e,
+        }
+    }
+    serde_json::json!({ "error": err })
 }
 
 #[cfg(test)]
@@ -444,10 +587,53 @@ mod tests {
     }
 
     #[test]
+    fn 使用率と使用量を取り出す() {
+        let j = |v: serde_json::Value| serde_json::to_value(v).unwrap();
+        let e: serde_json::Value = serde_json::from_str(r#"{"type":"rate_limit_event","rate_limit_info":{"unifiedWindows":{"five_hour":{"utilization":0.72,"resetsAt":1800000000},"seven_day":{"utilization":0.89},"bad":{"status":"x"}}}}"#).unwrap();
+        let mut v: Vec<_> = limit_events(&e).iter().map(|x| serde_json::to_value(x).unwrap()).collect();
+        v.sort_by_key(|x| x["id"].as_str().unwrap().to_string());
+        assert_eq!(v.len(), 2); // utilization のない窓は捨てる
+        assert_eq!(v[0], j(serde_json::json!({"t":"limit","id":"five_hour","u":0.72,"r":1800000000u64})));
+        assert_eq!(v[1]["r"], 0);
+        let one: serde_json::Value = serde_json::from_str(r#"{"rate_limit_info":{"rateLimitType":"seven_day","utilization":0.5,"resetsAt":5}}"#).unwrap();
+        assert_eq!(serde_json::to_value(&limit_events(&one)[0]).unwrap()["id"], "seven_day");
+        assert!(limit_events(&serde_json::json!({})).is_empty());
+        let r: serde_json::Value = serde_json::from_str(r#"{"type":"result","usage":{"input_tokens":3,"output_tokens":4,"cache_read_input_tokens":5}}"#).unwrap();
+        assert_eq!(serde_json::to_value(usage_event(&r).unwrap()).unwrap(), serde_json::json!({"t":"usage","i":3,"o":4,"cr":5,"cw":0}));
+        assert!(usage_event(&serde_json::json!({"type":"result"})).is_none());
+    }
+
+    #[test]
+    fn 場所の指定は決まった語だけ通す() {
+        for w in ["", "auto", "windows", "wsl"] {
+            assert!(where_ok(w));
+        }
+        assert!(!where_ok("mac") && !where_ok("wsl; rm"));
+    }
+
+    #[test]
     fn ログインの_url_は_claude_のドメインだけ拾う() {
         assert_eq!(login_url("visit: https://claude.ai/oauth/authorize?code=true&x=1 now").as_deref(), Some("https://claude.ai/oauth/authorize?code=true&x=1"));
         assert!(login_url("https://evil.example/claude.ai").is_none());
         assert!(login_url("https://claude.ai.evil.example/x").is_none());
         assert!(login_url("no url").is_none());
+    }
+
+    #[test]
+    fn 使用量の返事から使用率とリセット時刻だけ取り出す() {
+        let v = serde_json::json!({ "five_hour": { "utilization": 8.0, "resets_at": "2026-11-12T14:40:00+00:00", "limit_dollars": null }, "seven_day": { "utilization": 150.0, "resets_at": null }, "seven_day_opus": null, "x": { "utilization": 1.0 } });
+        let o = usage_out(&v);
+        assert_eq!(o["five_hour"]["u"], 0.08);
+        assert_eq!(o["five_hour"]["r"], "2026-11-12T14:40:00+00:00");
+        assert_eq!(o["seven_day"]["u"], 1.0);
+        assert_eq!(o["seven_day"]["r"], "");
+        assert!(o.get("seven_day_opus").is_none() && o.get("x").is_none());
+    }
+
+    #[test]
+    fn ログイン情報からトークンだけ取り出す() {
+        assert_eq!(token_of(br#"{"claudeAiOauth":{"accessToken":"abc","refreshToken":"zzz"}}"#).as_deref(), Some("abc"));
+        assert!(token_of(br#"{"claudeAiOauth":{"accessToken":"a b"}}"#).is_none());
+        assert!(token_of(b"not json").is_none() && token_of(b"{}").is_none());
     }
 }

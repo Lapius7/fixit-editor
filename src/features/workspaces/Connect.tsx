@@ -4,7 +4,7 @@ import ContextMenu, { type Item } from "@/workbench/ContextMenu";
 import { usePresence } from "@/shared/presence";
 import { byName, dropJunk, isJunk } from "@/platform/fs";
 import { checkDir, connLabel, dropRecent, getRecent, homeOf, listHosts, parseTarget, pushRecent, resolvePath, showPath, RemoteDir, type Conn } from "@/platform/remote";
-import { ms } from "@/features/settings/settings";
+import { get, ms } from "@/features/settings/settings";
 import i18next from 'i18next'
 import { Trans } from 'react-i18next'
 
@@ -21,10 +21,11 @@ const SKEL = [46, 62, 38, 70, 54, 42]; // 読み込み中に並べる仮の行�
 export default function Connect({ current, adding, onConnect, onClose, out }: Props) {
   const [kind, setKind] = useState<"wsl" | "ssh">(current?.kind === "ssh" ? "ssh" : "wsl");
   const [host, setHost] = useState(current?.host ?? "");
-  // パスは、開いているフォルダに関係なく、いつもホーム("~" → /home/<ユーザー>)から始める
-  const [path, setPath] = useState("~");
+  // パスは、開いているフォルダに関係なく、設定の「最初のフォルダ」(初期はホーム。"~" → /home/<ユーザー>)から始める。SSH はいつもホーム
+  const start = get().connStart.trim() || "~";
+  const [path, setPath] = useState(current?.kind === "ssh" ? "~" : start);
   // フォルダの入力は種類(このPC / SSH)ごとに持つ。このPCのパスを SSH 先で開こうとしないように
-  const kindPaths = useRef<Record<"wsl" | "ssh", string>>({ wsl: "~", ssh: "~" });
+  const kindPaths = useRef<Record<"wsl" | "ssh", string>>({ wsl: start, ssh: "~" });
   const switchKind = (k: "wsl" | "ssh") => {
     if (k === kind) return;
     kindPaths.current[kind] = path;

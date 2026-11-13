@@ -1,0 +1,7 @@
+{
+  "productName": "Fixit Editor Dev",
+  "identifier": "dev.lapius7.fixit-editor.dev",
+  "build": {
+    "devUrl": "http://localhost:5174"
+  }
+}

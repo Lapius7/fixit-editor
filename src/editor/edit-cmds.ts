@@ -19,6 +19,14 @@ const mapSel = (f: (s: string) => string): Run => (v) => {
   }));
   return true;
 };
+// 現在行の上に、同じ字下げの空行を足してそこへ移る(Ctrl+Shift+Enter)
+const blankAbove: Run = (v) => {
+  v.dispatch(v.state.changeByRange((r) => {
+    const l = v.state.doc.lineAt(r.head), ind = /^[ \t]*/.exec(l.text)![0];
+    return { changes: { from: l.from, insert: ind + "\n" }, range: EditorSelection.cursor(l.from + ind.length) };
+  }), { scrollIntoView: true, userEvent: "input" });
+  return true;
+};
 const lines = (f: (l: string[]) => string[]): Run => (v) => {
   const s = v.state, m = s.selection.main;
   const from = m.empty ? 0 : s.doc.lineAt(m.from).from, to = m.empty ? s.doc.length : s.doc.lineAt(m.to).to;
@@ -28,8 +36,8 @@ const lines = (f: (l: string[]) => string[]): Run => (v) => {
 const clip = (s: string) => writeClip(s);
 
 export const EDIT: Record<string, Run> = {
-  undo, redo, comment: toggleComment, blockComment: toggleBlockComment, indentMore, indentLess,
-  dupDown: copyLineDown, dupUp: copyLineUp, moveDown: moveLineDown, moveUp: moveLineUp, deleteLine, blankBelow: insertBlankLine, selectLine,
+  undo, redo, redoAlt: redo, comment: toggleComment, blockComment: toggleBlockComment, indentMore, indentLess,
+  dupDown: copyLineDown, dupUp: copyLineUp, moveDown: moveLineDown, moveUp: moveLineUp, deleteLine, blankBelow: insertBlankLine, blankAbove, selectLine,
   find: openSearchPanel, replace: openSearchPanel, findNext, findPrev: findPrevious, gotoLine, selectNext: selectNextOccurrence, selectMatches: selectSelectionMatches,
   fold: foldCode, unfold: unfoldCode, foldAll, unfoldAll,
   upper: mapSel((s) => s.toUpperCase()), lower: mapSel((s) => s.toLowerCase()),

@@ -5,7 +5,7 @@ import { TAB_SIZE } from "@/shared/config";
 
 export type Dot = { x: number; y: number; c: string };
 export type Mode = "light" | "dark" | "auto";
-export type Cat = "look" | "layout" | "editor" | "cursor" | "assist" | "files" | "ws" | "term" | "run" | "status" | "motion" | "privacy" | "adv" | "history" | "ai" | "account" | "about";
+export type Cat = "look" | "layout" | "editor" | "cursor" | "assist" | "lsp" | "files" | "ws" | "term" | "run" | "status" | "motion" | "privacy" | "adv" | "history" | "ai" | "account" | "about";
 
 // 背景の色を選ぶ見本(画像の下段の丸)
 export const SWATCHES = ["#e4e6ec", "#f08bb4", "#f2836b", "#f5a65b", "#e6c85a", "#8ccf6f", "#4fc79a", "#4aa8f0", "#7a7cf0", "#b57cf0"];
@@ -14,7 +14,7 @@ export const MAX_DOTS = 5;
 
 export const CATS: { id: Cat | "keys"; label: string }[] = [
   { id: "look", label: "外観" }, { id: "layout", label: "レイアウト" }, { id: "editor", label: "エディタ" }, { id: "cursor", label: "カーソルと行番号" },
-  { id: "assist", label: "補完と入力" }, { id: "files", label: "ファイル" }, { id: "ws", label: "ワークスペース" }, { id: "term", label: "ターミナル" }, { id: "run", label: "実行" }, { id: "status", label: "ステータスバー" },
+  { id: "assist", label: "補完と入力" }, { id: "lsp", label: "言語サーバー" }, { id: "files", label: "ファイル" }, { id: "ws", label: "ワークスペース" }, { id: "term", label: "ターミナル" }, { id: "run", label: "実行" }, { id: "status", label: "ステータスバー" },
   { id: "motion", label: "アニメーション" }, { id: "privacy", label: "統計とプライバシー" }, { id: "adv", label: "詳細" }, { id: "account", label: "アカウント" }, { id: "ai", label: "AI" }, { id: "history", label: "変更履歴" }, { id: "keys", label: "ショートカット" }, { id: "about", label: "開発者情報" },
 ];
 
@@ -28,6 +28,7 @@ const n = <K extends string>(id: K, cat: Cat, label: string, def: number, o: Opt
 const b = <K extends string>(id: K, cat: Cat, label: string, def: boolean, o: Opt & { fmt?: (v: boolean) => string } = {}) => ({ id, cat, label, def, kind: "bool" as const, ...o });
 const e = <K extends string>(id: K, cat: Cat, label: string, def: string, opts: [string, string][], o: Opt & { fmt?: (v: string) => string } = {}) =>
   ({ id, cat, label, def, kind: "enum" as const, opts, ...o });
+const s_ = <K extends string>(id: K, cat: Cat, label: string, def: string, o: Opt & { max?: number; ph?: string } = {}) => ({ id, cat, label, def, kind: "text" as const, ...o });
 // 書体。選択肢のキー(preset)か、この PC のフォント("local:家族名")のどちらかを持つ
 const f = <K extends string>(id: K, cat: Cat, label: string, def: string, opts: [string, string][], o: Opt & { fmt?: (v: string) => string; mono?: boolean } = {}) =>
   ({ id, cat, label, def, kind: "font" as const, opts, ...o });
@@ -113,7 +114,19 @@ const RAW = [
   b("indentGuides", "cursor", "インデントの縦線", true),
   b("bracketMatching", "cursor", "対応する括弧を強調", true, { sec: "強調" }),
   b("matchHighlight", "cursor", "選んだ語と同じ語を強調", true),
-  b("rainbowBrackets", "cursor", "括弧を階層ごとに色分け", true), b("tagSync", "assist", "開始タグを直すと閉じタグも同時に直す", true), b("diagnostics", "assist", "エラーに波線を引く", true), b("langService", "assist", "型情報・定義へ移動・参照検索・リネーム(JS・TS)", true), b("gitStatus", "assist", "Git の変更を表示(ファイルの印・行の変更・ブランチ)", true), b("minimap", "cursor", "ミニマップ(右端に全体の縮図)", true, { sec: "全体表示" }), b("breadcrumbs", "cursor", "パンくず(いまの位置の階層)", true),
+  b("rainbowBrackets", "cursor", "括弧を階層ごとに色分け", true), b("tagSync", "assist", "開始タグを直すと閉じタグも同時に直す", true), b("diagnostics", "assist", "エラーに波線を引く", true), b("langService", "assist", "型情報・定義へ移動・参照検索・リネーム(JS・TS)", true), b("tsServer", "lsp", "TypeScript 言語サーバーを使う", false, { sec: "TypeScript / JavaScript", hint: "オンにすると、初回に registry.npmjs.org から TypeScript のサーバー(約 30 MB)を取得し、この PC(WSL のフォルダは WSL の中)で動かします。import の自動追加つきの補完・ホバー・定義へ移動・エラー表示が正確になります。取得で送るのはパッケージの要求だけで、コードやファイル名は送りません。画面下のバーからも入り切りできます" }),
+  b("tsLspWsl", "lsp", "WSL のフォルダで使う", true), b("tsLspPc", "lsp", "この PC のフォルダで使う", true),
+  b("tsLspDiag", "lsp", "エラーの波線", true), b("tsLspComplete", "lsp", "補完(import の自動追加つき)", true), b("tsLspHover", "lsp", "ホバーで型を表示", true), b("tsLspDef", "lsp", "定義へ移動(Ctrl+クリック・F12)", true), b("tsLspSig", "lsp", "引数のヒント(関数の ( を打つと出る)", true), b("tsLspRefs", "lsp", "参照の検索(Shift+F12)", true), b("tsLspRename", "lsp", "名前の変更(F2)", true), b("tsLspAction", "lsp", "コードアクション(Ctrl+.)", true), b("tsLspInlay", "lsp", "インレイヒント(型と引数名を薄く添える)", false, { hint: "変数の型や、関数に渡す値の引数名をコードの中に薄く表示します。表示のための文字で、ファイルには書き込まれません" }),
+  n("lspIdleMin", "lsp", "タブを閉じてから止めるまで", 1, { min: 1, max: 30, unit: "分", hint: "タブがなくなったあと、サーバーを動かし続ける時間です。短いほどメモリを早く手放し、長いほどフォルダに戻ったときにすぐ使えます" }),
+  b("pyServer", "lsp", "Python 言語サーバーを使う", false, { sec: "Python", hint: "オンにすると、初回に registry.npmjs.org から Pyright(約 20 MB)を取得し、この PC(WSL のフォルダは WSL の中)で動かします。補完・ホバー・定義へ移動・型チェックのエラー表示が使えます。動かすには Node.js が必要です。 取得で送るのはパッケージの要求だけで、コードやファイル名は送りません。画面下のバーからも入り切りできます" }),
+  b("htmlServer", "lsp", "HTML 言語サーバーを使う", false, { sec: "HTML", hint: "オンにすると、初回に registry.npmjs.org から VS Code 由来の HTML サーバーを取得し、この PC(WSL のフォルダは WSL の中)で動かします。タグ・属性の補完とホバー、エラー表示が使えます。動かすには Node.js が必要です。CSS と同じ配布物を使うので、取得は 1 回で済みます。 取得で送るのはパッケージの要求だけで、コードやファイル名は送りません。画面下のバーからも入り切りできます" }),
+  b("cssServer", "lsp", "CSS 言語サーバーを使う", false, { sec: "CSS / SCSS / Less", hint: "オンにすると、初回に registry.npmjs.org から VS Code 由来の CSS サーバーを取得し、この PC(WSL のフォルダは WSL の中)で動かします。プロパティ・値の補完とホバー、エラー表示が使えます。動かすには Node.js が必要です。HTML と同じ配布物を使うので、取得は 1 回で済みます。 取得で送るのはパッケージの要求だけで、コードやファイル名は送りません。画面下のバーからも入り切りできます" }),
+  b("phpServer", "lsp", "PHP 言語サーバーを使う", false, { sec: "PHP", hint: "オンにすると、初回に registry.npmjs.org から Intelephense を取得し、この PC(WSL のフォルダは WSL の中)で動かします。補完・ホバー・定義へ移動・エラー表示が使えます。動かすには Node.js が必要です。有料機能は使えません。 取得で送るのはパッケージの要求だけで、コードやファイル名は送りません。画面下のバーからも入り切りできます" }),
+  b("goServer", "lsp", "Go 言語サーバーを使う", false, { sec: "Go", hint: "オンにすると、初回に go install で gopls を取得(ビルド)し、この PC(WSL のフォルダは WSL の中)で動かします。補完・ホバー・定義へ移動・エラー表示が使えます。動かすには Go が必要で、取得には少し時間がかかります。取得で送るのはモジュールの要求だけで、コードやファイル名は送りません。画面下のバーからも入り切りできます" }),
+  b("rsServer", "lsp", "Rust 言語サーバーを使う", false, { sec: "Rust", hint: "オンにすると、初回に GitHub のリリースから rust-analyzer(約 15 MB)を取得し、この PC(WSL のフォルダは WSL の中)で動かします。取得した内容は GitHub が公開する sha256 と照合します。補完・ホバー・定義へ移動・エラー表示が使えます。解析には Rust のツールチェーン(rustup)が必要です。 取得で送るのはパッケージの要求だけで、コードやファイル名は送りません。画面下のバーからも入り切りできます" }),
+  b("rbServer", "lsp", "Ruby 言語サーバーを使う", false, { sec: "Ruby", hint: "オンにすると、初回に gem install で Solargraph を取得し、この PC(WSL のフォルダは WSL の中)で動かします。補完・ホバー・定義へ移動が使えます。動かすには Ruby(gem)が必要です。取得で送るのはパッケージの要求だけで、コードやファイル名は送りません。画面下のバーからも入り切りできます" }),
+  b("sqlServer", "lsp", "SQL 言語サーバーを使う", false, { sec: "MySQL(SQL)", hint: "オンにすると、初回に GitHub のリリースから sqls を取得し、この PC(WSL のフォルダは WSL の中)で動かします。取得した内容は GitHub が公開する sha256 と照合します。データベースにはつながず、構文とキーワードの補完だけが使えます。 取得で送るのはパッケージの要求だけで、コードやファイル名は送りません。画面下のバーからも入り切りできます" }),
+  b("gitStatus", "assist", "Git の変更を表示(ファイルの印・行の変更・ブランチ)", true), b("minimap", "cursor", "ミニマップ(右端に全体の縮図)", true, { sec: "全体表示" }), b("breadcrumbs", "cursor", "パンくず(いまの位置の階層)", true),
   e("whitespace", "cursor", "空白文字の表示", "off", [["off", "出さない"], ["trailing", "行末だけ"], ["all", "すべて"]]),
   e("cursorStyle", "cursor", "カーソルの形", "bar", [["bar", "縦線"], ["block", "ブロック"], ["underline", "下線"]], { sec: "カーソル", attr: "cursor" }),
   n("cursorWidth", "cursor", "カーソルの太さ", 1.5, { min: 1, max: 4, step: 0.5, unit: "px", css: "--cur-w" }),
@@ -152,7 +165,8 @@ const RAW = [
   /* ワークスペースとプロファイル */
   b("wsRestore", "ws", "起動したとき、前回のワークスペースを開く", true, { sec: "ワークスペース" }),
   // 以前は初期値がオンで、その値が保存されて残るため、名前を変えて全員をオフに戻した(wsRegister → wsAutoAdd)
-  b("wsAutoAdd", "ws", "フォルダを開いたとき、ワークスペースに登録する", false, { hint: "登録したフォルダは、開き直すと前回のタブも戻ります" }),
+  s_("connStart", "ws", "WSL のフォルダを開く画面の、最初のフォルダ", "~", { max: 300, ph: "例: ~/projects、C:\\Users\\me\\code", hint: "「~」はホーム(/home/ユーザー)です。SSH はいつもホームから始まります" }),
+  b("wsAutoAdd", "ws", "フォルダを開いたとき、ワークスペースに登録する", false, { hint: "登録したフォルダは、いつ開き直しても前回のタブが戻ります。登録していないフォルダは、最後に開いた 1 つだけ戻ります" }),
   b("wsTerms", "ws", "ターミナルの数と開始位置も保存する", true, { hint: "実行中の処理は戻りません。新しいシェルを同じ場所で開きます" }),
   b("wsProfileLink", "ws", "ワークスペースに結びつけたプロファイルへ切り替える", true),
   n("wsMax", "ws", "保存できるワークスペースの数", 30, { min: 5, max: 100, step: 5 }),
@@ -214,11 +228,16 @@ const RAW = [
   n("searchMax", "adv", "全文検索の表示数", 50, { min: 20, max: 500, step: 10 }),
   b("smoothScroll", "adv", "一覧のスクロールをなめらかに", true, { attr: "smooth" }),
   b("emptyHint", "adv", "何も開いていないとき、操作の案内を出す", true),
+  e("shotBg", "editor", "背景", "aurora", [["aurora", "オーロラ"], ["sunset", "夕焼け"], ["ocean", "海"], ["mono", "グレー"], ["none", "なし(透明)"]], { sec: "コードの画像" }),
+  e("shotTheme", "editor", "ウィンドウの配色", "dark", [["dark", "ダーク"], ["light", "ライト"], ["app", "画面と同じ"]]),
+  b("shotChrome", "editor", "ウィンドウの枠(三つの丸とファイル名)を付ける", true),
+  b("shotLineNo", "editor", "行番号を付ける", false),
+  n("shotPad", "editor", "外側の余白", 56, { min: 0, max: 160, step: 4, unit: "px" }),
 ];
 
 /* ---------- 型 ---------- */
 export type AnyDef = {
-  id: string; cat: Cat; label: string; hint?: string; sec?: string; kind: "num" | "bool" | "enum" | "font"; mono?: boolean; def: number | boolean | string;
+  id: string; cat: Cat; label: string; hint?: string; sec?: string; kind: "num" | "bool" | "enum" | "font" | "text"; mono?: boolean; ph?: string; def: number | boolean | string;
   min?: number; max?: number; step?: number; unit?: string; opts?: [string, string][]; css?: string; attr?: string; fmt?: (v: never) => string;
 };
 export const DEFS: AnyDef[] = RAW;
@@ -246,6 +265,7 @@ function clean(raw: unknown, base: Settings = DEFAULTS): Settings {
     if (typeof v !== typeof d.def) continue;
     if (d.kind === "num") { if (Number.isFinite(v)) out[d.id] = Math.min(d.max!, Math.max(d.min!, v as number)); }
     else if (d.kind === "enum") { if (d.opts!.some(([k]) => k === v)) out[d.id] = v; }
+    else if (d.kind === "text") { if (typeof v === "string" && v.length <= (d.max ?? 300)) out[d.id] = v.trim(); }
     else if (d.kind === "font") { if (d.opts!.some(([k]) => k === v) || (typeof v === "string" && v.startsWith(LOCAL) && v.length > LOCAL.length && v.length < 120)) out[d.id] = v; }
     else out[d.id] = v;
   }

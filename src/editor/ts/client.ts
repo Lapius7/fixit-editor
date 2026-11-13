@@ -20,7 +20,8 @@ export const isScript = (name: string) => JS_RE.test(name);
 export const openFiles: { v: Record<string, string> } = { v: {} };
 
 export type Loc = { file: string; from: number; to: number; line: number; text: string };
-export type Edit = { file: string; from: number; to: number; pre: string; suf: string };
+// text があるときは、それをそのまま差し込む(言語サーバー)。ないときは pre + 新しい名前 + suf(Worker)
+export type Edit = { file: string; from: number; to: number; pre: string; suf: string; text?: string };
 export type Hover = { from: number; to: number; sig: string; doc: string; kind: string };
 
 async function sync(extra: Record<string, string>) {

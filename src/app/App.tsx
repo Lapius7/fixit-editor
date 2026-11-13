@@ -13,7 +13,7 @@ import { OUTLINE_EVENT } from "@/editor/Crumbs";
 import LangUI from "@/editor/LangUI";
 import { openFiles, isScript, type Edit, type Loc } from "@/editor/ts/client";
 import Editor, { dropStates, cursorsNow, seedCursors, type Cursor, type Jump } from "@/editor/Editor";
-import FileTree, { GitMarks, canDrop, type GitMark } from "@/workbench/FileTree";
+import FileTree, { GitMarks, canDrop, iconFor, type GitMark } from "@/workbench/FileTree";
 import { ColGrip, RatioGrip } from "@/workbench/ColGrip";
 import { loadBase, loadGit, type GitInfo } from "@/features/git/git";
 import QuickOpen from "@/workbench/QuickOpen";
@@ -21,6 +21,10 @@ import Viewer from "@/workbench/Viewer";
 import { IMAGE_SAVE } from "@/workbench/ImageView";
 import Terminal, { type TermApi } from "@/workbench/Terminal";
 import StatusBar from "@/workbench/StatusBar";
+import { LSP_AVAILABLE } from "@/editor/lsp/transport";
+import { lspOptsOf, serverOfFile } from "@/editor/lsp/servers";
+import { syncTabs as lspSync, normPath, sessionKey, type TabDoc } from "@/editor/lsp/session";
+import { lspUi } from "@/editor/lsp/ext";
 import { usePresence } from "@/shared/presence";
 import ThemePanel from "@/features/theme/ThemePanel";
 import StatusPop, { type PopKind } from "@/workbench/StatusPop";
@@ -47,12 +51,17 @@ import Workspaces from "@/features/workspaces/Workspaces";
 import { GitBranch, Pin, History, MessageSquareText, RefreshCw, ArrowUpCircle } from "lucide-react";
 import { Play, FolderSearch, AppWindow, FolderGit2, ChevronsUpDown } from "lucide-react";
 import { runnerFor, buildCommand, shq } from "@/features/run/runners";
-import { Sparkles, Server, FolderKanban, Eye, Maximize2, Minimize2, ImageIcon, ClipboardCopy, ChevronUp } from "lucide-react";
-import { createWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, patchWs, rootLabel, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
+import { Sparkles, Server, FolderKanban, Eye, Maximize2, Minimize2, ImageIcon, ClipboardCopy, ChevronUp, Camera } from "lucide-react";
+import { createTemp, createWs, emptyWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, patchWs, removeWs, rootLabel, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
 import { displayPath, setRootNames, splitRoot } from "@/workbench/rootpath";
 import { getProfiles, switchProfile, useProfiles } from "@/features/settings/profiles";
-import { copyWithNotice } from "@/platform/clipboard";
-import { prefetchOpen, setAllOpen, shownOpen } from "@/workbench/treeOpen";
+import { copyWithNotice, writeClip } from "@/platform/clipboard";
+import { prefetchOpen, setAllOpen, setOpenPath, shownOpen } from "@/workbench/treeOpen";
+import { revealPaths, startCreating } from "@/workbench/creating";
+import { beginPending } from "@/workbench/pending";
+import { clearSel, isMulti, isSelectedPath, selectedNodes } from "@/workbench/selection";
+import { clearTreeClip, getTreeClip, hasTreeClip, setTreeClip, treeClipFor } from "@/workbench/treeclip";
+import { leaveRows } from "@/workbench/treeAnim";
 import { listShells, type ShellOpt } from "@/platform/pty";
 import { RemoteFile, checkDir, connKey, isRemote, remoteSig, connLabel, lastDir, normConn, showPath, pushRecent, rootHandle, sshUrl, type Conn, type RemoteDir } from "@/platform/remote";
 import { DEMO_NAME, DEMO_TREE } from "@/shared/demo";
@@ -69,13 +78,15 @@ import type { AiAction, AiJob, Ctx } from "@/features/ai/prompts";
 import Preview, { previewKind } from "@/features/preview/Preview";
 import { KEYS, DEF, chips, comboOf, keyOf, rec, table } from "@/features/settings/keys";
 import { EDIT } from "@/editor/edit-cmds";
-import { codeToPng, shareShot } from "@/editor/shot";
+import { codeToPng, copyShot } from "@/editor/shot";
+import { showShot } from "@/editor/shotPreview";
+import { ShotPreview } from "@/editor/ShotPreview";
 import { drag, dragEnd, extFiles, paneDrag, rootKey, setDropTarget, useDropTarget } from "@/workbench/dnd";
 import { LEAF0, boxes, flipAround, fromPair, isLeaf, joints, leaves, nextId, onTop, removeLeaf, renumber, setRatio, splitLeaf, swapLeaves, topLeaves, topRight, valid as validLay, type Box, type Dir, type Edge, type Joint, type Lay } from "@/workbench/layout";
 import { addNode, dirOf, exists, moveNode, removeNode, renameNode } from "@/workbench/treeops";
 import { DEFS, isDark, ms, update, useSettings } from "@/features/settings/settings";
 import type { Tab } from "@/shared/types";
-import { ask } from "@/shared/ask";
+import { ask, askChoice } from "@/shared/ask";
 import i18next from 'i18next'
 import { Trans } from 'react-i18next'
 
@@ -85,7 +96,7 @@ type Spec = { prefix: string; name: string; handle?: FileSystemDirectoryHandle; 
 // ツリーの見出しのホバーに出す、フォルダの種類と場所(ブラウザ版の PC のフォルダは場所が分からないので名前だけ)
 const rootPath = (r: { ref: RootRef }) => rootLabel(r.ref);
 const newPrefix = () => "/@" + Math.random().toString(36).slice(2, 7);
-type Dlg = { title: string; desc?: string; input?: string; placeholder?: string; ok: string; danger?: boolean; validate?: (v: string) => string | null; onSubmit: (v: string) => void };
+type Dlg = { title: string; desc?: string; input?: string; placeholder?: string; ok: string; danger?: boolean; validate?: (v: string) => string | null; onSubmit: (v: string) => void; icon?: (v: string) => React.ReactNode };
 type Pm<T> = Record<number, T>; // 画面の番号ごとの値
 type Sess = { id: number; num: number; name?: string; exiting?: boolean; cwd?: string; shell?: string; label?: string; host?: string | null }; // host: SSH 先(null は SSH ではない。未指定は先頭のフォルダに合わせる)
 const def = (id: string) => DEFS.find((d) => d.id === id)!.def as number;
@@ -208,7 +219,8 @@ export default function App() {
   const [pop, setPop] = useState<PopKind | null>(null);
   const wsStore = useWorkspaces();
   const pfStore = useProfiles();
-  const ws = wsStore.list.find((w) => w.id === wsStore.current) ?? null;
+  const wsAny = wsStore.list.find((w) => w.id === wsStore.current) ?? null;
+  const ws = wsAny && !wsAny.temp ? wsAny : null; // 登録していないフォルダの「前回の続き」は、登録済みのワークスペースとしては扱わない
   const activeWs = useRef<string | null>(null); // いまの状態を書き戻す先
   const restoring = useRef(true); // 開き直している間と、起動の直後は、書き戻さない
   const wsTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -289,10 +301,27 @@ export default function App() {
       setTabs((p) => p.map((t) => (t.node.path === n.path && t.view.kind === "unsupported" ? { ...t, view, info, text, saved: text, eol: view.kind === "text" ? view.eol ?? "lf" : "lf" } : t)));
     } catch (e) { flash(String(e), "error"); }
   };
+  // 読み込み中のファイル(同じファイルを続けて押しても、読むのは 1 回)と、最後に押した順番
+  const opening = useRef(new Map<string, ReturnType<typeof load>>());
+  const openSeq = useRef(0);
   const open = useCallback(async (n: Node, pane: number = fp, pin = true) => {
+    const seq = ++openSeq.current;
+    let slow: ReturnType<typeof setTimeout> | undefined;
     if (!tabs.some((t) => t.node.path === n.path)) {
       try {
-        const { view, info } = await load(n);
+        let pend = opening.current.get(n.path);
+        if (!pend) {
+          const q = load(n);
+          pend = q;
+          opening.current.set(n.path, q);
+          document.body.classList.add("opening");
+          const done = () => { opening.current.delete(n.path); if (!opening.current.size) document.body.classList.remove("opening"); };
+          q.then(done, done);
+        }
+        // 読み込みが長引くときだけ知らせる
+        slow = setTimeout(() => flash(i18next.t("開いています…")), 700);
+        const { view, info } = await pend;
+        clearTimeout(slow);
         const text = view.kind === "text" ? view.text : "";
         const nt: Tab = { node: n, view, info, text, saved: text, eol: view.kind === "text" ? view.eol ?? "lf" : "lf" };
         // 一時表示のタブは、次に一時表示で開くものに置き換わる(未保存の変更があるもの・もう一方の画面に出ているものは除く)
@@ -305,7 +334,9 @@ export default function App() {
           setFresh((f) => new Set(f).add(n.path));
           setTimeout(() => setFresh((f) => { const x = new Set(f); x.delete(n.path); return x; }), ms(500));
         }
-      } catch (e) { return flash((e as Error).message, "error"); }
+      } catch (e) { clearTimeout(slow); return flash((e as Error).message, "error"); }
+      // 待っている間に別のファイルを押していたら、そちらを優先する(このファイルはタブにだけ追加する)
+      if (seq !== openSeq.current) return;
     } else if (pin && preview === n.path) setPreview(null);
     setAct((a) => ({ ...a, [pane]: n.path }));
     setGrp((g) => (g[pane]?.has(n.path) ? g : grpAdd(g, pane, n.path)));
@@ -331,6 +362,36 @@ export default function App() {
 
   // JS/TS の言語機能: 言語サービスには、開いているタブの中身を渡す
   useEffect(() => { openFiles.v = Object.fromEntries(tabs.filter((t) => isText(t) && isScript(t.node.name)).map((t) => [t.node.path, t.text])); }, [tabs]);
+  // 言語サーバー: WSL・PC のフォルダのタブを、そのフォルダの言語ごとのサーバーへ渡す
+  const lspDocs = (): TabDoc[] => {
+    if (!LSP_AVAILABLE) return [];
+    const out: TabDoc[] = [];
+    for (const t of tabs) {
+      if (!isText(t) || !serverOfFile(t.node.name)) continue;
+      const c = rootOf(t.node).conn;
+      if (c && (c.kind === "wsl" || c.kind === "pc")) out.push({ vpath: t.node.path, abs: abs(t.node), conn: c, text: t.text });
+    }
+    return out;
+  };
+  useEffect(() => { lspSync(lspDocs(), lspOptsOf(st)); }, [tabs, st.tsServer, st.pyServer, st.htmlServer, st.cssServer, st.phpServer, st.goServer, st.rsServer, st.rbServer, st.sqlServer, st.tsLspWsl, st.tsLspPc, st.lspIdleMin]); // eslint-disable-line react-hooks/exhaustive-deps
+  const lspServer = tab ? serverOfFile(tab.node.name)?.server.id ?? null : null;
+  const lspConn = (() => { if (!LSP_AVAILABLE || !tab || !lspServer) return null; const c = rootOf(tab.node).conn; return c && (c.kind === "wsl" || c.kind === "pc") ? c : null; })();
+  const lspKey = lspConn && lspServer ? sessionKey(lspConn, lspServer) : null;
+  // 定義へ移動で別のファイルへ飛ぶとき(絶対パス → このフォルダの仮想パス)
+  lspUi.openAt = async (conn, absPath, line, ch) => {
+    const r = roots.find((x) => x.conn && connKey(x.conn) === connKey(conn));
+    if (!r?.conn || !r.handle) return false;
+    const base = normPath(r.conn.path).replace(/\/+$/, "");
+    const p = normPath(absPath);
+    if (p !== base && !p.startsWith(base + "/")) return false;
+    const rel = p.slice(base.length).replace(/^\/+/, "");
+    if (!rel) return false;
+    const vpath = r.prefix ? `${r.prefix}/${rel}` : rel;
+    const n = tabOf(vpath)?.node ?? (await nodeAt(r.handle, vpath, r.prefix));
+    if (!n) return false;
+    await goto(n, line + 1, ch, ch);
+    return true;
+  };
   const gotoLoc = (l: Loc) => {
     const t = tabOf(l.file);
     if (!t) return;
@@ -344,11 +405,11 @@ export default function App() {
     let n = 0;
     for (const [f, list] of by) {
       n += list.length;
-      if (f === file) { view.dispatch({ changes: sort(list).map((e) => ({ from: e.from, to: e.to, insert: e.pre + name + e.suf })), userEvent: "input.rename" }); continue; }
+      if (f === file) { view.dispatch({ changes: sort(list).map((e) => ({ from: e.from, to: e.to, insert: e.text ?? e.pre + name + e.suf })), userEvent: "input.rename" }); continue; }
       setTabs((p) => p.map((t) => {
         if (t.node.path !== f || !isText(t)) return t;
         let x = t.text;
-        for (const e of sort(list)) x = x.slice(0, e.from) + e.pre + name + e.suf + x.slice(e.to);
+        for (const e of sort(list)) x = x.slice(0, e.from) + (e.text ?? e.pre + name + e.suf) + x.slice(e.to);
         return { ...t, text: x };
       }));
     }
@@ -385,7 +446,14 @@ export default function App() {
   const close = async (path: string) => {
     if (pinned.has(path)) return;
     const t = tabOf(path);
-    if (t && st.confirmClose && isText(t) && t.text !== t.saved && !(await ask({ message: i18next.t("{{name}} は保存されていません。閉じますか?", { name: t.node.name }), ok: i18next.t("保存せずに閉じる"), danger: true }))) return;
+    if (t && st.confirmClose && isText(t) && t.text !== t.saved) {
+      const c = await askChoice({ message: i18next.t("{{name}} は保存されていません。閉じますか?", { name: t.node.name }), ok: i18next.t("保存せずに閉じる"), alt: i18next.t("保存して閉じる"), danger: true });
+      if (c === "cancel") return;
+      if (c === "alt") {
+        // 上書きの確認でやめた・書き込みに失敗したときは、閉じない
+        if (!(await saveTab(t))) return;
+      }
+    }
     closeMany([path], true);
   };
   // 分割中、もう一方の画面にも出しているタブは、この画面から外すだけにする
@@ -402,25 +470,25 @@ export default function App() {
   // eslint-disable-next-line no-control-regex
   const baseOf = (t: Tab) => t.saved.replace(/\u0000+$/, "");
   // 保存。設定に応じて、行末の空白を削り、末尾に改行を入れる
-  const saveTab = useCallback(async (t: Tab, quiet = false) => {
-    if (!isText(t)) { if (t.view.kind === "image") window.dispatchEvent(new CustomEvent(IMAGE_SAVE, { detail: t.node.path })); return; }
+  const saveTab = useCallback(async (t: Tab, quiet = false): Promise<boolean> => {
+    if (!isText(t)) { if (t.view.kind === "image") window.dispatchEvent(new CustomEvent(IMAGE_SAVE, { detail: t.node.path })); return false; }
     let text = t.text;
     if (st.trimOnSave) text = text.replace(/[ \t]+$/gm, "");
     if (st.finalNewline && text && !text.endsWith("\n")) text += "\n";
     const mark = () => { setTabs((p) => p.map((x) => (x.node.path === t.node.path ? { ...x, text: x.text === t.text ? text : x.text, saved: text } : x))); setPreview((v) => (v === t.node.path ? null : v)); };
-    if (!t.node.handle) { mark(); return quiet ? undefined : flash(i18next.t("デモのファイルは、保存先がありません")); }
+    if (!t.node.handle) { mark(); if (!quiet) flash(i18next.t("デモのファイルは、保存先がありません")); return false; }
     // 開いた(前に保存した)あとに、外(端末・ほかのアプリ)で書き換わっていないか確かめる。気づかずに上書きしないため
     const disk = await diskText(t.node);
     if (disk !== null && disk !== baseOf(t) && disk !== text) {
       if (quiet) {
         if (!conflicts.current.has(t.node.path)) { conflicts.current.add(t.node.path); flash(i18next.t("{{name}} は外で変更されたため、自動では保存しません。保存すると上書きします", { name: t.node.name }), "error"); }
-        return;
+        return false;
       }
-      if (!(await ask({ message: i18next.t("{{name}} は、開いたあとに外で変更されています。上書きして保存しますか?", { name: t.node.name }), ok: i18next.t("上書きして保存"), danger: true }))) return;
+      if (!(await ask({ message: i18next.t("{{name}} は、開いたあとに外で変更されています。上書きして保存しますか?", { name: t.node.name }), ok: i18next.t("上書きして保存"), danger: true }))) return false;
     }
     conflicts.current.delete(t.node.path);
-    try { await writeFile(t.node.handle as FileSystemFileHandle, t.eol === "crlf" && st.remoteKeepEol ? text.replace(/\n/g, "\r\n") : text); mark(); noteSave(); recordSave(t.node.path, text, t.saved); setGitTick((n) => n + 1); if (!quiet) flash(i18next.t("保存しました")); }
-    catch (e) { flash(i18next.t("保存できませんでした: {{m}}", { m: (e as Error).message }), "error"); }
+    try { await writeFile(t.node.handle as FileSystemFileHandle, t.eol === "crlf" && st.remoteKeepEol ? text.replace(/\n/g, "\r\n") : text); mark(); noteSave(); recordSave(t.node.path, text, t.saved); setGitTick((n) => n + 1); if (!quiet) flash(i18next.t("保存しました")); return true; }
+    catch (e) { flash(i18next.t("保存できませんでした: {{m}}", { m: (e as Error).message }), "error"); return false; }
   }, [st.trimOnSave, st.finalNewline, st.remoteKeepEol]);
   // 改行コードの切り替え。保存し直すまでは、ファイルは変わらない(未保存の印をつける)
   const toggleEol = () => { if (!tab || !isText(tab)) return; const eol = tab.eol === "crlf" ? "lf" : "crlf"; setTabs((p) => p.map((x) => (x.node.path === tab.node.path ? { ...x, eol, saved: x.saved + "\u0000" } : x))); flash(i18next.t("改行コードを {{arg0}} にしました。保存すると反映されます", { arg0: eol === "crlf" ? "CRLF" : "LF" })); };
@@ -638,9 +706,13 @@ export default function App() {
       // ワークスペースへの登録
       let w = hit;
       if (!w && st.wsAutoAdd && main.ref.kind !== "demo") {
-        w = createWs(main.name, main.ref, { tabs: [], act: [null, null], fp: 0, split: false, side: true, panel: "files", term: false, terms: [], actTerm: 0 }, st.wsMax);
+        w = createWs(main.name, main.ref, emptyWs(), st.wsMax);
         if (specs.length > 1) setWsRoots(w.id, specs.map((x) => ({ ref: x.ref, prefix: x.prefix })));
-      }
+      } else if (!w && main.ref.kind !== "demo") {
+        // 登録しない設定のときも、前回のフォルダとタブは次の起動で戻せるように、非表示の 1 件に残す
+        w = createTemp(main.name, main.ref, emptyWs());
+        if (specs.length > 1) setWsRoots(w.id, specs.map((x) => ({ ref: x.ref, prefix: x.prefix })));
+      } else if (w?.temp && st.wsAutoAdd) { patchWs(w.id, { temp: false }); }
       if (w) for (const x of specs) if (x.ref.kind === "local" && x.handle) await putHandle(handleKey(w.id, x.prefix), x.handle);
       activeWs.current = w?.id ?? null;
       setCurrent(w?.id ?? null);
@@ -690,7 +762,9 @@ export default function App() {
     return ok;
   };
   const saveNew = async (name: string) => {
+    const old = findWs(activeWs.current);
     const w = createWs(name, root.ref, snapshot(), st.wsMax);
+    if (old?.temp) removeWs(old.id); // 「前回の続き」用の控えは、登録したものに置き換える
     if (roots.length > 1) setWsRoots(w.id, roots.map((r) => ({ ref: r.ref, prefix: r.prefix })));
     for (const r of roots) if (r.ref.kind === "local" && r.handle) await putHandle(handleKey(w.id, r.prefix), r.handle);
     activeWs.current = w.id; setCurrent(w.id);
@@ -709,7 +783,7 @@ export default function App() {
     setWsName(""); setFootOpen(false);
   };
   const quickSave = () => {
-    if (activeWs.current) { saveState(activeWs.current, snapshot()); flash(i18next.t("ワークスペース「{{arg0}}」に保存しました", { arg0: findWs(activeWs.current)?.name })); } else setWsDlg("ws");
+    if (activeWs.current && !findWs(activeWs.current)?.temp) { saveState(activeWs.current, snapshot()); flash(i18next.t("ワークスペース「{{arg0}}」に保存しました", { arg0: findWs(activeWs.current)?.name })); } else setWsDlg("ws");
   };
   // 起動したとき、前回のワークスペースを開く(PC のフォルダは許可が要るので、確認できなければ一覧を出す)
   useEffect(() => {
@@ -719,7 +793,10 @@ export default function App() {
       const w = findWs(getWorkspaces().current);
       const mine = gen.current;
       try {
-        if (st.wsRestore && w && w.root.kind !== "demo") { flash(i18next.t("ワークスペースを開いています…")); await openWs(w, false); }
+        // 「fixit ./」のように、起動のときにフォルダを渡されたら、前回のワークスペースではなくそのフォルダを開く
+        const given = IS_TAURI ? await import("@tauri-apps/api/core").then((m) => m.invoke<string | null>("launch_target")).catch(() => null) : null;
+        if (given) { setCurrent(null); const conn = normConn({ kind: "pc", path: given }); pushRecent(conn); await connect(conn); }
+        else if (st.wsRestore && w && w.root.kind !== "demo") { flash(i18next.t("ワークスペースを開いています…")); await openWs(w, false); }
         else if (w) setCurrent(null);
       } catch (e) {
         if (gen.current !== mine) return; // 待っている間に、利用者が別のフォルダを開いた
@@ -765,12 +842,124 @@ export default function App() {
     } catch (err) { flash((err as Error).message, "error"); }
   };
   // OS のファイル・フォルダを、落とした所のフォルダ(dest。null ならフォルダ r の一番上)へ写す。同じ名前があれば「名前-2」にする
-  const dropInto = async (e: React.DragEvent, dest: Node | null, r?: Root) => {
+  const dropInto = (e: React.DragEvent, dest: Node | null, r?: Root) => {
     e.preventDefault(); e.stopPropagation();
     setRootDrop(false); setExtDrop(false); setDropTarget(null);
     // ドロップのイベントが終わると中身を読めなくなるので、待つ前にまとめて受け取っておく
-    const hps = [...e.dataTransfer.items].filter((i) => i.kind === "file").map((i) => (i as unknown as { getAsFileSystemHandle?: () => Promise<FileSystemHandle | null> }).getAsFileSystemHandle?.());
-    const files = [...e.dataTransfer.files];
+    return putExternal(e.dataTransfer, dest, r);
+  };
+  // OS でコピーしたファイルを、エクスプローラーでの貼り付け(Ctrl+V)で入れる。ファイルの行ならその行があるフォルダへ、フォルダの行ならその中へ
+  // exe: エクスプローラーでコピーしたファイル・フォルダを、OS のクリップボードから直接読んで写す(WebView の貼り付けはフォルダを渡さない)
+  const pasteNative = async (dest: Node | null, imgs: File[] = []) => {
+    let list: string[];
+    try { list = await (await import("@tauri-apps/api/core")).invoke<string[]>("clip_files"); } catch { list = []; }
+    if (!list.length && !imgs.length) return;
+    const rr = dest ? rootOf(dest) : roots[0];
+    const to = (dest?.handle ?? rr.handle) as FileSystemDirectoryHandle | undefined;
+    if (!to) return flash(i18next.t("ここへはドロップできません"), "error");
+    // 画像だけがコピーされているとき(スクリーンショット、コードの画像など)は、PNG のファイルとして入れる
+    if (!list.length) {
+      const d = new Date(), z = (v: number) => String(v).padStart(2, "0");
+      const stamp = `${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}`;
+      const at = dest ? (dest.kind === "dir" ? dest.path : dirOf(dest.path)) : rr.prefix;
+      if (dest) revealPaths([at]);
+      const endImg = beginPending(at, imgs.map((_, i) => ({ name: `screenshot-${stamp}${imgs.length > 1 ? "-" + (i + 1) : ""}.png`, dir: false })));
+      try {
+        let k = 0;
+        for (const f of imgs) {
+          const ext = f.type === "image/jpeg" ? "jpg" : f.type === "image/gif" ? "gif" : f.type === "image/webp" ? "webp" : "png";
+          const name = await freeEntryName(to, `screenshot-${stamp}${imgs.length > 1 ? "-" + (++k) : ""}.${ext}`);
+          const w = await ((await to.getFileHandle(name, { create: true })) as unknown as { createWritable: () => Promise<{ write: (d: ArrayBuffer) => Promise<void>; close: () => Promise<void> }> }).createWritable();
+          await w.write(await f.arrayBuffer()); await w.close();
+        }
+        await reload();
+        flash(i18next.t("{{n}} 件を「{{name}}」に入れました", { n: imgs.length, name: dest?.name ?? rr.name }));
+      } catch (err) { flash(i18next.t("入れられませんでした: {{msg}}", { msg: (err as Error).message }), "error"); }
+      finally { endImg(); }
+      return;
+    }
+    const toPath = isRemote(to) && to.conn.kind === "pc" ? to.path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase() : null;
+    // 入り終わるまで、入る先に名前つきの読み込み行を出す(閉じたフォルダなら開いて見せる)
+    const at = dest ? (dest.kind === "dir" ? dest.path : dirOf(dest.path)) : rr.prefix;
+    if (dest) revealPaths([at]);
+    // 先に中身の種類(フォルダかファイルか)を調べて、並び順どおりの位置にスケルトンを出す
+    const srcs = await Promise.all(list.map(async (raw) => {
+      const q = raw.replace(/\\/g, "/").replace(/\/+$/, ""), i = q.lastIndexOf("/");
+      const name = q.slice(i + 1), parent = q.slice(0, i) || "/";
+      const dir = rootHandle({ kind: "pc", path: /^[A-Za-z]:$/.test(parent) ? parent + "/" : parent }) as unknown as FileSystemDirectoryHandle;
+      const h = await dir.getDirectoryHandle(name).catch(() => null) ?? await dir.getFileHandle(name).catch(() => null);
+      return { q, name, h };
+    }));
+    const endPending = beginPending(at, srcs.map((x) => ({ name: x.name, dir: x.h?.kind === "directory" })));
+    try {
+      let n = 0;
+      for (const { q, name, h } of srcs) {
+        if (!h) throw new Error(name + " を読めません");
+        const lq = q.toLowerCase();
+        if (h.kind === "directory" && toPath && (toPath === lq || toPath.startsWith(lq + "/"))) { flash(i18next.t("フォルダをそれ自身の中へは入れられません"), "error"); continue; }
+        await copyInto(h, to, await freeEntryName(to, name)); n++;
+      }
+      if (!n) return;
+      await reload();
+      flash(i18next.t("{{n}} 件を「{{name}}」に入れました", { n, name: dest?.name ?? rr.name }));
+    } catch (err) { flash(i18next.t("入れられませんでした: {{msg}}", { msg: (err as Error).message }), "error"); }
+    finally { endPending(); }
+  };
+  // エクスプローラー内のコピー・切り取り。OS のクリップボードにはパスの文字を書き、貼り付けで同じ文字なら、持っている行を写す・移す
+  const copyTree = async (mode: "copy" | "cut", list: Node[] = selectedNodes()) => {
+    if (!list.length) return;
+    const sig = list.map((n) => displayPath(n.path)).join("\n");
+    setTreeClip(mode, list, sig);
+    await writeClip(sig);
+    if (mode === "copy") flash(i18next.t("コピーしました"));
+  };
+  // 貼り付け先のフォルダ。ファイルの行ならその行があるフォルダ、何もなければ(null)一番上
+  const dirDest = (n: Node | null): Node | null => (!n || n.kind === "dir" ? n : { name: dirOf(n.path).split("/").pop() ?? "", path: dirOf(n.path), kind: "dir", handle: n.parent });
+  const pasteTree = async (c: { mode: "copy" | "cut"; nodes: Node[] }, dest: Node | null) => {
+    const rr = dest ? rootOf(dest) : roots[0];
+    const to = (dest?.handle ?? rr.handle) as FileSystemDirectoryHandle | undefined;
+    if (!to) return flash(i18next.t("ここへはドロップできません"), "error");
+    if (c.mode === "cut") {
+      for (const n of c.nodes) await moveTo(n, dest);
+      clearTreeClip(); clearSel();
+      return;
+    }
+    const at = dest ? (dest.kind === "dir" ? dest.path : dirOf(dest.path)) : rr.prefix;
+    if (dest) revealPaths([at]);
+    const end = beginPending(at, c.nodes.map((n) => ({ name: n.name, dir: n.kind === "dir" })));
+    try {
+      let k = 0;
+      for (const n of c.nodes) {
+        if (!n.handle) { flash(i18next.t("ここへはドロップできません"), "error"); continue; }
+        // フォルダを、自分自身かその中へ写すと終わらないので止める
+        if (n.kind === "dir" && (await inside(n.handle, rootOf(n).conn, to, rr.conn))) { flash(i18next.t("フォルダをそれ自身の中へは入れられません"), "error"); continue; }
+        await copyInto(n.handle, to, await freeEntryName(to, n.name)); k++;
+      }
+      if (!k) return;
+      await reload();
+      flash(i18next.t("{{n}} 件を「{{name}}」に入れました", { n: k, name: dest?.name ?? rr.name }));
+    } catch (err) { flash(i18next.t("入れられませんでした: {{msg}}", { msg: (err as Error).message }), "error"); }
+    finally { end(); }
+  };
+  // メニューの「貼り付け」。このアプリでコピーしたものがあればそれを、なければ(exe のみ)OS でコピーしたファイルを入れる
+  const pasteMenu = (n: Node | null) => { const c = getTreeClip(), d = dirDest(n); if (c) void pasteTree(c, d); else if (IS_TAURI) void pasteNative(d); };
+  const pasteInto = (e: React.ClipboardEvent, dest: Node | null) => {
+    const t = e.target as HTMLElement;
+    if (t.tagName === "INPUT" || t.tagName === "TEXTAREA") return;
+    const own = treeClipFor(e.clipboardData?.getData("text/plain") ?? "");
+    if (own) { e.preventDefault(); e.stopPropagation(); void pasteTree(own, dest); return; }
+    if (IS_TAURI) {
+      // 画像は貼り付けイベントの中でしか取れないので、先に受け取っておく
+      const imgs = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith("image/"));
+      e.preventDefault(); e.stopPropagation(); void pasteNative(dest, imgs); return;
+    }
+    if (!e.clipboardData.files.length) return;
+    e.preventDefault(); e.stopPropagation();
+    return putExternal(e.clipboardData, dest);
+  };
+  const putExternal = async (dt: DataTransfer, dest: Node | null, r?: Root) => {
+    const hps = [...dt.items].filter((i) => i.kind === "file").map((i) => (i as unknown as { getAsFileSystemHandle?: () => Promise<FileSystemHandle | null> }).getAsFileSystemHandle?.());
+    const files = [...dt.files];
     const rr = dest ? rootOf(dest) : r ?? roots[0];
     const to = (dest?.handle ?? rr.handle) as FileSystemDirectoryHandle | undefined;
     if (!to) return flash(i18next.t("ここへはドロップできません"), "error");
@@ -949,23 +1138,45 @@ export default function App() {
   }, []);
 
   const parentDir = (n: Node | null) => (n ? (n.kind === "dir" ? n : null) : null);
+  // エクスプローラーの中で名前を打って作る。「a/b/c.js」なら a と b を作ってから c.js を作る
   const create = (kind: "file" | "dir", at: Node | null) => {
     const rr = at ? rootOf(at) : roots[0];
     const base = at ? at.path : rr.prefix;
-    setDlg({
-      title: kind === "file" ? i18next.t("新規ファイル") : i18next.t("新規フォルダ"), desc: at ? i18next.t("{{path}} に作ります", { path: displayPath(at.path) || rr.name }) : i18next.t("{{name}} の直下に作ります", { name: rr.name }), input: "", placeholder: kind === "file" ? i18next.t("例: index.ts") : i18next.t("例: components"), ok: i18next.t("作る"),
-      validate: (v) => (/[\\/]/.test(v) ? i18next.t("「/」は使えません") : !rr.handle && exists(rr.nodes, `${base}/${v.trim()}`) ? i18next.t("同じ名前があります") : null),
-      onSubmit: async (name) => {
+    const parts = (v: string) => v.split(/[\\/]+/).map((x) => x.trim()).filter(Boolean);
+    setSide(true); setPanel("files");
+    if (!at && folded.has(rr.prefix)) setFolded((p) => { const q = new Set(p); q.delete(rr.prefix); return q; });
+    startCreating({
+      kind, at: at ? at.path : rr.prefix,
+      validate: (v) => {
+        const ps = parts(v);
+        if (!ps.length) return null;
+        if (ps.some((x) => x === "." || x === "..")) return i18next.t("「.」「..」は使えません");
+        return exists(rr.nodes, `${base}/${ps.join("/")}`) ? i18next.t("同じ名前があります") : null;
+      },
+      submit: async (v) => {
+        const ps = parts(v), dirs = kind === "file" ? ps.slice(0, -1) : ps, last = kind === "file" ? ps[ps.length - 1] : "";
+        const full = [...dirs, ...(last ? [last] : [])].join("/");
         try {
+          const through: string[] = []; let acc = base;
+          for (const d of dirs) { acc += "/" + d; through.push(acc); }
           if (rr.handle) {
-            const dir = (parentDir(at)?.handle ?? rr.handle) as FileSystemDirectoryHandle;
-            const h = kind === "file" ? await createFile(dir, name) : await createDir(dir, name);
+            let dir = (parentDir(at)?.handle ?? rr.handle) as FileSystemDirectoryHandle;
+            for (const d of dirs) dir = await createDir(dir, d);
+            const h = last ? await createFile(dir, last) : undefined;
+            for (const p of through) setOpenPath(p, true);
             await reload();
-            if (kind === "file") open({ name, path: `${base}/${name}`, kind: "file", handle: h, parent: dir });
+            revealPaths([...(at ? [at.path] : []), ...through]);
+            if (h) open({ name: last, path: `${base}/${full}`, kind: "file", handle: h, parent: dir });
           } else {
-            const n: Node = kind === "file" ? { name, path: `${base}/${name}`, kind: "file", demo: "" } : { name, path: `${base}/${name}`, kind: "dir", children: [] };
-            updRoot(rr.prefix, (r) => ({ ...r, nodes: addNode(r.nodes, base, n) }));
-            if (kind === "file") open(n);
+            const made: Node = last ? { name: last, path: `${base}/${full}`, kind: "file", demo: "" } : { name: "", path: "", kind: "dir" };
+            updRoot(rr.prefix, (r) => {
+              let nodes = r.nodes, cur = base;
+              for (const d of dirs) { const p = `${cur}/${d}`; if (!exists(nodes, p)) nodes = addNode(nodes, cur, { name: d, path: p, kind: "dir", children: [] }); cur = p; }
+              return { ...r, nodes: last ? addNode(nodes, cur, { ...made, name: last }) : nodes };
+            });
+            for (const p of through) setOpenPath(p, true);
+            revealPaths([...(at ? [at.path] : []), ...through]);
+            if (last) open(made);
           }
         } catch (e) { flash("作れませんでした: " + (e as Error).message); }
       },
@@ -975,7 +1186,7 @@ export default function App() {
     const rr = rootOf(n);
     if (n.kind === "dir" && rr.handle && !rr.conn && !canMove()) return flash(i18next.t("フォルダの名前の変更は、まだできません"));
     setDlg({
-      title: i18next.t("名前の変更"), input: n.name, ok: i18next.t("変更"),
+      title: i18next.t("名前の変更"), input: n.name, ok: i18next.t("変更"), icon: (v) => (n.kind === "dir" ? <Folder className="ico folder" /> : iconFor(v.trim() || n.name)),
       validate: (v) => (/[\\/]/.test(v) ? i18next.t("「/」は使えません") : v.trim() !== n.name && exists(rr.nodes, `${dirOf(n.path)}/${v.trim()}`) ? i18next.t("同じ名前があります") : null),
       onSubmit: async (name) => {
         if (name === n.name) return;
@@ -1053,13 +1264,42 @@ export default function App() {
     setDlg({
       title: i18next.t("「{{name}}」を削除", { name: n.name }), desc: n.kind === "dir" ? i18next.t("中のファイルもすべて消えます。元に戻せません。") : i18next.t("元に戻せません。"), ok: i18next.t("削除"), danger: true,
       onSubmit: async () => {
+        const out = leaveRows([n.path]); // 先に畳んで見せる(遅い場所でも、すぐ消えたように見える)
         try {
           if (rr.handle) await removeEntry((n.parent ?? rr.handle) as FileSystemDirectoryHandle, n.name);
           else updRoot(rr.prefix, (r) => ({ ...r, nodes: removeNode(r.nodes, n.path) }));
           closeMany(tabs.filter((t) => t.node.path === n.path || t.node.path.startsWith(n.path + "/")).map((t) => t.node.path), true);
           if (rr.handle) await reload();
+          out.settle();
           flash(i18next.t("削除しました"));
-        } catch (e) { flash("削除できませんでした: " + (e as Error).message); }
+        } catch (e) { out.undo(); flash("削除できませんでした: " + (e as Error).message); }
+      },
+    });
+  };
+  // 複数選択をまとめて消す(確認は 1 回)
+  const removeMany = (list: Node[]) => {
+    if (list.length === 1) return remove(list[0]);
+    setDlg({
+      title: i18next.t("{{n}} 件を削除", { n: list.length }),
+      desc: list.slice(0, 5).map((x) => x.name).join("、") + (list.length > 5 ? " …" : "") + "\n" + (list.some((x) => x.kind === "dir") ? i18next.t("中のファイルもすべて消えます。元に戻せません。") : i18next.t("元に戻せません。")),
+      ok: i18next.t("削除"), danger: true,
+      onSubmit: async () => {
+        let ok = 0, last = "";
+        const out = leaveRows(list.map((x) => x.path));
+        for (const n of list) {
+          const rr = rootOf(n);
+          try {
+            if (rr.handle) await removeEntry((n.parent ?? rr.handle) as FileSystemDirectoryHandle, n.name);
+            else updRoot(rr.prefix, (r) => ({ ...r, nodes: removeNode(r.nodes, n.path) }));
+            closeMany(tabs.filter((t) => t.node.path === n.path || t.node.path.startsWith(n.path + "/")).map((t) => t.node.path), true);
+            ok++;
+          } catch (e) { last = (e as Error).message; out.undo([n.path]); }
+        }
+        clearSel();
+        await reload();
+        out.settle();
+        if (ok === list.length) flash(i18next.t("{{n}} 件を削除しました", { n: ok }));
+        else flash(i18next.t("{{n}} 件を削除できませんでした: {{msg}}", { n: list.length - ok, msg: last }), "error");
       },
     });
   };
@@ -1317,14 +1557,10 @@ export default function App() {
       toggleTheme: () => update({ mode: isDark(st) ? "light" : "dark" }),
       zoomIn: () => update({ fontSize: Math.min(28, st.fontSize + 1) }), zoomOut: () => update({ fontSize: Math.max(10, st.fontSize - 1) }), zoomReset: () => update({ fontSize: def("fontSize") }),
       wrap: () => update({ wrap: !st.wrap }), gotoLine: () => { if (ev()) setPop("goto"); },
+      pinTab: () => { if (act[fp]) togglePin(act[fp]!); },
       closeTab: () => act[fp] && closeIn(act[fp]!, fp), closeAll: () => closeMany(tabs.map((t) => t.node.path)),
       nextTab: () => step(1), prevTab: () => step(-1),
-      shot: () => {
-        const v = ev(), n = act[fp];
-        if (!v || !n) return;
-        flash(i18next.t("画像を作っています…"));
-        codeToPng(v, n.split("/").pop() || "code").then((b) => shareShot(b, n.split("/").pop() || "code")).then((r) => flash(r === "copied" ? i18next.t("画像をクリップボードにコピーしました") : i18next.t("画像を保存しました"))).catch(() => flash(i18next.t("画像を作れませんでした")));
-      },
+      shot: () => { const v = ev(), n = act[fp]; if (v && n) takeShot(v, n); },
       goSymbol: () => { dispatchEvent(new Event(OUTLINE_EVENT)); },
       localHistory: () => { if (tab && isText(tab)) setLh(tab.node.path); },
       searchAll: () => {
@@ -1362,15 +1598,23 @@ export default function App() {
     return () => removeEventListener("keydown", on, true);
   });
 
-  useEffect(() => {
-    const h = (e: BeforeUnloadEvent) => { if (st.confirmExit && dirtyList.length) e.preventDefault(); };
-    addEventListener("beforeunload", h);
-    return () => removeEventListener("beforeunload", h);
-  });
-  // デスクトップ版: ×ボタン・Alt+F4 で閉じるときも確かめる(beforeunload は、ウィンドウを閉じる操作では働かない)。
   // 受け取る側を 1 度だけ登録し、未保存の数と設定は ref で最新を見る
   const exitRef = useRef({ dirty: 0, on: true });
   exitRef.current = { dirty: dirtyList.length, on: st.confirmExit };
+  // ブラウザのタブ・窓を閉じるときは、未保存があれば確かめる(beforeunload が唯一の手段)。
+  // 再読み込みでは確かめない: F5・Ctrl+R と、Vite の自動再読み込みの直前に印を付けて通す。
+  // ブラウザの再読み込みボタンは見分けられないので、そのときは確認が出る
+  useEffect(() => {
+    let skipUntil = 0;
+    const skip = () => { skipUntil = Date.now() + 3000; };
+    const key = (e: KeyboardEvent) => { if (e.key === "F5" || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r")) skip(); };
+    const h = (e: BeforeUnloadEvent) => { if (Date.now() < skipUntil) return; if (exitRef.current.on && exitRef.current.dirty) e.preventDefault(); };
+    addEventListener("keydown", key, true);
+    addEventListener("beforeunload", h);
+    import.meta.hot?.on("vite:beforeFullReload", skip);
+    return () => { removeEventListener("keydown", key, true); removeEventListener("beforeunload", h); };
+  }, []);
+  // デスクトップ版: ×ボタン・Alt+F4 で閉じるときも確かめる(beforeunload は、ウィンドウを閉じる操作では働かない)。
   useEffect(() => {
     if (!IS_TAURI) return;
     let off: (() => void) | undefined, dead = false;
@@ -1446,6 +1690,13 @@ export default function App() {
     setAi(true);
     setAiQuote({ id: ++aiSeq.current, ...c });
   };
+  // コード(選択範囲、なければ全体)を画像にして、クリップボードに入れ、右下に見せる
+  const takeShot = (v: EditorView, path: string) => {
+    const file = path.split("/").pop() || "code";
+    const make = () => codeToPng(v, file);
+    flash(i18next.t("画像を作っています…"));
+    make().then(async (b) => showShot(b, file, await copyShot(b), make)).catch(() => flash(i18next.t("画像を作れませんでした"), "error"));
+  };
   const editorMenu = (e: MouseEvent, v: EditorView) => {
     const sel = !v.state.selection.main.empty, word = sel ? v.state.sliceDoc(v.state.selection.main.from, v.state.selection.main.to) : "";
     const r = (id: string) => () => { v.focus(); EDIT[id](v); };
@@ -1471,6 +1722,7 @@ export default function App() {
           { label: i18next.t("下へ移動"), keys: K("moveDown"), run: r("moveDown") }, { label: i18next.t("上へ移動"), keys: K("moveUp"), run: r("moveUp") },
           { label: i18next.t("行を削除"), keys: K("deleteLine"), run: r("deleteLine"), danger: true },
           { label: i18next.t("下に空行を挿入"), keys: K("blankBelow"), run: r("blankBelow") },
+          { label: i18next.t("上に空行を挿入"), keys: K("blankAbove"), run: r("blankAbove") },
         ] },
         { label: i18next.t("変換"), icon: ic(CaseUpper), sub: [
           { label: i18next.t("大文字にする"), keys: K("upper"), run: r("upper"), disabled: !sel }, { label: i18next.t("小文字にする"), keys: K("lower"), run: r("lower"), disabled: !sel },
@@ -1481,6 +1733,7 @@ export default function App() {
           { label: i18next.t("折りたたむ"), keys: K("fold"), run: r("fold") }, { label: i18next.t("展開する"), keys: K("unfold"), run: r("unfold") },
           { label: i18next.t("すべて折りたたむ"), keys: K("foldAll"), run: r("foldAll") }, { label: i18next.t("すべて展開"), keys: K("unfoldAll"), run: r("unfoldAll") },
         ] },
+        { label: sel ? i18next.t("選択範囲を画像にする") : i18next.t("コードを画像にする"), icon: ic(Camera), keys: K("shot"), run: () => { const n = act[fp]; if (n) takeShot(v, n); } },
         { label: i18next.t("AI チャットに引用"), icon: ic(Quote), keys: K("aiQuote"), run: () => quoteToAi(v) },
         { label: "AI", icon: ic(Sparkles), sub: [
           { type: "title", label: sel ? i18next.t("選択範囲を送信") : i18next.t("ファイル全体を送信") },
@@ -1528,6 +1781,10 @@ export default function App() {
   };
   const treeMenu = async (e: React.MouseEvent, n: Node | null) => {
     e.preventDefault();
+    if (n && isMulti() && isSelectedPath(n.path)) {
+      const list = selectedNodes();
+      return setMenu({ x: e.clientX, y: e.clientY, path: n.path, items: [{ label: i18next.t("切り取り"), icon: ic(Scissors), keys: "Mod+X", run: () => void copyTree("cut", list) }, { label: i18next.t("コピー"), icon: ic(Copy), keys: "Mod+C", run: () => void copyTree("copy", list) }, { type: "sep" as const }, { label: i18next.t("{{n}} 件を削除", { n: list.length }), icon: ic(Trash2), danger: true, run: () => removeMany(list) }] });
+    }
     const { clientX: x, clientY: y } = e;
     const shells = await listShells();
     const dir = n?.kind === "dir";
@@ -1587,6 +1844,12 @@ export default function App() {
           ...(roots.length > 1 ? [{ label: i18next.t("すべてのフォルダを閉じる"), icon: ic(FolderX), keys: K("closeFolder"), run: closeFolder }] : []),
         ] : n ? [
           { type: "sep" as const },
+          ...(head ? [] : [
+            { label: i18next.t("切り取り"), icon: ic(Scissors), keys: "Mod+X", run: () => void copyTree("cut", [n]) },
+            { label: i18next.t("コピー"), icon: ic(Copy), keys: "Mod+C", run: () => void copyTree("copy", [n]) },
+          ]),
+          { label: i18next.t("貼り付け"), icon: ic(ClipboardPaste), keys: "Mod+V", run: () => pasteMenu(n), disabled: !hasTreeClip() && !IS_TAURI },
+          { type: "sep" as const },
           { label: i18next.t("名前の変更"), icon: ic(Pencil), run: () => rename(n) },
           { label: i18next.t("パスをコピー"), icon: ic(Link), run: () => copyText(displayPath(n.path)) },
           ...(rr.conn ? [
@@ -1601,6 +1864,7 @@ export default function App() {
           { label: i18next.t("削除"), icon: ic(Trash2), danger: true, run: () => remove(n) },
         ] : [
           { type: "sep" as const },
+          { label: i18next.t("貼り付け"), icon: ic(ClipboardPaste), keys: "Mod+V", run: () => pasteMenu(null), disabled: !hasTreeClip() && !IS_TAURI },
           { label: i18next.t("ファイル一覧を更新"), icon: ic(RotateCw), run: reload },
           ...(root.conn ? [termItem(root.conn, root.conn.path, true), ...osItems(root.conn, root.conn.path, true)] : []),
           { label: i18next.t("WSL・SSH に接続"), icon: ic(Server), keys: K("connect"), run: () => { setCnAdd(false); setCn(true); } },
@@ -1788,7 +2052,7 @@ export default function App() {
           <div className="empty">
             <p className="empty-title">{APP_NAME}</p>
             <p className="empty-sub">{roots.every((r) => r.ref.kind === "demo") ? i18next.t("左下の「フォルダを開く」から始めます。") : <Trans i18nKey="左のファイルを選ぶと、ここで開きます。" />}</p>
-            <FolderCards list={wsStore.list} current={ws?.id ?? null} canNew={supportsFs()} onNew={openFolder} onOpen={(w) => void switchWs(w).catch((e) => flash((e as Error).message, "error"))} />
+            <FolderCards list={wsStore.list.filter((w) => !w.temp)} current={ws?.id ?? null} canNew={supportsFs()} onNew={openFolder} onOpen={(w) => void switchWs(w).catch((e) => flash((e as Error).message, "error"))} />
             {st.emptyHint && (
               <ul className="empty-acts">
                 {([["quickOpen", i18next.t("ファイルを開く"), () => setQo(true)], ["palette", i18next.t("コマンドを探す"), () => setPal(true)], ["searchAll", i18next.t("全文検索"), () => run("searchAll")], ["toggleTerm", i18next.t("ターミナル"), () => showTerm()]] as const).map(([id, label, go]) => (
@@ -1828,13 +2092,17 @@ export default function App() {
   const goHit = (n: Node, h: { line: number; from: number; to: number }) => goto(n, h.line, h.from, h.to);
 
   // ツリーに渡す関数は毎回同じものにする(FileTree は memo なので、打鍵のたびに描き直さない)
-  const treeRef = useRef({ openOrFocus, treeMenu, moveTo, dropInto });
-  treeRef.current = { openOrFocus, treeMenu, moveTo, dropInto };
+  const treeRef = useRef({ openOrFocus, treeMenu, moveTo, dropInto, pasteInto, removeMany, copyTree });
+  treeRef.current = { openOrFocus, treeMenu, moveTo, dropInto, pasteInto, removeMany, copyTree };
   const treeFn = useMemo(() => ({
     open: (n: Node, pin?: boolean) => treeRef.current.openOrFocus(n, !!pin),
     ctx: (e: React.MouseEvent, n: Node | null) => void treeRef.current.treeMenu(e, n),
-    move: (n: Node, dest: Node | null) => treeRef.current.moveTo(n, dest),
+    move: async (n: Node, dest: Node | null) => {
+      const list = selectedNodes();
+      if (isMulti() && list.some((x) => x.path === n.path)) { for (const x of list) if (x.path !== dest?.path) await treeRef.current.moveTo(x, dest); clearSel(); } else await treeRef.current.moveTo(n, dest);
+    },
     drop: (e: React.DragEvent, n: Node | null) => void treeRef.current.dropInto(e, n),
+    paste: (e: React.ClipboardEvent, n: Node | null) => void treeRef.current.pasteInto(e, n),
   }), []);
 
   return (
@@ -1865,7 +2133,7 @@ export default function App() {
                   )}
                 </div>
               )}
-              <nav className="tree scroll overscroll-contain" data-foot={footOpen} style={{ ["--fh" as string]: `${footOpen ? footH : 0}px` }} data-drop={rootDrop || (roots.length === 1 && dropAt === rootKey(roots[0].prefix))}
+              <nav className="tree scroll overscroll-contain" data-foot={footOpen} onKeyDown={(e) => { const t = e.target as HTMLElement; if (t.tagName === "INPUT" || t.tagName === "TEXTAREA") return; if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === "c" || e.key === "x")) { const l = selectedNodes(); if (l.length) { e.preventDefault(); void treeRef.current.copyTree(e.key === "x" ? "cut" : "copy", l); } return; } if (e.key !== "Delete") return; const l = selectedNodes(); if (l.length) { e.preventDefault(); treeRef.current.removeMany(l); } }} onPaste={(e) => { if (roots[0].handle) treeFn.paste(e, null); }} style={{ ["--fh" as string]: `${footOpen ? footH : 0}px` }} data-drop={rootDrop || (roots.length === 1 && dropAt === rootKey(roots[0].prefix))}
                 onDragOver={(e) => {
                   if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDropTarget(null); setRootDrop(true); setExtDrop(true); return; }
                   // ここまで来るのは、一番上の階層のファイルか、何もない所の上。フォルダが1つなら、その一番上へ移す
@@ -1883,7 +2151,8 @@ export default function App() {
                   if (roots.length > 1 || dirOf(m.path) === roots[0].prefix) return;
                   e.preventDefault(); moveTo(m, null);
                 }}
-                onContextMenu={(e) => { if (e.target === e.currentTarget || !(e.target as HTMLElement).closest(".tree-row")) treeMenu(e, null); }}>
+                onContextMenu={(e) => { if (e.target === e.currentTarget || !(e.target as HTMLElement).closest(".tree-row")) treeMenu(e, null); }}
+                onClick={(e) => { if (!(e.target as HTMLElement).closest(".tree-row, .create-row, .pending-row")) clearSel(); }}>
                 {treeBusy > 0 ? (
                   <div className="tree-skel" role="status" aria-label={i18next.t("読み込み中…")}>
                     {TREE_SKEL.map(([d, w, dir], i) => <div key={i} className="tree-skel-row" style={{ paddingLeft: 10 + d * st.treeIndent, ["--i" as string]: i, ["--w" as string]: `${w}%` }}><i data-dir={dir || undefined} /><i /><b /></div>)}
@@ -1907,7 +2176,7 @@ export default function App() {
                       </button>
                       <div className="collapse" data-open={!shut} inert={shut}>
                         <div className="collapse-inner">
-                          <FileTree nodes={r.nodes} activePath={act[fp]} ctxPath={menu?.path ?? null} rev={rev} onOpen={treeFn.open} onContext={treeFn.ctx} onMove={treeFn.move} onDropFiles={r.handle ? treeFn.drop : undefined} />
+                          <FileTree nodes={r.nodes} activePath={act[fp]} ctxPath={menu?.path ?? null} rev={rev} onOpen={treeFn.open} onContext={treeFn.ctx} onMove={treeFn.move} onDropFiles={r.handle ? treeFn.drop : undefined} onPasteFiles={r.handle ? treeFn.paste : undefined} dirPath={r.prefix} />
                         </div>
                       </div>
                     </section>
@@ -1918,7 +2187,7 @@ export default function App() {
                     <p><Trans i18nKey="フォルダやファイルをここへドラッグ&ドロップするか、下のボタンから選んでください。" /></p>
                   </div>
                 ) : (
-                  <FileTree nodes={root.nodes} activePath={act[fp]} ctxPath={menu?.path ?? null} rev={rev} onOpen={treeFn.open} onContext={treeFn.ctx} onMove={treeFn.move} />
+                  <FileTree nodes={root.nodes} activePath={act[fp]} ctxPath={menu?.path ?? null} rev={rev} onOpen={treeFn.open} onContext={treeFn.ctx} onMove={treeFn.move} onPasteFiles={root.handle ? treeFn.paste : undefined} dirPath={root.prefix} />
                 )}
               </nav>
               <div className="side-foot" ref={footRef}>
@@ -2024,6 +2293,7 @@ export default function App() {
         </section>
         {pTp.v && <ThemePanel key={pTp.key} out={pTp.out} onClose={() => setTp(false)} />}
 
+        <ShotPreview />
         {st.sbShow && (
           <StatusBar
             tab={tab} cur={cur[fp]} info={tab?.info ?? ""} lang={tab ? langName(tab.node.name) : ""}
@@ -2032,6 +2302,7 @@ export default function App() {
             onConn={() => setCn(true)} ws={st.wsStatus ? ws?.name ?? "" : null} wsColor={ws?.color} onWs={() => setWsDlg("ws")} onPop={(k) => setPop((p) => (p === k ? null : k))}
             onTerm={() => showTerm()}
             git={gits[root.prefix] ? { branch: gits[root.prefix]!.branch, changes: gits[root.prefix]!.files.size } : null} onGit={() => { setGitTick((n) => n + 1); setGitOpen(true); }}
+            lspKey={lspKey}
           />
         )}
       </div>
@@ -2047,7 +2318,7 @@ export default function App() {
       {pUp.v && upd && <UpdateView key={pUp.key} m={upd} out={pUp.out} onClose={() => setUpdOpen(false)} />}
       {pStats.v && <StatsView key={pStats.key} out={pStats.out} onClose={() => setStatsOpen(false)} />}
       {pCn.v && <Connect key={pCn.key} out={pCn.out} current={cnAdd ? null : root.conn ?? null} adding={cnAdd} onConnect={cnAdd ? addConn : connect} onClose={() => setCn(false)} />}
-      {pPop.v && <StatusPop key={pPop.key} out={pPop.out} kind={pPop.v} view={ev() ?? null} eol={tab?.eol ?? "lf"} lang={tab ? langName(tab.node.name) : ""} onEol={toggleEol} onClose={() => setPop(null)} />}
+      {pPop.v && <StatusPop key={pPop.key} out={pPop.out} kind={pPop.v} view={ev() ?? null} eol={tab?.eol ?? "lf"} lang={tab ? langName(tab.node.name) : ""} onEol={toggleEol} lspKey={lspKey} onSettings={(c) => setSetts(c)} onClose={() => setPop(null)} />}
       <LangUI onGoto={gotoLoc} onRename={applyRename} />
       {pMenu.v && <ContextMenu key={pMenu.key} out={pMenu.out} x={pMenu.v.x} y={pMenu.v.y} items={pMenu.v.items} onClose={() => setMenu(null)} />}
     </div>

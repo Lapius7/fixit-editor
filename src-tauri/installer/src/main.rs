@@ -20,6 +20,8 @@ const HTML: &str = include_str!("../ui/index.html");
 const VERSION: &str = match option_env!("FIXIT_VERSION") { Some(v) => v, None => env!("CARGO_PKG_VERSION") };
 
 const REG_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\FixitEditor";
+// 「fixit」と打って起動できるようにする登録。エクスプローラーのアドレス欄や「ファイル名を指定して実行」が参照する(cmd・PowerShell は参照しない)
+const APP_PATHS_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\App Paths\fixit.exe";
 const EXE_NAME: &str = "Fixit.exe";
 const OLD_EXE_NAME: &str = "Fixit-Editor.exe"; // 旧版の名前。入れ替えるときに消す
 const NO_WINDOW: u32 = 0x0800_0000; // CREATE_NO_WINDOW
@@ -111,6 +113,7 @@ fn register(dir: &Path, exe: &Path) -> Result<(), String> {
     let un = dir.join("Uninstall.exe");
     let cmd = format!("\"{}\" --uninstall", un.display());
     let mb = (APP.len() / 1024) as u32 + 2048;
+    reg::set(APP_PATHS_KEY, &[("", reg::V::S(&exe.display().to_string())), ("Path", reg::V::S(&dir.display().to_string()))])?;
     reg::set(REG_KEY, &[
         ("DisplayName", reg::V::S("Fixit Editor")),
         ("DisplayVersion", reg::V::S(VERSION)),
@@ -221,6 +224,7 @@ fn main() {
                             send(serde_json::json!({ "t": "step", "i": 0 })); nap();
                             let _ = ps("foreach($k in 'Programs','Desktop'){ $f=Join-Path ([Environment]::GetFolderPath($k)) 'Fixit Editor.lnk'; if(Test-Path $f){Remove-Item $f -Force} }");
                             reg::delete(REG_KEY);
+                            reg::delete(APP_PATHS_KEY);
                             send(serde_json::json!({ "t": "step", "i": 1 })); nap();
                             remove_dir_retry(&install_dir())?;
                             let c = cache_dir();

@@ -155,6 +155,9 @@ button.sb:active { transform: scale(var(--ps)); }
 .dlg h2 { margin: 0 0 4px; font-size: 15px; line-height: 24px; font-weight: 600; }
 .dlg p { margin: 0 0 12px; color: var(--ink-2); text-wrap: pretty; }
 .field { width: 100%; height: 36px; padding: 0 12px; border-radius: 10px; border: 0; outline: 0; background: var(--field); box-shadow: 0 0 0 1px var(--hair) inset; transition: box-shadow calc(.12s * var(--sp)) var(--ease); }
+.dlg-name { position: relative; }
+.dlg-name-ico { position: absolute; left: 12px; top: 10px; width: 16px; height: 16px; display: flex; pointer-events: none; }
+.dlg-name[data-ico] .field { padding-left: 36px; }
 .field:focus { box-shadow: 0 0 0 2px var(--accent) inset; }
 .dlg-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .btn { height: 32px; padding: 0 14px; border-radius: 9px; font-weight: 500; line-height: 20px; background: var(--s1); box-shadow: 0 0 0 1px var(--hair), 0 1px 2px var(--shadow-soft); transition: background-color calc(.12s * var(--sp)) var(--ease), transform calc(.12s * var(--sp)) var(--ease); }
@@ -301,7 +304,26 @@ button.sb:active { transform: scale(var(--ps)); }
 .tree-skel-row i:first-child { width: 12px; height: 12px; background: none; }
 .tree-skel-row i[data-dir]:first-child { width: 6px; height: 8px; margin: 0 3px; border-radius: 1px; background: var(--hair); }
 .tree-skel-row b { width: var(--w); max-width: calc(100% - 40px); height: 10px; border-radius: 5px; background: var(--hair); }
+/* 貼り付け中: 名前は出したまま、薄くまたたく */
+nav.tree .pending-row .tree-row { cursor: default; pointer-events: none; animation: tree-skel calc(1.1s * var(--sp)) ease-in-out calc(var(--i) * 70ms * var(--sp)) infinite alternate; }
+.pending-ico { flex: none; width: 16px; height: 16px; border-radius: 4px; background: var(--hair); }
 @keyframes tree-skel { from { opacity: .4; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .tree-skel-row { animation: none; opacity: .7; } }
 /* ファイル一覧のフォルダを Git パネルに落とすとき */
 .git-dock[data-over] { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 60%, transparent); }
+.sb-lsp[data-phase="error"] { color: #d93b3b; }
+.sb-lsp[data-phase="off"] { color: var(--ink-3); }
+
+/* エクスプローラーの中で名前を打つ行(新規ファイル・フォルダ) */
+.create-row .tree-row { cursor: text; background: color-mix(in srgb, var(--accent) 10%, transparent); box-shadow: 0 0 0 1px var(--accent) inset; -webkit-backdrop-filter: blur(12px) saturate(1.4); backdrop-filter: blur(12px) saturate(1.4); }
+.create-row[data-err] .tree-row { box-shadow: 0 0 0 1px var(--danger, #d93b3b) inset; }
+.create-input { flex: 1; min-width: 0; height: 20px; padding: 0; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; line-height: 20px; }
+.create-err { margin: 2px 6px 4px 0; padding-right: 8px; font-size: 12px; line-height: 18px; color: var(--danger, #d93b3b); }
+
+/* 複数選択: 続けて選んだ行は、枠線でつながった 1 つの塊に見せる(角丸と上下の線は塊の端だけ)。
+   線は常に 4 辺を持ち、色だけ切り替えるので、選んだ・外した・塊が伸び縮みしたときに滑らかに動く */
+nav.tree .tree-row { transition: background-color calc(.2s * var(--sp)) var(--out), box-shadow calc(.2s * var(--sp)) var(--out), border-radius calc(.2s * var(--sp)) var(--out), transform calc(.15s * var(--sp)) var(--out); }
+nav.tree .tree-row[data-sel] { --sel-line: color-mix(in srgb, var(--accent) 45%, transparent); --sel-top: transparent; --sel-bottom: transparent; background: color-mix(in srgb, var(--accent) 16%, transparent); border-radius: 0; outline: none; box-shadow: inset 1px 0 0 var(--sel-line), inset -1px 0 0 var(--sel-line), inset 0 1px 0 var(--sel-top), inset 0 -1px 0 var(--sel-bottom); }
+nav.tree .tree-row[data-sel][data-sel-pos="first"] { --sel-top: var(--sel-line); border-radius: 7px 7px 0 0; }
+nav.tree .tree-row[data-sel][data-sel-pos="last"] { --sel-bottom: var(--sel-line); border-radius: 0 0 7px 7px; }
+nav.tree .tree-row[data-sel][data-sel-pos="only"] { --sel-top: var(--sel-line); --sel-bottom: var(--sel-line); border-radius: 7px; }

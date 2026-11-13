@@ -25,7 +25,7 @@ const parse = <T,>(s: string | null, d: T): T => { try { return (JSON.parse(s ||
 const syncable = (r: RootRef | undefined): r is Extract<RootRef, { path: string }> => !!r && (r.kind === "wsl" || r.kind === "ssh" || r.kind === "pc");
 type WsOut = Pick<Workspace, "id" | "name" | "color" | "root" | "roots" | "profile" | "pinned" | "updated">;
 const wsOut = (w: Workspace): WsOut | null => {
-  if (!syncable(w.root)) return null;
+  if (w.temp || !syncable(w.root)) return null;
   return { id: w.id, name: w.name, color: w.color, root: w.root, roots: w.roots?.filter((e) => syncable(e.ref)), profile: w.profile, pinned: w.pinned, updated: w.updated };
 };
 const BLANK = { tabs: [], act: [null, null], fp: 0, split: false, side: true, panel: "files", term: false, terms: [], actTerm: 0 } as const;

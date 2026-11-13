@@ -14,6 +14,9 @@ export const AI_ERR: Record<AiErrorKind, string> = {
   bad: "リクエストが受け付けられませんでした。モデル名や入力の長さを確かめてください",
   nocli: "claude コマンドが見つかりません(または、この環境では使えません)。Claude Code を入れてログインしてください",
   login: "claude にログインしていません。設定の「AI」で、ログインしてください",
+  relogin: "GitHub Copilot のログインが切れました。設定の「AI」で、もう一度ログインしてください",
+  nosub: "この GitHub アカウントでは Copilot を使えません。Copilot の契約(無料プランを含む)があるか確かめてください",
+  nobase: "OpenAI 互換の接続先が未設定です。設定の「AI」で、接続先の URL を入れてください",
   other: "AI の応答でエラーが起きました",
 };
 

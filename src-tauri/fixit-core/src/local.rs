@@ -69,6 +69,32 @@ pub fn home() -> String {
 }
 
 // 消してはいけない場所(ルート・ドライブ直下・ホーム)
+// //wsl.localhost/<名前>/home/x や //wsl$/<名前>/x を (名前, /home/x) に分ける。WSL の UNC でなければ None
+fn wsl_unc(p: &str) -> Option<(String, String)> {
+    let rest = p.strip_prefix("//")?;
+    let (host, rest) = rest.split_once('/')?;
+    if !(host.eq_ignore_ascii_case("wsl.localhost") || host.eq_ignore_ascii_case("wsl$")) {
+        return None;
+    }
+    let (distro, lin) = match rest.split_once('/') {
+        Some((d, l)) => (d, format!("/{l}")),
+        None => (rest, "/".to_string()),
+    };
+    (!distro.is_empty() && !distro.starts_with('-')).then(|| (distro.to_string(), lin))
+}
+
+// WSL の中で rm -rf を動かす(リンクはリンク自体だけ消える)。Windows 以外では使わない
+fn wsl_rm(distro: &str, lin: &str) -> Result<(), FsError> {
+    if !cfg!(windows) {
+        return Err(FsError::new("WSL は使えません", 500, "EIO"));
+    }
+    let mut c = std::process::Command::new("wsl.exe");
+    c.args(["-d", distro, "-e", "rm", "-rf", "--", lin]);
+    // 止まっていた WSL の起動に時間がかかることがある
+    let r = crate::run::run(c, None, std::time::Duration::from_secs(120), 1024 * 1024)?;
+    if r.code == 0 { Ok(()) } else { Err(FsError::new(r.err.trim().to_string(), 500, "EIO")) }
+}
+
 pub fn protected(p: &str) -> bool {
     p == "/" || (is_drive(p) && p.len() == 3) || p.eq_ignore_ascii_case(&home())
 }
@@ -156,6 +182,17 @@ pub fn dispatch(op: &str, q: &Q, body: Option<Vec<u8>>) -> Result<Reply, FsError
             let p = abs(q, "path")?;
             if protected(&p) {
                 return Err(FsError::new("このフォルダは削除できません", 400, "EARG"));
+            }
+            // WSL の中のフォルダ(UNC)は、9P 越しに 1 ファイルずつ消すと極端に遅い。WSL の中で rm -rf を 1 回動かす
+            if let Some((distro, lin)) = wsl_unc(&p) {
+                let depth = lin.matches('/').count();
+                if depth < 2 || (lin.starts_with("/home/") && depth < 3) {
+                    return Err(FsError::new("このフォルダは削除できません", 400, "EARG"));
+                }
+                if wsl_rm(&distro, &lin).is_ok() {
+                    return Ok(Reply::Json(json!({ "ok": true })));
+                }
+                // wsl.exe が動かないときは、下の std::fs に任せる
             }
             // リンク自体を消す(先のフォルダの中身は消さない)
             match fs::symlink_metadata(&p) {

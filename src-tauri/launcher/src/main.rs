@@ -50,6 +50,18 @@ fn sweep(base: &PathBuf, keep: &str) {
     }
 }
 
+// 本体は展開先を作業フォルダにして起動するので、「fixit ./」のような相対パスは、ここ(呼ばれた場所)で絶対パスにしておく
+fn abs_args() -> Vec<std::ffi::OsString> {
+    let cwd = env::current_dir().ok();
+    env::args_os().skip(1).map(|a| {
+        let p = std::path::Path::new(&a);
+        match &cwd {
+            Some(c) if !a.to_string_lossy().starts_with('-') && p.is_relative() && !a.is_empty() => c.join(p).components().collect::<PathBuf>().into_os_string(),
+            _ => a,
+        }
+    }).collect()
+}
+
 fn main() {
     let b = base();
     let dir = b.join(ID);
@@ -58,7 +70,7 @@ fn main() {
         return;
     }
     sweep(&b, ID);
-    if let Err(e) = Command::new(dir.join("fixit-editor.exe")).args(env::args_os().skip(1)).current_dir(&dir).env("FIXIT_LAUNCHER", env::current_exe().unwrap_or_default()).spawn() {
+    if let Err(e) = Command::new(dir.join("fixit-editor.exe")).args(abs_args()).current_dir(&dir).env("FIXIT_LAUNCHER", env::current_exe().unwrap_or_default()).spawn() {
         msg(&format!("Fixit Editor を起動できませんでした。\n{e}"));
     }
 }

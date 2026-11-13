@@ -52,12 +52,16 @@ const base = EditorView.theme({
   ".cm-gutters:hover .cm-foldGutter span, .cm-foldGutter span[title*=nfold]": { opacity: "1" },
   ".cm-foldPlaceholder": { backgroundColor: "var(--sel)", border: "none", color: "var(--accent)", borderRadius: "6px", padding: "0 6px", margin: "0 4px" },
   ".cm-tooltip": { borderRadius: "10px", border: "none", color: "var(--ink)", boxShadow: "0 8px 30px var(--shadow-soft), 0 0 0 1px var(--edge)", backgroundColor: "var(--pop)", backdropFilter: "blur(20px) saturate(1.6)" },
-  ".cm-tooltip.cm-tooltip-autocomplete": { padding: "4px", animation: `pop .14s ${E}`, transformOrigin: "top left" },
-  ".cm-tooltip-autocomplete > ul": { fontFamily: "var(--font-mono)", fontSize: "12.5px", maxHeight: "260px", overscrollBehavior: "contain" },
-  ".cm-tooltip-autocomplete > ul > li": { borderRadius: "6px", padding: "2px 8px", lineHeight: "20px" },
-  ".cm-tooltip-autocomplete > ul > li[aria-selected]": { backgroundColor: "var(--accent)", color: "#fff" },
-  ".cm-completionMatchedText": { textDecoration: "none", fontWeight: "700" },
-  ".cm-completionDetail": { opacity: ".6", marginLeft: "10px" },
+  ".cm-tooltip.cm-tooltip-autocomplete": { padding: "6px", borderRadius: "12px", animation: `pop .14s ${E}`, transformOrigin: "top left" },
+  ".cm-tooltip-autocomplete > ul": { fontFamily: "var(--font-mono)", fontSize: "12.5px", minWidth: "240px", maxHeight: "280px", overscrollBehavior: "contain" },
+  ".cm-tooltip-autocomplete > ul > li": { display: "flex", alignItems: "center", gap: "8px", borderRadius: "8px", padding: "0 10px", height: "28px", lineHeight: "28px", transition: `background-color .1s ${E}` },
+  ".cm-tooltip-autocomplete > ul > li + li": { marginTop: "1px" },
+  ".cm-tooltip-autocomplete > ul > li[aria-selected]": { backgroundColor: "color-mix(in srgb, var(--accent) 14%, transparent)", color: "var(--ink)" },
+  ".cm-completionLabel": { flex: "1", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  ".cm-completionMatchedText": { textDecoration: "none", fontWeight: "600", color: "var(--accent)" },
+  ".cm-completionDetail": { flex: "none", marginLeft: "16px", fontFamily: "var(--font-sans)", fontSize: "11.5px", fontStyle: "normal", opacity: ".55" },
+  ".cm-completionIcon": { flex: "none", width: "16px", fontSize: "12px", lineHeight: "28px", textAlign: "center", padding: "0", opacity: ".7" },
+  ".cm-completionInfo": { borderRadius: "10px", padding: "8px 12px", fontFamily: "var(--font-sans)", fontSize: "12.5px", lineHeight: "20px" },
 });
 
 export const fixitTheme = [base, syntaxHighlighting(hl)];

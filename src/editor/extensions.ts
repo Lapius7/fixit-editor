@@ -1,4 +1,6 @@
 import { langService } from "@/editor/langsvc";
+import { lspExtension } from "@/editor/lsp/ext";
+import { LSP_SERVERS, type LspOnKey } from "@/editor/lsp/servers";
 import { rainbowBrackets, tagSync, diagnostics, minimap } from "@/editor/intel";
 import { EditorSelection, EditorState, countColumn, type Extension, type Text } from "@codemirror/state";
 import { gitGutter } from "./gitgutter";
@@ -12,6 +14,8 @@ import { keymap } from "@codemirror/view";
 import { indentLess, indentMore } from "@codemirror/commands";
 import { MANAGED } from "@/editor/edit-cmds";
 import { snippetSource } from "@/editor/snippets";
+import { explodeBrackets } from "@/editor/explode";
+import { autoCloseExtra } from "@/editor/autoclose";
 
 // Tab: 候補が開いていれば確定、範囲選択があれば行ごとにインデント、
 // カーソルだけなら次のタブ位置まで空白(またはタブ文字)を入れる。Shift+Tab は逆
@@ -162,7 +166,7 @@ const hangingIndent = ViewPlugin.fromClass(class {
 
 const BLINK: Record<string, number> = { off: 0, slow: 1600, normal: 1200, fast: 600 };
 export type EditorOpts = Pick<Settings,
-  "tabSize" | "insertSpaces" | "wrap" | "lineNumbers" | "activeLine" | "foldGutter" | "indentGuides" | "bracketMatching" | "matchHighlight" | "rainbowBrackets" | "tagSync" | "diagnostics" | "langService" | "minimap" | "whitespace" | "cursorBlink" |
+  "tabSize" | "insertSpaces" | "wrap" | "lineNumbers" | "activeLine" | "foldGutter" | "indentGuides" | "bracketMatching" | "matchHighlight" | "rainbowBrackets" | "tagSync" | "diagnostics" | "langService" | LspOnKey | "tsLspDiag" | "tsLspComplete" | "tsLspHover" | "tsLspDef" | "tsLspSig" | "tsLspRefs" | "tsLspRename" | "tsLspAction" | "tsLspInlay" | "minimap" | "whitespace" | "cursorBlink" |
   "autocomplete" | "autocompleteDelay" | "completeMax" | "completeIcons" | "wordComplete" | "closeBrackets" | "indentOnInput" | "scrollPastEnd" | "spellcheck" | "readOnly">;
 
 // 設定で入り切りする部分。ひとつの Compartment にまとめて、設定が変わるたびに組み直す
@@ -175,14 +179,16 @@ export const dynamic = (o: EditorOpts): Extension => [
   o.activeLine ? [highlightActiveLine(), highlightActiveLineGutter()] : [],
   o.foldGutter ? foldGutter({ openText: "⌄", closedText: "›" }) : [],
   o.indentGuides ? indentationMarkers({
-    highlightActiveBlock: true, hideFirstIndent: true, markerType: "fullScope", thickness: 1,
+    highlightActiveBlock: true, hideFirstIndent: true, markerType: "codeOnly", thickness: 1,
     colors: { light: "var(--indent)", dark: "var(--indent)", activeLight: "var(--indent-on)", activeDark: "var(--indent-on)" },
   }) : [],
   o.bracketMatching ? bracketMatching() : [],
   o.matchHighlight ? highlightSelectionMatches() : [],
-  o.rainbowBrackets ? rainbowBrackets : [], o.tagSync ? tagSync : [], o.diagnostics ? diagnostics : [], o.langService ? langService() : [], o.minimap ? minimap : [],
+  o.rainbowBrackets ? rainbowBrackets : [], o.tagSync ? tagSync : [], o.diagnostics ? diagnostics : [], o.langService ? langService() : [], LSP_SERVERS.some((x) => o[x.on]) ? lspExtension(o) : [], o.minimap ? minimap : [],
   o.whitespace === "all" ? highlightWhitespace() : o.whitespace === "trailing" ? highlightTrailingWhitespace() : [],
   o.closeBrackets ? closeBrackets() : [],
+  explodeBrackets,
+  autoCloseExtra,
   o.indentOnInput ? indentOnInput() : [],
   o.autocomplete ? [
     autocompletion({ defaultKeymap: true, icons: o.completeIcons, maxRenderedOptions: o.completeMax, activateOnTypingDelay: o.autocompleteDelay }),

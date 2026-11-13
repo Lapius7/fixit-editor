@@ -4,7 +4,7 @@
 use base64::{engine::general_purpose::STANDARD, Engine};
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use std::{collections::HashMap, io::{Read, Write}, sync::Mutex, thread};
-use fixit_core::{claude, fonts, fs as fxfs, store, update};
+use fixit_core::{claude, copilot, fonts, fs as fxfs, lsp, store, update};
 use std::sync::Arc;
 use tauri::{ipc::{Channel, Request, Response}, AppHandle, Emitter, State};
 
@@ -172,6 +172,43 @@ fn pty_close(state: State<Ptys>, id: String) {
 }
 
 
+// ---- 言語サーバー(TypeScript)。取得・起動・受信は fixit-core の lsp。画面へは Channel で JSON の文字列を送る ----
+#[derive(Default)]
+struct Lsps(Mutex<HashMap<String, Arc<lsp::Server>>>);
+
+#[tauri::command]
+fn lsp_start(state: State<Lsps>, id: String, kind: String, server: String, root: String, on_event: Channel<String>) -> Result<(), String> {
+    let k = lsp::Kind::parse(&kind).ok_or("kind")?;
+    if !lsp::root_ok(k, &root) { return Err("root".into()); }
+    if !lsp::known(&server) { return Err("server".into()); }
+    // すぐ返す(取得と起動は別のスレッド)。同じ id が残っていれば先に止める
+    let old = state.0.lock().unwrap().remove(&id);
+    if let Some(o) = old { o.stop(); }
+    let srv = lsp::start(k, &server, root, Arc::new(move |s| { let _ = on_event.send(s); }));
+    state.0.lock().unwrap().insert(id, srv);
+    Ok(())
+}
+
+#[tauri::command]
+fn lsp_send(state: State<Lsps>, id: String, msg: String) -> Result<(), String> {
+    let s = state.0.lock().unwrap().get(&id).cloned().ok_or("not running")?;
+    s.send(&msg)
+}
+
+// いまの負荷。{cpu, mem} か、動いていなければ null。wsl.exe を呼ぶことがあるので、別のスレッドで測る
+#[tauri::command]
+async fn lsp_stats(state: State<'_, Lsps>, id: String) -> Result<Option<serde_json::Value>, String> {
+    let Some(s) = state.0.lock().unwrap().get(&id).cloned() else { return Ok(None) };
+    let st = tauri::async_runtime::spawn_blocking(move || s.stats()).await.map_err(|e| e.to_string())?;
+    Ok(st.map(|v| serde_json::json!({ "cpu": v.cpu, "mem": v.mem })))
+}
+
+#[tauri::command]
+fn lsp_stop(state: State<Lsps>, id: String) {
+    let old = state.0.lock().unwrap().remove(&id);
+    if let Some(o) = old { o.stop(); }
+}
+
 // ---- ファイル操作(ブラウザ版の /__fs と同じ。中身は fixit-core) ----
 #[derive(serde::Serialize)]
 struct FsErr { error: String, code: String, status: u16 }
@@ -232,6 +269,18 @@ async fn pick_folder(window: tauri::WebviewWindow, title: Option<String>) -> Opt
     .flatten()
 }
 
+// 起動のときに渡されたフォルダ(「fixit ./」など)。ファイルなら、その親のフォルダを返す。launcher が相対パスを絶対パスにして渡してくる
+#[tauri::command]
+fn launch_target() -> Option<String> {
+    for a in std::env::args_os().skip(1) {
+        if a.to_string_lossy().starts_with('-') { continue; }
+        let p = std::path::PathBuf::from(&a);
+        let dir = if p.is_dir() { p } else if p.is_file() { p.parent()?.to_path_buf() } else { continue };
+        return Some(dir.to_string_lossy().trim_start_matches(r"\\?\").replace('\\', "/"));
+    }
+    None
+}
+
 // ---- アプリのデータ(設定・AI の会話履歴など)。%APPDATA%\Fixit の JSON ファイルに残す ----
 fn data_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     use tauri::Manager;
@@ -273,7 +322,8 @@ async fn store_save(app: AppHandle, key: String, value: Option<String>) -> Resul
 struct Jobs(Mutex<HashMap<String, Arc<claude::Job>>>);
 
 #[tauri::command]
-async fn claude_chat(state: State<'_, Jobs>, id: String, system: String, model: String, effort: String, messages: Vec<claude::Msg>, on_event: Channel<claude::Event>) -> Result<(), String> {
+async fn claude_chat(state: State<'_, Jobs>, id: String, system: String, model: String, effort: String, wh: Option<String>, messages: Vec<claude::Msg>, on_event: Channel<claude::Event>) -> Result<(), String> {
+    let wh = wh.unwrap_or_default();
     if messages.is_empty() || messages.iter().any(|m| m.role != "user" && m.role != "assistant") {
         return Err("messages".into());
     }
@@ -281,7 +331,7 @@ async fn claude_chat(state: State<'_, Jobs>, id: String, system: String, model: 
     state.0.lock().unwrap().insert(id.clone(), job.clone());
     let j = job.clone();
     let r = tauri::async_runtime::spawn_blocking(move || {
-        claude::chat(&system, &model, &effort, &messages, &j, &mut |e| { let _ = on_event.send(e); });
+        claude::chat(&system, &model, &effort, &wh, &messages, &j, &mut |e| { let _ = on_event.send(e); });
     })
     .await;
     state.0.lock().unwrap().remove(&id);
@@ -289,17 +339,25 @@ async fn claude_chat(state: State<'_, Jobs>, id: String, system: String, model: 
 }
 
 #[tauri::command]
-async fn claude_status() -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(|| claude::status().to_string()).await.map_err(|e| e.to_string())
+async fn claude_status(wh: Option<String>) -> Result<String, String> {
+    let wh = wh.unwrap_or_default();
+    tauri::async_runtime::spawn_blocking(move || claude::status(&wh).to_string()).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn claude_login(state: State<'_, Jobs>, id: String, on_event: Channel<claude::Event>) -> Result<(), String> {
+async fn claude_usage(wh: Option<String>) -> Result<serde_json::Value, String> {
+    let wh = wh.unwrap_or_default();
+    tauri::async_runtime::spawn_blocking(move || claude::usage(&wh)).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn claude_login(state: State<'_, Jobs>, id: String, wh: Option<String>, on_event: Channel<claude::Event>) -> Result<(), String> {
+    let wh = wh.unwrap_or_default();
     let job = Arc::new(claude::Job::default());
     state.0.lock().unwrap().insert(id.clone(), job.clone());
     let j = job.clone();
     let r = tauri::async_runtime::spawn_blocking(move || {
-        claude::login(&j, &mut |e| { let _ = on_event.send(e); });
+        claude::login(&wh, &j, &mut |e| { let _ = on_event.send(e); });
     })
     .await;
     state.0.lock().unwrap().remove(&id);
@@ -309,6 +367,22 @@ async fn claude_login(state: State<'_, Jobs>, id: String, on_event: Channel<clau
 #[tauri::command]
 fn claude_cancel(state: State<Jobs>, id: String) {
     if let Some(j) = state.0.lock().unwrap().get(&id) { j.cancel(); }
+}
+
+// ---- GitHub Copilot のログイン(デバイスフロー)。ブラウザ版の /__copilot と同じ ----
+#[tauri::command]
+async fn copilot_device() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(copilot::device).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn copilot_poll(device_code: String) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || copilot::poll(&device_code)).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn copilot_token(oauth: String) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || copilot::token(&oauth)).await.map_err(|e| e.to_string())?
 }
 
 // 既定のブラウザで URL を開く。http(s) のアドレスだけを許す(ターミナルのリンクとログイン画面から呼ぶ)
@@ -441,6 +515,18 @@ async fn clip_read() -> Result<String, String> {
     .map_err(|e| e.to_string())?
 }
 
+// エクスプローラーでコピーしたファイル・フォルダのパス。WebView の貼り付けイベントはフォルダを渡さないので、OS から直接読む
+#[tauri::command]
+async fn clip_files() -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(|| match arboard::Clipboard::new().and_then(|mut c| c.get().file_list()) {
+        Ok(v) => Ok(v.into_iter().map(|p| p.to_string_lossy().into_owned()).collect()),
+        Err(arboard::Error::ContentNotAvailable) => Ok(Vec::new()),
+        Err(e) => Err(e.to_string()),
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 async fn clip_write(text: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || arboard::Clipboard::new().and_then(|mut c| c.set_text(text)).map_err(|e| e.to_string()))
@@ -476,6 +562,7 @@ fn main() {
     tauri::Builder::default()
         .manage(Ptys::default())
         .manage(Jobs::default())
+        .manage(Lsps::default())
         .manage(Pv::default())
         .register_uri_scheme_protocol("fixitpv", pv_serve)
         // 念のため: 画面側から読み取りの許可を求められても、ブラウザの確認を出さずに許可する(アプリ自身の画面だけを表示するため)
@@ -483,7 +570,15 @@ fn main() {
             tauri::webview::PermissionKind::ClipboardRead => tauri::webview::PermissionResponse::Allow,
             _ => tauri::webview::PermissionResponse::Default,
         })
-        .invoke_handler(tauri::generate_handler![pv_put, pv_drop, clip_read, clip_write, pty_open, pty_shells, pty_write, pty_resize, pty_close, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_login, claude_cancel, store_load, store_read, store_stamps, store_save, apply_update, list_fonts, open_url, os_open])
-        .run(tauri::generate_context!())
-        .expect("フィクシットエディタを起動できませんでした");
+        .invoke_handler(tauri::generate_handler![pv_put, pv_drop, clip_read, clip_write, clip_files, pty_open, pty_shells, pty_write, pty_resize, pty_close, lsp_start, lsp_send, lsp_stats, lsp_stop, launch_target, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_usage, claude_login, claude_cancel, copilot_device, copilot_poll, copilot_token, store_load, store_read, store_stamps, store_save, apply_update, list_fonts, open_url, os_open])
+        .build(tauri::generate_context!())
+        .expect("フィクシットエディタを起動できませんでした")
+        .run(|app, ev| {
+            // アプリを閉じるときは、言語サーバーの子プロセスも止める
+            if let tauri::RunEvent::Exit = ev {
+                use tauri::Manager;
+                let all: Vec<_> = app.state::<Lsps>().0.lock().unwrap().drain().map(|x| x.1).collect();
+                for s in all { s.stop(); }
+            }
+        });
 }

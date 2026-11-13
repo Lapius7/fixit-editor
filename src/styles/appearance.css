@@ -125,3 +125,4 @@
 .set-link svg { flex: none; }
 .set-link span { flex: 1; min-width: 0; }
 .set-link .set-link-ext { opacity: .5; }
+.set-text { width: 240px; height: 32px; font-size: 13px; }

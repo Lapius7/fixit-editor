@@ -1,6 +1,6 @@
 // AI パネルの、モデルと考える量(Effort)の選択。使えるプロバイダーのモデルを 1 つの一覧に混ぜて出す。
 import i18next from "i18next";
-import { connected, EFFORTS, hasEffort, modelsOf, PROVIDER_NAME, setActive, setEffort, useAi, useLink, type Effort, type Provider } from "@/features/ai/store";
+import { connected, EFFORTS, hasEffort, modelsOf, PROVIDER_SHORT, setActive, setEffort, useAi, useLink, type Effort, type Provider } from "@/features/ai/store";
 
 import { Select } from "@/shared/Select";
 
@@ -12,7 +12,7 @@ export function ModelPicker({ disabled }: { disabled?: boolean }) {
   // 選んでいるプロバイダーは、接続の確認が終わっていなくても必ず一覧に入れる
   const ps = connected(cfg, link);
   const list: Provider[] = ps.includes(cfg.provider) || !cfg.enabled[cfg.provider] ? ps : [...ps, cfg.provider];
-  const label = (p: Provider, m: string) => `${i18next.t(PROVIDER_NAME[p])} · ${m || i18next.t("(claude の既定)")}`;
+  const label = (p: Provider, m: string) => `${m || i18next.t("claude の既定")} (${i18next.t(PROVIDER_SHORT[p])})`;
   const cur = cfg.provider + SEP + cfg.models[cfg.provider];
   return (
     <div className="ai-pick">

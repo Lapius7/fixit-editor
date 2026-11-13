@@ -1,7 +1,16 @@
 // ファイル一覧で開いているフォルダの記録。タブの切り替えや再起動でも、開閉の状態を保つ。
 import { kvGet, kvSet } from "@/platform/appdata";
-import { readDir, type Node } from "@/platform/fs";
-import { TREE_EXPAND_MAX, TREE_EXPAND_MS, TREE_PREFETCH_MS, TREE_WARM_MAX, TREE_WARM_MS } from "@/shared/config";
+import { readDir as readDirRaw, type Node } from "@/platform/fs";
+import { dlog } from "@/shared/debuglog";
+import { TREE_EXPAND_MAX, TREE_EXPAND_MS, TREE_PREFETCH_MS, TREE_READ_TIMEOUT_MS, TREE_WARM_MAX, TREE_WARM_MS } from "@/shared/config";
+
+// 読み先(WSL・SSH など)が応答しないとき、読み込み中の行が出たままにならないよう、待つ時間に上限を置く。
+// 先読みの Promise は使い回されるので、止まったものを残すと、開くたびに同じ止まった読み込みを待つことになる
+const readDir: typeof readDirRaw = (h, path) => new Promise((resolve, reject) => {
+  const t = setTimeout(() => { dlog("tree", `フォルダの読み込みが ${TREE_READ_TIMEOUT_MS / 1000} 秒で終わらず中止: ${path}`); reject(new Error("timeout")); }, TREE_READ_TIMEOUT_MS);
+  readDirRaw(h, path).then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+});
+export { readDir };
 
 const KEY = "fixit:tree-open:v1";
 const MAX = 1000;
@@ -128,3 +137,12 @@ export function bulkFor(path: string, name: string): boolean | undefined {
   return true;
 }
 export const bulkTake = () => { if (bulk) bulk.left--; };
+
+// 前に読んだフォルダの中身。行が作り直されたとき、スケルトンに戻さず、これを先に出して裏で読み直す
+const last = new Map<string, Node[]>();
+export const rememberKids = (path: string, kids: Node[]) => {
+  last.delete(path);
+  last.set(path, kids);
+  if (last.size > 600) last.delete(last.keys().next().value as string);
+};
+export const recallKids = (path: string) => last.get(path);

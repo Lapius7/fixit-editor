@@ -21,6 +21,8 @@ export type WsState = {
 export type RootEntry = { ref: RootRef; prefix: string };
 export type Workspace = WsState & {
   id: string; name: string; color: string; root: RootRef; roots?: RootEntry[]; profile?: string; pinned?: boolean; updated: number;
+  // 登録していないフォルダの「前回の続き」用。一覧には出さず、1 件だけ持つ(別のフォルダを開くと入れ替わる)
+  temp?: boolean;
 };
 type Store = { list: Workspace[]; current: string | null };
 
@@ -61,9 +63,9 @@ export const wsLabel = (w: Workspace) => (w.roots && w.roots.length > 1 ? i18nex
 
 // 保存数の上限を超えたら、固定していない古いものから消す
 function trim(list: Workspace[], keep: string, max: number): Workspace[] {
-  if (list.length <= max) return list;
+  if (list.filter((w) => !w.temp).length <= max) return list;
   const drop = new Set(
-    list.filter((w) => !w.pinned && w.id !== keep).sort((a, b) => a.updated - b.updated).slice(0, list.length - max).map((w) => w.id),
+    list.filter((w) => !w.temp && !w.pinned && w.id !== keep).sort((a, b) => a.updated - b.updated).slice(0, list.filter((w) => !w.temp).length - max).map((w) => w.id),
   );
   list.filter((w) => drop.has(w.id)).forEach((w) => wsRoots(w).forEach((o) => delHandle(handleKey(w.id, o.prefix))));
   return list.filter((w) => !drop.has(w.id));
@@ -74,12 +76,20 @@ export function createWs(name: string, root: RootRef, state: WsState, max = 30, 
   set({ ...st, list: trim([...st.list, w], w.id, max) });
   return w;
 }
+export const emptyWs = (): WsState => ({ tabs: [], act: [null, null], fp: 0, split: false, side: true, panel: "files", term: false, terms: [], actTerm: 0 });
+// 登録していないフォルダの「前回の続き」。前のものは(ハンドルごと)消して入れ替える
+export function createTemp(name: string, root: RootRef, state: WsState): Workspace {
+  st.list.filter((w) => w.temp).forEach((w) => wsRoots(w).forEach((o) => delHandle(handleKey(w.id, o.prefix))));
+  const w: Workspace = { id: uid(), name, color: COLORS[0], root, updated: Date.now(), temp: true, ...state };
+  set({ ...st, list: [...st.list.filter((x) => !x.temp), w] });
+  return w;
+}
 export const saveState = (id: string, state: WsState) => {
   const w = findWs(id);
   if (!w || JSON.stringify({ ...w, updated: 0 }) === JSON.stringify({ ...w, ...state, updated: 0 })) return;
   set({ ...st, list: st.list.map((x) => (x.id === id ? { ...x, ...state, updated: Date.now() } : x)) });
 };
-export const patchWs = (id: string, patch: Partial<Pick<Workspace, "name" | "color" | "profile" | "pinned" | "root">>) =>
+export const patchWs = (id: string, patch: Partial<Pick<Workspace, "name" | "color" | "profile" | "pinned" | "root" | "temp">>) =>
   set({ ...st, list: st.list.map((x) => (x.id === id ? { ...x, ...patch, ...(patch.name !== undefined ? { name: patch.name.trim() || x.name } : {}) } : x)) });
 // 開いているフォルダの一覧を保存する(1 つだけなら roots は持たない)
 export function setWsRoots(id: string, list: RootEntry[]) {
@@ -148,7 +158,7 @@ export async function nodeAt(root: FileSystemDirectoryHandle, path: string, pref
 }
 
 // ---- 書き出し・読み込み(PC のフォルダはハンドルを持ち出せないので含めない) ----
-export const exportWorkspaces = () => JSON.stringify({ fixitWorkspaces: 1, list: st.list.filter((w) => w.root.kind !== "local") }, null, 2);
+export const exportWorkspaces = () => JSON.stringify({ fixitWorkspaces: 1, list: st.list.filter((w) => !w.temp && w.root.kind !== "local") }, null, 2);
 export function importWorkspaces(text: string, max = 30): number {
   const r = JSON.parse(text);
   if (!r || !Array.isArray(r.list)) throw new Error(i18next.t("ワークスペースのファイルではありません"));

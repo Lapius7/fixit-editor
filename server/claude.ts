@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { ServerResponse } from "node:http";
 import type { Plugin } from "vite";
@@ -51,6 +52,32 @@ function status(): Promise<string> {
   });
 }
 
+// 使用量(5 時間/週間)を会話なしで取る。src-tauri/fixit-core/src/claude.rs の usage と同じ動き。
+// トークンはここで読んで使うだけで、返すのは使用率とリセット時刻だけ
+const USAGE_IDS = ["five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet"];
+async function usage(): Promise<unknown> {
+  let tok = "";
+  try {
+    const raw = (await readFile(path.join(homedir(), ".claude", ".credentials.json"), "utf8")).slice(0, 65536);
+    const t = JSON.parse(raw)?.claudeAiOauth?.accessToken;
+    if (typeof t === "string" && t && t.length <= 2048 && !/[\s\x00-\x1f]/.test(t)) tok = t;
+  } catch { return { error: "nocli" }; }
+  if (!tok) return { error: "nocli" };
+  try {
+    const r = await fetch("https://api.anthropic.com/api/oauth/usage", { headers: { Authorization: `Bearer ${tok}`, "anthropic-beta": "oauth-2025-04-20", Accept: "application/json", "User-Agent": "Fixit-Editor" }, signal: AbortSignal.timeout(30_000) });
+    if (r.status === 401 || r.status === 403) return { error: "login" };
+    if (!r.ok) return { error: "network" };
+    const v = JSON.parse((await r.text()).slice(0, 65536)) as Record<string, { utilization?: unknown; resets_at?: unknown } | null>;
+    const limits: Record<string, { u: number; r: string }> = {};
+    for (const id of USAGE_IDS) {
+      const o = v[id];
+      if (!o || typeof o.utilization !== "number" || !Number.isFinite(o.utilization) || o.utilization < 0) continue;
+      limits[id] = { u: Math.min(o.utilization / 100, 1), r: typeof o.resets_at === "string" && o.resets_at.length <= 40 ? o.resets_at : "" };
+    }
+    return { limits };
+  } catch { return { error: "network" }; }
+}
+
 // 出力の 1 行から、claude.ai などのログイン用 URL を取り出す
 const loginUrl = (l: string) => {
   const m = /https:\/\/[^\s"\\]+/.exec(l);
@@ -70,6 +97,12 @@ export function claudeBridge(): Plugin {
             if (req.method !== "GET") { res.statusCode = 405; res.end(); return; }
             res.setHeader("content-type", "application/json"); res.setHeader("cache-control", "no-store");
             res.end(JSON.stringify({ state: await status() }));
+            return;
+          }
+          if ((req.url ?? "").split("?")[0] === "/usage") {
+            if (req.method !== "GET") { res.statusCode = 405; res.end(); return; }
+            res.setHeader("content-type", "application/json"); res.setHeader("cache-control", "no-store");
+            res.end(JSON.stringify(await usage()));
             return;
           }
           // ログイン(`claude auth login --claudeai`)。押されたときだけ動かし、ブラウザでの認証を待つ
@@ -127,11 +160,21 @@ export function claudeBridge(): Plugin {
             let i: number;
             while ((i = buf.indexOf("\n")) >= 0) {
               const l = buf.slice(0, i); buf = buf.slice(i + 1);
-              let e: { type?: string; event?: { type?: string; delta?: { type?: string; text?: string; stop_reason?: string } }; is_error?: boolean; result?: string; subtype?: string };
+              let e: { type?: string; event?: { type?: string; delta?: { type?: string; text?: string; stop_reason?: string } }; is_error?: boolean; result?: string; subtype?: string; rate_limit_info?: { unifiedWindows?: Record<string, { utilization?: number; resetsAt?: number }>; rateLimitType?: string; utilization?: number; resetsAt?: number }; usage?: Record<string, number> };
               try { e = JSON.parse(l); } catch { continue; }
               if (e.type === "stream_event" && e.event?.type === "content_block_delta" && e.event.delta?.type === "text_delta" && e.event.delta.text) { sent = true; line(res, { t: "text", s: e.event.delta.text }); }
               else if (e.type === "stream_event" && e.event?.type === "message_delta") { const r = e.event.delta?.stop_reason; if (r === "max_tokens") stop = "length"; else if (r === "refusal") stop = "refusal"; }
-              else if (e.type === "result" && e.is_error) err = (e.result ?? "") + "\n" + err;
+              else if (e.type === "rate_limit_event") {
+                // 5 時間・週間の使用率。claude が返すものをそのまま画面へ渡す(src-tauri/fixit-core/src/claude.rs と同じ形)
+                const info = e.rate_limit_info;
+                const ws = info?.unifiedWindows && typeof info.unifiedWindows === "object" ? Object.entries(info.unifiedWindows) : info?.rateLimitType ? [[info.rateLimitType, info]] : [];
+                for (const [id, v] of ws as [string, { utilization?: number; resetsAt?: number }][]) if (typeof v?.utilization === "number") line(res, { t: "limit", id, u: v.utilization, r: typeof v.resetsAt === "number" ? v.resetsAt : 0 });
+              }
+              else if (e.type === "result") {
+                const u = e.usage; const n = (k: string) => (typeof u?.[k] === "number" ? u[k] : 0);
+                if (u && typeof u === "object") line(res, { t: "usage", i: n("input_tokens"), o: n("output_tokens"), cr: n("cache_read_input_tokens"), cw: n("cache_creation_input_tokens") });
+                if (e.is_error) err = (e.result ?? "") + "\n" + err;
+              }
             }
           });
           p.on("error", (e: NodeJS.ErrnoException) => { finish(); line(res, { t: "err", kind: e.code === "ENOENT" ? "nocli" : "other" }); res.end(); });

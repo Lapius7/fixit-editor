@@ -1,10 +1,12 @@
 import type { ReactElement } from "react";
 import { Trans } from "react-i18next";
 import i18next from "i18next";
-import { Copy, ExternalLink, Mail } from "lucide-react";
+import { Copy, ExternalLink, FileDown, Mail } from "lucide-react";
 import { DEV, REPO_URL } from "@/shared/config";
 import { openExternal } from "@/features/account/auth";
 import { copyWithNotice } from "@/platform/clipboard";
+import { downloadDebugLog } from "@/shared/debuglog";
+import { notify } from "@/shared/notify";
 
 // ブランドのロゴ(Simple Icons、CC0)
 const brand = (d: string) => <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d={d} /></svg>;
@@ -35,6 +37,17 @@ export default function About() {
             <span className="about-ic">{GH_ICON}</span><span className="about-label"><Trans i18nKey="ソースコード" /></span>
             <span className="about-val">{REPO_URL.replace(/^https:\/\//, "")}</span>
             <button className="icon-btn" aria-label={i18next.t("開く")} title={i18next.t("開く")} onClick={() => void openExternal(REPO_URL)}><ExternalLink size={14} /></button>
+          </div>
+        </div>
+      </section>
+      <section className="set-sec">
+        <h3><Trans i18nKey="デバッグログ" /></h3>
+        <p className="about-note"><Trans i18nKey="不具合が起きたときは、ログをダウンロードして開発者に渡してください。エラーの記録、主な出来事、設定、環境の情報が入っています。ファイルの中身・AI の会話・パスワード類は入っておらず、ユーザー名とフォルダ名は伏せてあります。自動では送信されません。" /></p>
+        <div className="about-list">
+          <div className="about-row">
+            <span className="about-ic"><FileDown size={16} /></span><span className="about-label"><Trans i18nKey="デバッグログ" /></span>
+            <span className="about-val"><Trans i18nKey="テキストファイル(.log)" /></span>
+            <button className="btn" onClick={() => { downloadDebugLog(); notify(i18next.t("デバッグログを保存しました"), "success"); }}><Trans i18nKey="ダウンロード" /></button>
           </div>
         </div>
       </section>

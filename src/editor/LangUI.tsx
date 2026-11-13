@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import i18next from "i18next";
 import type { EditorView } from "@codemirror/view";
-import { LANG_EVENT, renameEdits, type LangMsg } from "@/editor/langsvc";
+import { LANG_EVENT, renameEdits, type LangMsg, type PickItem } from "@/editor/langsvc";
 import type { Edit, Loc } from "@/editor/ts/client";
 import { displayPath } from "@/workbench/rootpath";
 import { notify } from "@/shared/notify";
@@ -10,7 +10,7 @@ import { notify } from "@/shared/notify";
 type Props = { onGoto: (l: Loc) => void; onRename: (edits: Edit[], name: string, view: EditorView, file: string) => void };
 
 export default function LangUI({ onGoto, onRename }: Props) {
-  const [refs, setRefs] = useState<{ title: string; items: Loc[]; sel: number } | null>(null);
+  const [refs, setRefs] = useState<{ title: string; items: PickItem[]; sel: number } | null>(null);
   const [ren, setRen] = useState<Extract<LangMsg, { kind: "rename" }> | null>(null);
   const [name, setName] = useState("");
   const box = useRef<HTMLDivElement>(null);
@@ -19,7 +19,8 @@ export default function LangUI({ onGoto, onRename }: Props) {
     const on = (e: Event) => {
       const m = (e as CustomEvent<LangMsg>).detail;
       if (m.kind === "goto") onGoto(m.loc);
-      else if (m.kind === "refs") setRefs({ title: m.title, items: m.items, sel: 0 });
+      else if (m.kind === "refs") setRefs({ title: m.title, items: m.items.map((l) => ({ label: l.text, sub: `${displayPath(l.file).split("/").pop()}:${l.line}`, go: () => onGoto(l) })), sel: 0 });
+      else if (m.kind === "pick") setRefs({ title: m.title, items: m.items, sel: 0 });
       else { setRen(m); setName(m.name); }
     };
     addEventListener(LANG_EVENT, on);
@@ -34,7 +35,7 @@ export default function LangUI({ onGoto, onRename }: Props) {
   }, [refs, ren]);
 
   const close = () => { setRefs(null); setRen(null); };
-  const go = (l: Loc) => { close(); onGoto(l); };
+  const go = (it: PickItem) => { close(); it.go(); };
 
   const submit = async () => {
     if (!ren) return;
@@ -42,7 +43,8 @@ export default function LangUI({ onGoto, onRename }: Props) {
     if (!nn || nn === ren.name) return close();
     if (!/^[\p{L}_$][\p{L}\p{N}_$]*$/u.test(nn)) { notify(i18next.t("名前に使えない文字があります"), "warning"); return; }
     const pos = ren.from;
-    const edits = await renameEdits(ren.view, ren.file, pos);
+    const edits = await renameEdits(ren.view, ren.file, pos, nn);
+    if (edits === "blocked") return close();
     if (!edits?.length) { notify(i18next.t("名前を変えられませんでした"), "warning"); return close(); }
     onRename(edits, nn, ren.view, ren.file);
     close();
@@ -61,8 +63,8 @@ export default function LangUI({ onGoto, onRename }: Props) {
         <ul tabIndex={0} autoFocus ref={(el) => el?.focus({ preventScroll: true })}>
           {refs.items.map((l, i) => (
             <li key={i} data-on={i === refs.sel} onMouseMove={() => refs.sel !== i && setRefs({ ...refs, sel: i })} onClick={() => go(l)}>
-              <span className="bc-name">{l.text || "…"}</span>
-              <em>{displayPath(l.file).split("/").pop()}:{l.line}</em>
+              <span className="bc-name">{l.label || "…"}</span>
+              {l.sub && <em>{l.sub}</em>}
             </li>
           ))}
         </ul>

@@ -1,6 +1,6 @@
 // AI チャットのパネル。右側に出す(アプリ内ブラウザと同じ置き場所)。
 // 送るのは「利用者が操作したとき」だけ。送る前に、相手と送る範囲を画面に出し、初回は同意を取る。
-import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Check, Copy, MousePointerClick, Replace, RotateCcw, Settings as Cog, Square, Trash2, X, History, SquarePen, ChevronLeft, FileText, Quote as QuoteIcon, FileDown, ImagePlus } from "lucide-react";
 import i18next from "i18next";
 import { AI_MAX_HISTORY_CHARS, AI_MAX_HISTORY_IMAGES, AI_MAX_IMAGES } from "@/shared/config";
@@ -13,14 +13,17 @@ import { Response } from "@/features/ai/Response";
 import { useCopy } from "@/features/ai/CodeBlock";
 import { MAX_OPEN_BYTES } from "@/shared/config";
 import { ms } from "@/features/settings/settings";
+import { useUsagePoll } from "@/features/ai/useUsagePoll";
 import { getAi, hasEffort, ready, PROVIDER_NAME, setConsent, useAi, useLink, type Provider } from "@/features/ai/store";
 import { ModelPicker } from "@/features/ai/ModelPicker";
+import { UsageStrip } from "@/features/ai/UsageView";
+import { addTok, type Tok } from "@/features/ai/usage";
 import { ImgPeek, type Peek } from "@/features/ai/ImgPeek";
 import { refreshLink } from "@/features/ai/link";
 import { AI_ERR as ERR } from "@/features/ai/oneshot";
 import { deleteChat, getChats, newChatId, saveChat, setCurChat, useChats, type Chat } from "@/features/ai/chats";
 
-type M = { id: number; role: "user" | "assistant"; content: string; label?: string; ctx?: string; at?: number; imgs?: (Img & { name: string })[]; busy?: boolean; err?: AiErrorKind; note?: Stop; job?: AiJob; applied?: "ok" | "stale" };
+type M = { id: number; role: "user" | "assistant"; content: string; label?: string; ctx?: string; at?: number; imgs?: (Img & { name: string })[]; busy?: boolean; err?: AiErrorKind; note?: Stop; job?: AiJob; applied?: "ok" | "stale"; tok?: Tok };
 
 
 // 発言の日時。今日なら時刻だけ、別の日なら月日つき、別の年なら年も付ける。title には日付と時刻をすべて入れる
@@ -98,9 +101,13 @@ const excerpt = (c: Chat) => {
   return (m?.content ?? "").replace(/```[\s\S]*?```/g, " ").replace(/^\s*(?:#{1,6}|>|[-*+]|\d+\.)\s+/gm, "").replace(/[*_`~]+/g, "").replace(/\s+/g, " ").trim().slice(0, 160);
 };
 
+// 同意画面に出す、接続先の host(ポート込み)。URL でなければ空
+const baseHost = (b: string) => { try { return new URL(b).host; } catch { return ""; } };
+
 export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { open: boolean; job: AiJob | null; quote: AiQuote | null; resolve: (x: NonNullable<typeof drag.node> | string) => Promise<Ctx | AiPic | null>; onClose: () => void; onSettings: () => void }) {
   const cfg = useAi();
   const link = useLink();
+  useUsagePoll();
   // 会話の履歴。前回開いていた会話を、そのまま開く
   const init = useRef<{ id: string; msgs: M[] } | null>(null);
   if (!init.current) { const g = getChats(), c = g.chats.find((x) => x.id === g.cur); init.current = { id: c?.id ?? newChatId(), msgs: c ? (c.msgs as M[]) : [] }; }
@@ -244,7 +251,7 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
     let acc = "", raf = 0;
     const flush = () => { raf = 0; pat(aid, (m) => ({ ...m, content: acc })); };
     try {
-      const stop = await streamChat({ provider: p, model: c.models[p], effort: hasEffort(p) ? c.effort : "", key: c.keys[p], system: systemPrompt(), messages, signal: ac.signal, onText: (s) => { acc += s; if (!raf) raf = requestAnimationFrame(flush); } });
+      const stop = await streamChat({ provider: p, model: c.models[p], effort: hasEffort(p) ? c.effort : "", key: c.keys[p], system: systemPrompt(), messages, signal: ac.signal, onText: (s) => { acc += s; if (!raf) raf = requestAnimationFrame(flush); }, onUsage: (t) => pat(aid, (m) => ({ ...m, tok: addTok(m.tok, t) })) });
       if (raf) cancelAnimationFrame(raf);
       pat(aid, (m) => ({ ...m, content: acc, busy: false, at: Date.now(), note: stop === "end" ? undefined : stop }));
     } catch (e) {
@@ -300,7 +307,7 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
   // 会話が変わるたび(送信が終わっているとき)に保存する。空にしたら、その会話の履歴も消える
   useEffect(() => {
     if (msgs === loaded.current || msgs.some((m) => m.busy)) return;
-    saveChat(chatId, msgs.filter((m) => !m.err && (m.role === "user" || m.content)).map(({ id, role, content, label, ctx, at, imgs }) => ({ id, role, content, label, ctx, at, imgs })));
+    saveChat(chatId, msgs.filter((m) => !m.err && (m.role === "user" || m.content)).map(({ id, role, content, label, ctx, at, imgs, tok }) => ({ id, role, content, label, ctx, at, imgs, tok })));
   }, [msgs, chatId]);
 
   // 会話を切り替える(送信中なら止める)
@@ -314,6 +321,8 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
   const dropChat = (c: Chat) => { if (c.id === chatId) startNew(); deleteChat(c.id); notify(i18next.t("会話を消しました"), "success"); };
   const when = (t: number) => new Date(t).toLocaleTimeString(i18next.language, { hour: "2-digit", minute: "2-digit" });
 
+  // この会話で使ったトークン数(返答ごとの数の合計)
+  const chatTok = useMemo(() => msgs.reduce<Tok | undefined>((s, m) => (m.tok ? addTok(s, m.tok) : s), undefined), [msgs]);
   const lastId = msgs.at(-1)?.role === "assistant" ? msgs.at(-1)!.id : -1;
   // 閉じるときは、縮みきってから外す
   const [mounted, setMounted] = useState(open);
@@ -337,6 +346,7 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
         <button className="icon-btn" aria-label={i18next.t("設定")} title={i18next.t("設定")} onClick={onSettings}><Cog /></button>
         <button className="icon-btn" aria-label={i18next.t("閉じる")} title={i18next.t("閉じる")} onClick={onClose}><X /></button>
       </div>
+      {!hist && <UsageStrip p={cfg.provider} chat={chatTok} />}
       {hist && (
         <section className="ai-hist-page" aria-label={i18next.t("会話の履歴")}>
           <div className="ai-hist-head">
@@ -390,6 +400,8 @@ export function AiDock({ open, job, quote, resolve, onClose, onSettings }: { ope
         <div className="ai-consent" role="alertdialog" aria-label={i18next.t("送信の確認")}>
           <p>{pending.p === "claude-cli"
             ? i18next.t("選んだコード・画像・入力した文章は、この PC の claude コマンドを通して Anthropic のサーバーに送られます。利用は、あなたの Claude の契約の枠に数えられます。このエディタの開発元には送られません")
+            : pending.p === "custom"
+            ? i18next.t("選んだコード・画像・入力した文章は、あなたが設定した接続先({{host}})に送られます。送った内容の扱いは、その接続先の運営者に従います。このエディタの開発元には送られません", { host: baseHost(getAi().base) })
             : i18next.t("選んだコード・画像・入力した文章は、{{name}} のサーバーに送られます。送った内容の扱いは、各社の規約に従います。このエディタの開発元には送られません", { name: i18next.t(PROVIDER_NAME[pending.p]) })}</p>
           <div>
             <button className="btn" onClick={() => setPending(null)}>{i18next.t("やめる")}</button>

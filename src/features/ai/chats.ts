@@ -5,7 +5,7 @@ import { useSyncExternalStore } from "react";
 import { AI_CHATS_KEY, AI_CHATS_MAX, AI_CHATS_MAX_CHARS, AI_CHATS_MAX_IMAGE_CHARS } from "@/shared/config";
 
 export type SavedImg = { type: string; data: string; name: string };
-export type SavedMsg = { id: number; role: "user" | "assistant"; content: string; label?: string; ctx?: string; at?: number; imgs?: SavedImg[] };
+export type SavedMsg = { id: number; role: "user" | "assistant"; content: string; label?: string; ctx?: string; at?: number; imgs?: SavedImg[]; tok?: { i: number; o: number; cr: number; cw: number } };
 export type Chat = { id: string; title: string; at: number; msgs: SavedMsg[] };
 type State = { cur: string | null; chats: Chat[] };
 
@@ -17,11 +17,19 @@ const imgsOf = (v: unknown): SavedImg[] | undefined => {
   return out.length ? out : undefined;
 };
 
+// 返答に付けた、使ったトークン数(壊れた値は捨てる)
+const tokOf = (v: unknown): SavedMsg["tok"] => {
+  if (!v || typeof v !== "object") return undefined;
+  const t = v as Record<string, unknown>, n = (x: unknown) => (typeof x === "number" && Number.isFinite(x) && x >= 0 ? x : 0);
+  const r = { i: n(t.i), o: n(t.o), cr: n(t.cr), cw: n(t.cw) };
+  return r.i || r.o || r.cr || r.cw ? r : undefined;
+};
+
 const load = (raw: string | null = kvGet(AI_CHATS_KEY)): State => {
   try {
     const r = JSON.parse(raw ?? "null");
     if (r && Array.isArray(r.chats)) {
-      const chats = (r.chats as Chat[]).filter((c) => c && typeof c.id === "string" && Array.isArray(c.msgs)).map((c) => ({ id: c.id, title: String(c.title ?? ""), at: Number(c.at) || 0, msgs: c.msgs.filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string").map((m) => ({ id: Number(m.id) || 0, role: m.role, content: m.content, label: typeof m.label === "string" ? m.label : undefined, ctx: typeof m.ctx === "string" ? m.ctx : undefined, at: Number(m.at) > 0 ? Number(m.at) : undefined, imgs: imgsOf(m.imgs) })) }));
+      const chats = (r.chats as Chat[]).filter((c) => c && typeof c.id === "string" && Array.isArray(c.msgs)).map((c) => ({ id: c.id, title: String(c.title ?? ""), at: Number(c.at) || 0, msgs: c.msgs.filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string").map((m) => ({ id: Number(m.id) || 0, role: m.role, content: m.content, label: typeof m.label === "string" ? m.label : undefined, ctx: typeof m.ctx === "string" ? m.ctx : undefined, at: Number(m.at) > 0 ? Number(m.at) : undefined, imgs: imgsOf(m.imgs), tok: tokOf(m.tok) })) }));
       return { cur: typeof r.cur === "string" && chats.some((c) => c.id === r.cur) ? r.cur : null, chats };
     }
   } catch { /* 読めなければ空から始める */ }

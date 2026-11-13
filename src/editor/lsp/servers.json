@@ -1,0 +1,65 @@
+[
+  {
+    "id": "ts", "short": "TS", "name": "TypeScript / JavaScript", "on": "tsServer",
+    "exts": {"ts": "typescript", "mts": "typescript", "cts": "typescript", "tsx": "typescriptreact", "js": "javascript", "mjs": "javascript", "cjs": "javascript", "jsx": "javascriptreact"},
+    "dir": "typescript",
+    "install": {"kind": "npm-native", "pkg": "@typescript/typescript-{os}-{cpu}", "exe": "lib/tsc"},
+    "args": ["--lsp", "--stdio"]
+  },
+  {
+    "id": "py", "short": "PY", "name": "Python", "on": "pyServer",
+    "exts": {"py": "python", "pyi": "python"},
+    "dir": "pyright",
+    "install": {"kind": "npm", "pkg": "pyright", "entry": "langserver.index.js"},
+    "args": ["--stdio"]
+  },
+  {
+    "id": "html", "short": "HTML", "name": "HTML", "on": "htmlServer",
+    "exts": {"html": "html", "htm": "html"},
+    "dir": "vscode-langservers-extracted",
+    "install": {"kind": "npm", "pkg": "vscode-langservers-extracted", "entry": "bin/vscode-html-language-server", "deps": true},
+    "args": ["--stdio"]
+  },
+  {
+    "id": "css", "short": "CSS", "name": "CSS / SCSS / Less", "on": "cssServer",
+    "exts": {"css": "css", "scss": "scss", "less": "less"},
+    "dir": "vscode-langservers-extracted",
+    "install": {"kind": "npm", "pkg": "vscode-langservers-extracted", "entry": "bin/vscode-css-language-server", "deps": true},
+    "args": ["--stdio"]
+  },
+  {
+    "id": "php", "short": "PHP", "name": "PHP", "on": "phpServer",
+    "exts": {"php": "php"},
+    "dir": "intelephense",
+    "install": {"kind": "npm", "pkg": "intelephense", "entry": "lib/intelephense.js", "deps": true},
+    "args": ["--stdio"]
+  },
+  {
+    "id": "go", "short": "GO", "name": "Go", "on": "goServer",
+    "exts": {"go": "go"},
+    "dir": "gopls",
+    "install": {"kind": "go", "pkg": "golang.org/x/tools/gopls", "exe": "gopls"},
+    "args": []
+  },
+  {
+    "id": "rs", "short": "RS", "name": "Rust", "on": "rsServer",
+    "exts": {"rs": "rust"},
+    "dir": "rust-analyzer",
+    "install": {"kind": "github", "repo": "rust-lang/rust-analyzer", "exe": "rust-analyzer", "assets": {"linux-x64": "rust-analyzer-x86_64-unknown-linux-gnu.gz", "linux-arm64": "rust-analyzer-aarch64-unknown-linux-gnu.gz", "darwin-x64": "rust-analyzer-x86_64-apple-darwin.gz", "darwin-arm64": "rust-analyzer-aarch64-apple-darwin.gz", "win32-x64": "rust-analyzer-x86_64-pc-windows-msvc.zip", "win32-arm64": "rust-analyzer-aarch64-pc-windows-msvc.zip"}},
+    "args": []
+  },
+  {
+    "id": "rb", "short": "RB", "name": "Ruby", "on": "rbServer",
+    "exts": {"rb": "ruby", "rake": "ruby", "gemspec": "ruby"},
+    "dir": "solargraph",
+    "install": {"kind": "gem", "name": "solargraph", "exe": "solargraph"},
+    "args": ["stdio"]
+  },
+  {
+    "id": "sql", "short": "SQL", "name": "MySQL (SQL)", "on": "sqlServer",
+    "exts": {"sql": "sql"},
+    "dir": "sqls",
+    "install": {"kind": "github", "repo": "sqls-server/sqls", "exe": "sqls", "assets": {"linux-x64": "sqls-linux-{ver}.zip", "darwin-x64": "sqls-darwin-{ver}.zip", "darwin-arm64": "sqls-darwin-{ver}.zip", "win32-x64": "sqls-windows-{ver}.zip"}},
+    "args": []
+  }
+]

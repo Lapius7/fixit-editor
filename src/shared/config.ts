@@ -18,6 +18,7 @@ export const SETTINGS_HISTORY_DELAY_MS = 1500;
 
 // AI 連携。キーは設定とは別のキーに置く(設定の書き出し・履歴に混ざらないように)
 export const AI_STORE_KEY = "fixit:ai:v1";
+export const AI_USAGE_KEY = "fixit:ai-usage:v1"; // プロバイダーごとの使用量(トークン数・5 時間/週間の上限)。API キーとは別に置く
 export const AI_CHATS_KEY = "fixit:ai-chats:v1"; // 会話の履歴。API キーとは別に置く(設定の書き出し・変更履歴・統計には載らない)
 export const AI_CHATS_MAX = 50; // 残す会話の数(古いものから消す)
 export const AI_CHATS_MAX_CHARS = 1_500_000; // 全会話の文字数の上限(localStorage の容量を使い切らないため)
@@ -26,16 +27,21 @@ export const AI_MAX_CONTEXT_CHARS = 60_000; // 1 回に送るコードの上限
 export const AI_COMMIT_DIFF_CHARS = 40_000; // コミットメッセージを作るときに送る差分の上限
 export const TREE_PREFETCH_MS = 6000; // フォルダを開くとき、前に開いていたフォルダの中身を先に読んで待つ上限(超えた分は描いてから読む)
 export const TREE_WARM_MS = 20_000; // 開く前に先読みしたフォルダの中身を使う期間(過ぎたら読み直す)
+/** フォルダの中身の読み込みを待つ上限(ミリ秒)。これを過ぎたら失敗として扱い、読み込み中の表示を続けない */
+export const TREE_READ_TIMEOUT_MS = 15_000;
 export const TREE_WARM_MAX = 40; // フォルダを開いたとき、中のフォルダを先読みする数の上限
 export const TREE_EXPAND_MAX = 300; // 「中の階層をすべて開く」で開くフォルダの数の上限
 export const TREE_EXPAND_MS = 8000; // 「中の階層をすべて開く」が、あとから現れるフォルダを開き続ける時間
 export const GIT_SCAN_DIRS = 200; // Git パネルで「中のリポジトリ」を探すとき、調べる直下のフォルダの数の上限
 export const AI_MAX_TOKENS = 16_000;
-export const AI_DEFAULT_MODEL = { anthropic: "claude-opus-5-5", openai: "gpt-5", "claude-cli": "" } as const;
+export const AI_DEFAULT_MODEL = { anthropic: "claude-opus-5-5", openai: "gpt-5", "claude-cli": "", copilot: "gpt-4.1", gemini: "gemini-2.5-flash", custom: "" } as const;
 export const AI_MODEL_HINTS = {
   anthropic: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-2"],
   openai: ["gpt-5", "gpt-5-mini"],
   "claude-cli": ["opus", "sonnet", "haiku"],
+  copilot: ["gpt-4.1", "gpt-4o", "gpt-5-mini", "claude-sonnet-4.5"],
+  gemini: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite"],
+  custom: [],
 } as const;
 export const AI_MAX_HISTORY_CHARS = 120_000; // 会話の履歴として送る量の上限(古い発言から外す)
 // AI に添える画像。API が受け付ける形式(これ以外は PNG に描き直す)と、縮める大きさ
@@ -86,3 +92,18 @@ export const DEV = {
   mail: "me@lapius7.com",
   discord: "x_lapius7.xyz",
 };
+
+// TypeScript 言語サーバー(npm から取得して子プロセスで動かす)
+export const LSP_SYNC_DELAY_MS = 150; // 打鍵のたびには送らず、この間隔でまとめて変更を伝える
+export const LSP_IDLE_UNIT_MS = 60_000; // 設定「止めるまで(分)」の 1 分ぶん(JS/TS のタブがなくなってから、サーバーを止めるまでの時間)
+export const LSP_REQUEST_TIMEOUT_MS = 30_000; // 1 回の問い合わせを待つ上限
+export const LSP_SIG_DELAY_MS = 80; // 引数のヒント: ( や , を打ってから、サーバーに聞くまでの時間
+export const LSP_SIG_AFTER_COMP_MS = 200; // 補完が閉じてから、引数のヒントを出し直すまでの時間(ちらつき防止)
+export const LSP_SIG_WORD_MS = 350; // 単語を打っている間、補完が開くのを待ってから引数のヒントを確かめる時間
+export const LSP_INLAY_DELAY_MS = 400; // インレイヒント: 編集やスクロールが止まってから、サーバーに聞くまでの時間
+export const LSP_REFS_MAX = 300; // 参照の一覧に出す上限
+export const LSP_LINT_DELAY_MS = 350; // 打鍵が止まってから、エラーの波線を取りにいくまでの時間
+export const LSP_MAX_DOC_CHARS = 3_000_000; // これより大きいファイルは、言語サーバーに渡さない
+export const LSP_STATS_MS = 1500; // 言語サーバーの一覧をひらいている間、負荷(CPU・メモリ)を測り直す間隔
+export const LSP_STATS_HIST = 30; // 負荷のグラフに残す点の数
+export const LSP_BUSY_SHOW_MS = 250; // 解析が続いたとき、バーに「解析中」を出すまでの時間(ちらつき防止)

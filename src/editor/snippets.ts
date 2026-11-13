@@ -70,6 +70,8 @@ const table = () => (cache?.lang === i18next.language ? cache.map : (cache = { l
 export function snippetSource(ctx: CompletionContext): CompletionResult | null {
   const w = ctx.matchBefore(/[A-Za-z0-9_]+/);
   if (!w && !ctx.explicit) return null;
+  // obj.l のようにメンバーを打っているときは定型句を出さない(console.l で console.console.log になるため)
+  if (/(?:\.|->|::)$/.test(ctx.state.sliceDoc(Math.max(0, (w ? w.from : ctx.pos) - 2), w ? w.from : ctx.pos))) return null;
   const name = ctx.state.facet(language)?.name ?? "";
   const list = table()[ALIAS[name] ?? name];
   if (!list?.length) return null;

@@ -44,6 +44,7 @@ export const KEYS: KeyDef[] = [
   d(G.tab, "closeAll", "すべてのタブを閉じる", "Alt+Shift+W"),
   d(G.tab, "nextTab", "次のタブ", "Alt+]"),
   d(G.tab, "prevTab", "前のタブ", "Alt+["),
+  d(G.tab, "pinTab", "タブのピン留めを切り替える", "Alt+P"),
   d(G.edit, "shot", "コードを画像にする(選択範囲、なければ全体)", "Mod+Alt+P"),
   d(G.find, "searchAll", "全文検索", "Mod+Shift+F", { inTerm: true }),
   d(G.find, "find", "検索", "Mod+F", e),
@@ -58,19 +59,21 @@ export const KEYS: KeyDef[] = [
   d(G.sel, "selectLine", "行を選択", "Mod+L", e),
   d(G.edit, "undo", "元に戻す", "Mod+Z", e),
   d(G.edit, "redo", "やり直す", "Mod+Shift+Z", e),
+  d(G.edit, "redoAlt", "やり直す(別のキー)", "Mod+Y", e),
   d(G.edit, "comment", "行コメントの切り替え", "Mod+/", e),
-  d(G.edit, "blockComment", "ブロックコメントの切り替え", "Shift+Alt+A", e),
+  d(G.edit, "blockComment", "ブロックコメントの切り替え", "Alt+Shift+A", e),
   d(G.edit, "indentMore", "インデントを増やす", "Mod+]", e),
   d(G.edit, "indentLess", "インデントを減らす", "Mod+[", e),
   d(G.edit, "upper", "大文字にする", "Mod+Shift+U", e),
   d(G.edit, "lower", "小文字にする", "Mod+Alt+U", e),
   d(G.edit, "cut", "切り取り", ""), d(G.edit, "copy", "コピー", ""), d(G.edit, "paste", "貼り付け", ""),
-  d(G.line, "dupDown", "行を下に複製", "Shift+Alt+ArrowDown", e),
-  d(G.line, "dupUp", "行を上に複製", "Shift+Alt+ArrowUp", e),
+  d(G.line, "dupDown", "行を下に複製", "Alt+Shift+ArrowDown", e),
+  d(G.line, "dupUp", "行を上に複製", "Alt+Shift+ArrowUp", e),
   d(G.line, "moveDown", "行を下へ移動", "Alt+ArrowDown", e),
   d(G.line, "moveUp", "行を上へ移動", "Alt+ArrowUp", e),
   d(G.line, "deleteLine", "行を削除", "Mod+Shift+K", e),
   d(G.line, "blankBelow", "下に空行を挿入", "Mod+Enter", e),
+  d(G.line, "blankAbove", "上に空行を挿入", "Mod+Shift+Enter", e),
   d(G.line, "sortLines", "行を並べ替え", "", e),
   d(G.line, "trimSpace", "行末の空白を削除", "", e),
   d(G.fold, "fold", "折りたたむ", "Mod+Shift+[", e),
@@ -113,6 +116,17 @@ const isMac = () => /Mac|iPhone|iPad/.test(navigator.platform);
 const NAME: Record<string, string> = { ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→", Enter: "Enter", Escape: "Esc", Backspace: "⌫", Delete: "Del", Space: "Space" };
 export const chips = (combo: string): string[] =>
   combo ? combo.split(/\+(?=.)/).map((p) => (p === "Mod" ? (isMac() ? "⌘" : "Ctrl") : p === "Alt" && isMac() ? "⌥" : p === "Shift" && isMac() ? "⇧" : NAME[p] ?? p)) : [];
+
+// キーでの絞り込み。「ctrl alt p」「Ctrl+P」「⌘」のように、画面に出る表記と内部の名前(Mod)のどちらでも探せる。
+// 検索語は空白か + で区切り、すべての語がキーのどれかの部分に含まれれば一致とする
+export const keyMatch = (combo: string, query: string): boolean => {
+  if (!combo) return false;
+  const parts = [...combo.split(/\+(?=.)/), ...chips(combo)].map((p) => p.toLowerCase());
+  if (combo.includes("Mod")) parts.push("ctrl", "control", "cmd", "command");
+  if (combo.includes("Alt")) parts.push("option");
+  const words = query.toLowerCase().split(/[\s+]+/).filter(Boolean);
+  return words.length > 0 && words.every((w) => parts.some((p) => p.includes(w)));
+};
 
 // 重複を調べるための、組み合わせ → 機能の対応表
 export function table(over: Record<string, string>) {

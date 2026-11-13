@@ -48,7 +48,8 @@ function Row({ d }: { d: AnyDef }) {
     ctl = o.length <= 4 && fits
       ? <div className="seg" role="group" aria-label={i18next.t(d.label)}>{o.map(([k, t]) => <button key={k} aria-pressed={v === k} onClick={() => set(k)}>{i18next.t(t)}</button>)}</div>
       : <Select value={v as string} options={o.map(([k, t]) => ({ value: k, label: i18next.t(t) }))} label={i18next.t(d.label)} onChange={set} />;
-  } else if (d.kind === "font") ctl = <FontSelect d={d} value={v as string} onChange={set} />;
+  } else if (d.kind === "text") ctl = <input className="field set-text" value={v as string} spellCheck={false} aria-label={i18next.t(d.label)} placeholder={d.ph ? i18next.t(d.ph) : undefined} onChange={(e) => set(e.target.value)} />;
+  else if (d.kind === "font") ctl = <FontSelect d={d} value={v as string} onChange={set} />;
   else {
     const min = d.min ?? 0, max = d.max ?? 100, step = d.step ?? 1, n = v as number;
     const fill = max > min ? ((n - min) / (max - min)) * 100 : 0;

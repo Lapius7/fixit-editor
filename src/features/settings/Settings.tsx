@@ -12,7 +12,8 @@ import HistoryView from "@/features/settings/HistoryView";
 import About from "@/features/settings/About";
 import { AiSettings } from "@/features/ai/AiSettings";
 import { AccountSettings } from "@/features/account/AccountUI";
-import { KEYS, chips, comboOf, keyOf, rec, table } from "@/features/settings/keys";
+import { ask } from "@/shared/ask";
+import { KEYS, chips, comboOf, keyMatch, keyOf, rec, table } from "@/features/settings/keys";
 import { notify } from "@/shared/notify";
 import i18next from 'i18next'
 import { Trans } from 'react-i18next'
@@ -112,7 +113,7 @@ export default function Settings({ onClose, first, out, onTheme, onCheckUpdate }
               {q && <button className="icon-btn" aria-label={i18next.t("消す")} onClick={() => setQ("")}><X /></button>}
             </div>
             <button className="chipbtn" aria-pressed={only} onClick={() => setOnly(!only)}><Trans i18nKey="変えたものだけ" />{changed ? ` ${changed}` : ""}</button>
-            <button className="chipbtn" disabled={!changed} onClick={() => { resetAll(); notify(i18next.t("設定を初期値に戻しました"), "success"); }}><RotateCcw size={13} /><Trans i18nKey="すべて戻す" /></button>
+            <button className="chipbtn" disabled={!changed} onClick={async () => { if (!(await ask({ message: i18next.t("変えた設定をすべて初期値に戻しますか?(ショートカットは戻りません)\n戻したあとも、「変更履歴」から元の値に戻せます。"), ok: i18next.t("初期値に戻す"), danger: true }))) return; resetAll(); notify(i18next.t("設定を初期値に戻しました"), "success"); }}><RotateCcw size={13} /><Trans i18nKey="すべて戻す" /></button>
             <button className="btn close-btn" onClick={close}>{i18next.t("閉じる")}<kbd>Esc</kbd></button>
           </div>
           <div className="set-body scroll" ref={body}>
@@ -165,7 +166,7 @@ function Keys() {
 
   const rows = useMemo(() => {
     const f = q.trim().toLowerCase();
-    return KEYS.filter((k) => !f || (k.label + i18next.t(k.label)).toLowerCase().includes(f) || (k.group + i18next.t(k.group)).includes(f) || keyOf(k.id, s.keys).toLowerCase().includes(f));
+    return KEYS.filter((k) => !f || (k.label + i18next.t(k.label)).toLowerCase().includes(f) || (k.group + i18next.t(k.group)).includes(f) || keyMatch(keyOf(k.id, s.keys), f));
   }, [q, s.keys]);
   const changed = Object.keys(s.keys).length > 0;
 
@@ -175,7 +176,7 @@ function Keys() {
       <div className="sp-box" style={{ marginBottom: 6 }}>
         <SearchIcon size={14} style={{ color: "var(--ink-3)" }} />
         <input placeholder={i18next.t("機能名・キーで絞り込み")} value={q} onChange={(e) => setQ(e.target.value)} aria-label={i18next.t("絞り込み")} />
-        {changed && <button className="btn" style={{ height: 24, padding: "0 8px", fontSize: 12 }} onClick={() => { update({ keys: {} }); setNote(i18next.t("すべて初期値に戻しました")); }}><Trans i18nKey="すべて戻す" /></button>}
+        {changed && <button className="btn" style={{ height: 24, padding: "0 8px", fontSize: 12 }} onClick={async () => { if (!(await ask({ message: i18next.t("ショートカットをすべて初期値に戻しますか?\n戻したあとも、「変更履歴」から元の割り当てに戻せます。"), ok: i18next.t("初期値に戻す"), danger: true }))) return; update({ keys: {} }); setNote(i18next.t("すべて初期値に戻しました")); }}><Trans i18nKey="すべて戻す" /></button>}
       </div>
       <p className="set-note" aria-live="polite">{recId ? i18next.t("割り当てるキーを押してください(Esc で中止、Backspace で外す)") : note}</p>
       {rows.map((k, i) => {

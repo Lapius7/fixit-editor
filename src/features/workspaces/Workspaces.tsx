@@ -58,6 +58,7 @@ export default function Workspaces({ initial, curId, saveName, max, onOpen, onSa
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
     return [...list]
+      .filter((w) => !w.temp)
       .filter((w) => !s || `${w.name} ${rootLabel(w.root)}`.toLowerCase().includes(s))
       .sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || b.updated - a.updated);
   }, [list, q]);

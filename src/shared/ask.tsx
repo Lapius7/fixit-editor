@@ -5,21 +5,27 @@ import i18next from "i18next";
 import { ms } from "@/features/settings/settings";
 
 export type AskOptions = { message: string; title?: string; ok?: string; cancel?: string; danger?: boolean };
-type Pending = AskOptions & { resolve: (v: boolean) => void };
+// alt を渡すと、「やめる」と ok の間に 3 つめのボタンを出す(「保存して閉じる」など)。そのボタンが目立つ主ボタンになり、Enter の既定も alt になる。
+export type Choice = "ok" | "alt" | "cancel";
+export type ChoiceOptions = AskOptions & { alt: string };
+type Pending = AskOptions & { alt?: string; resolve: (v: Choice) => void };
 
 let queue: Pending[] = [];
 const subs = new Set<() => void>();
 const emit = () => subs.forEach((f) => f());
 
-export function ask(o: AskOptions): Promise<boolean> {
+export function askChoice(o: ChoiceOptions): Promise<Choice> {
   return new Promise((resolve) => { queue = [...queue, { ...o, resolve }]; emit(); });
+}
+export function ask(o: AskOptions): Promise<boolean> {
+  return new Promise((resolve) => { queue = [...queue, { ...o, resolve: (v) => resolve(v === "ok") }]; emit(); });
 }
 
 export function AskHost() {
   const cur = useSyncExternalStore((f) => (subs.add(f), () => void subs.delete(f)), () => queue[0] ?? null);
   const [closing, setClosing] = useState(false);
   const okRef = useRef<HTMLButtonElement>(null);
-  const done = (v: boolean) => {
+  const done = (v: Choice) => {
     if (!cur || closing) return;
     setClosing(true);
     cur.resolve(v);
@@ -35,8 +41,8 @@ export function AskHost() {
     if (!cur) return;
     // 下にあるモーダルの Esc より先に受ける
     const on = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); done(false); }
-      else if (e.key === "Enter" && !e.isComposing && document.activeElement?.tagName !== "BUTTON") { e.preventDefault(); e.stopImmediatePropagation(); done(true); }
+      if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); done("cancel"); }
+      else if (e.key === "Enter" && !e.isComposing && document.activeElement?.tagName !== "BUTTON") { e.preventDefault(); e.stopImmediatePropagation(); done(cur.alt ? "alt" : "ok"); }
     };
     addEventListener("keydown", on, true);
     return () => removeEventListener("keydown", on, true);
@@ -48,8 +54,9 @@ export function AskHost() {
         <h2 id="ask-t">{cur.title ?? i18next.t("確認")}</h2>
         <p id="ask-m">{cur.message}</p>
         <div className="dlg-foot">
-          <button className="btn" onClick={() => done(false)}>{cur.cancel ?? i18next.t("やめる")}</button>
-          <button ref={okRef} className="btn" data-primary={!cur.danger || undefined} data-danger={cur.danger || undefined} onClick={() => done(true)}>{cur.ok ?? i18next.t("続ける")}</button>
+          <button className="btn" onClick={() => done("cancel")}>{cur.cancel ?? i18next.t("やめる")}</button>
+          <button ref={cur.alt ? undefined : okRef} className="btn" data-primary={(!cur.danger && !cur.alt) || undefined} data-danger={cur.danger || undefined} onClick={() => done("ok")}>{cur.ok ?? i18next.t("続ける")}</button>
+          {cur.alt && <button ref={okRef} className="btn" data-primary onClick={() => done("alt")}>{cur.alt}</button>}
         </div>
       </div>
     </div>

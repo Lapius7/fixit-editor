@@ -1,7 +1,10 @@
-import { Check, SquareTerminal, WrapText, Server, HardDrive, FolderKanban, GitBranch } from "lucide-react";
+import { Check, SquareTerminal, WrapText, Server, HardDrive, FolderKanban, GitBranch, Braces } from "lucide-react";
 import type { Cursor } from "@/editor/Editor";
 import type { Tab } from "@/shared/types";
 import { useSettings } from "@/features/settings/settings";
+import { briefErr, useLspRunning, useLspStatus, type Status } from "@/editor/lsp/session";
+import { LSP_AVAILABLE } from "@/editor/lsp/transport";
+import { LSP_SERVERS, phaseText, serverById } from "@/editor/lsp/servers";
 import type { PopKind } from "@/workbench/StatusPop";
 import i18next from 'i18next'
 import { Trans } from 'react-i18next'
@@ -9,11 +12,29 @@ import { Trans } from 'react-i18next'
 type Props = {
   tab: Tab | null; cur: Cursor | null; info: string; lang: string; dirtyCount: number; termCount: number;
   term: boolean; conn: string | null; connFull?: string; connKind: "wsl" | "ssh" | "pc" | null; onConn: () => void; ws: string | null; wsColor?: string; onWs: () => void; onPop: (k: PopKind) => void; onTerm: () => void;
-  git?: { branch: string; changes: number } | null; onGit?: () => void;
+  git?: { branch: string; changes: number } | null; onGit?: () => void; lspKey?: string | null;
 };
 
+
+// 言語サーバーの状態(押すと、対応している言語サーバーの一覧と負荷がひらく)。開いているファイルに関わらず、いつも出す。
+// 開いているファイルのフォルダのサーバーがあればその状態を、なければ動いているサーバーの先頭を、どれもなければ待機中(設定がオフならオフ)を示す
+const NONE: Status = { phase: "off" };
+function LspItem({ k, onPop }: { k: string | null; onPop: (k: PopKind) => void }) {
+  const set = useSettings();
+  const own = useLspStatus(k);
+  const run = useLspRunning();
+  const s = k ? own : run[0]?.status ?? NONE;
+  // 表に出す言語: 開いているファイルの言語、なければ動いているサーバーの先頭、なければ設定でオンの先頭(なければ TS)
+  const sv = serverById(k ? k.split("|").pop() ?? "" : run[0]?.server ?? "") ?? LSP_SERVERS.find((x) => set[x.on]) ?? LSP_SERVERS[0];
+  const waiting = !k && s.phase === "off" && LSP_SERVERS.some((x) => set[x.on]);
+  const label = waiting ? i18next.t("待機中") : phaseText(s.phase);
+  const open = i18next.t("言語サーバーの一覧をひらく");
+  const tip = s.phase === "error" ? `${briefErr(s.err)}\n${open}` : s.version ? `${sv.name} ${s.version}\n${open}` : open;
+  return <button className="sb sb-lsp" data-pop="lsp" data-on={s.phase !== "off"} data-phase={s.phase} onClick={() => onPop("lsp")} title={tip.trim()}><Braces />{sv.short} · {label}{s.phase === "download" && s.pct != null ? ` ${s.pct}%` : ""}{run.length > 1 ? ` ×${run.length}` : ""}</button>;
+}
+
 // 下の情報バー(VS Code の状態バーに相当)。出す項目は設定で選べる
-export default function StatusBar({ tab, cur, info, lang, dirtyCount, term, conn, connFull, connKind, onConn, ws, wsColor, onWs, onPop, onTerm, git, onGit }: Props) {
+export default function StatusBar({ tab, cur, info, lang, dirtyCount, term, conn, connFull, connKind, onConn, ws, wsColor, onWs, onPop, onTerm, git, onGit, lspKey = null }: Props) {
   const s = useSettings();
   const text = tab?.view.kind === "text";
   return (
@@ -21,6 +42,7 @@ export default function StatusBar({ tab, cur, info, lang, dirtyCount, term, conn
       {ws !== null && <button className="sb sb-ws" onClick={onWs} title={i18next.t("ワークスペースの切り替え・保存")}><FolderKanban />{ws ? <><i className="ws-dot" style={{ background: wsColor }} /><span className="sb-wsn">{ws}</span></> : i18next.t("ワークスペース")}</button>}
       {conn && <button className="sb sb-conn" data-kind={connKind} onClick={onConn} title={`${connFull ?? conn}\n${i18next.t("接続先の切り替え・切断")}`}>{connKind === "ssh" ? <Server /> : <HardDrive />}{(() => { const i = conn.indexOf(" · "); return i < 0 ? conn : <><span className="sb-host">{conn.slice(0, i)} ·</span><span className="sb-path"><bdi>{conn.slice(i + 3)}</bdi></span></>; })()}</button>}
       {git && <button className="sb sb-git" onClick={onGit} title={i18next.t("Git のブランチ(クリックで更新)")}><GitBranch />{git.branch}{git.changes > 0 && <span className="sb-chg">{git.changes}</span>}</button>}
+      {LSP_AVAILABLE && <LspItem k={lspKey} onPop={onPop} />}
       {s.sbTerm && <button className="sb" data-on={term} onClick={onTerm} title={i18next.t("ターミナル")}><SquareTerminal /><Trans i18nKey="ターミナル" /></button>}
       {s.sbSaved && <span className="sb" title={i18next.t("未保存のファイル")} data-on={dirtyCount > 0}>{dirtyCount > 0 ? <><span className="sb-dot" />{dirtyCount} <Trans i18nKey="件未保存" /></> : <><Check /><Trans i18nKey="保存済み" /></>}</span>}
       <span className="sb-sp" />

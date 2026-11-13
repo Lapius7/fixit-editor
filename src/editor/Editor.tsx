@@ -120,7 +120,7 @@ export default function Editor({ path, docKey, name, value, onChange, onCursor, 
     view.current?.dispatch({ effects: DYN.reconfigure(dynamic(st)) });
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 使う項目だけを並べる
   }, [docKey, st.tabSize, st.insertSpaces, st.wrap, st.lineNumbers, st.activeLine, st.foldGutter, st.indentGuides, st.bracketMatching, st.matchHighlight, st.whitespace, st.cursorBlink,
-    st.autocomplete, st.autocompleteDelay, st.completeMax, st.completeIcons, st.wordComplete, st.closeBrackets, st.indentOnInput, st.scrollPastEnd, st.spellcheck, st.readOnly, st.rainbowBrackets, st.tagSync, st.diagnostics, st.langService, st.minimap]);
+    st.autocomplete, st.autocompleteDelay, st.completeMax, st.completeIcons, st.wordComplete, st.closeBrackets, st.indentOnInput, st.scrollPastEnd, st.spellcheck, st.readOnly, st.rainbowBrackets, st.tagSync, st.diagnostics, st.langService, st.tsServer, st.tsLspDiag, st.tsLspComplete, st.tsLspHover, st.tsLspDef, st.tsLspSig, st.tsLspRefs, st.tsLspRename, st.tsLspAction, st.tsLspInlay, st.minimap]);
 
   useEffect(() => { view.current?.dispatch({ effects: setGitBase.of(gitBase ?? null) }); }, [docKey, gitBase]);
 
