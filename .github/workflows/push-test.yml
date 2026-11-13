@@ -1,0 +1,15 @@
+name: push-test
+on:
+  push:
+    branches: [claude-ci-test3]
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - run: |
+          git config user.name test; git config user.email test@example.com
+          git commit --allow-empty -m "ruleset test (should be rejected)"
+          git push origin HEAD:main && echo "RESULT: PUSHED TO MAIN" || echo "RESULT: REJECTED"
