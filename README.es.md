@@ -10,7 +10,7 @@
 ![Platform](https://img.shields.io/badge/platform-Windows-0078d4)
 ![Built with](https://img.shields.io/badge/built%20with-Tauri%20%C2%B7%20React%20%C2%B7%20CodeMirror%206-444)
 
-[Sitio web](https://fixit-editor.lapius7.com) · [Documentación](https://fixit-editor.lapius7.com/docs) · [Historial de cambios](https://fixit-editor.lapius7.com/es/changelog) · [Licencia](#licencia)
+[Sitio web](https://fixit-editor.lapius7.com) · [Documentación](https://fixit-editor.lapius7.com/docs) · [Historial de cambios](https://fixit-editor.lapius7.com/en/changelog) · [Licencia](#licencia)
 
 [English](README.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [简体中文](README.zh-CN.md) · **Español**
 
@@ -29,7 +29,7 @@ Los ajustes, las estadísticas y los espacios de trabajo se guardan en tu PC. Lo
 
 ## Funciones
 
-Todo lo que se describe aquí está en la última versión, la 1.0.8. Los cambios de cada versión están en el [registro de cambios](https://fixit-editor.lapius7.com/es/changelog).
+Todo lo que se describe aquí está en la última versión, la 1.0.8. Los cambios de cada versión están en el [registro de cambios](https://fixit-editor.lapius7.com/en/changelog).
 
 ### Edición
 
