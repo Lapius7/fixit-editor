@@ -1,11 +1,12 @@
 // Git パネルで、開いているフォルダがリポジトリではないときの中身。
 // ここでリポジトリを作る(git init)・複製する(git clone)か、中にあるリポジトリを選んで開く
 import { useEffect, useState } from "react";
-import { FolderGit2, FolderOpen, GitBranchPlus, Download } from "lucide-react";
+import { Folder, FolderGit2, FolderOpen, GitBranchPlus, Download } from "lucide-react";
 import i18next from "i18next";
-import { RemoteDir, type Conn } from "@/platform/remote";
+import type { Conn } from "@/platform/remote";
 import { gitWrite } from "@/features/git/git";
 import { GIT_SCAN_DIRS } from "@/shared/config";
+import { walkRepos, type Walked } from "@/features/github/repos";
 
 type Props = { conn: Conn; dir: string; onRepo: (dir: string) => void };
 
@@ -14,37 +15,32 @@ const join = (d: string, n: string) => (d.endsWith("/") ? d + n : `${d}/${n}`);
 // URL の最後の部分から、複製先のフォルダ名を決める(…/name.git → name)
 export const cloneDirName = (url: string) => url.trim().replace(/[/\\]+$/, "").split(/[/:]/).pop()?.replace(/\.git$/i, "") ?? "";
 
-// 直下のフォルダのうち、.git を持つもの(.git はフォルダのことも、ワークツリーなどのファイルのこともある)
-async function childRepos(conn: Conn, dir: string): Promise<string[]> {
-  const subs: string[] = [];
-  for await (const [name, h] of new RemoteDir(conn, dir).entries()) {
-    if (h.kind === "directory" && name !== ".git") subs.push(name);
-    if (subs.length >= GIT_SCAN_DIRS) break;
-  }
-  const out: string[] = [];
-  for (let i = 0; i < subs.length; i += 8) {
-    const hit = await Promise.all(subs.slice(i, i + 8).map((n) => new RemoteDir(conn, join(dir, n)).getDirectoryHandle(".git")
-      .then(() => true, (e: { code?: string }) => e?.code === "ENOTDIR")));
-    subs.slice(i, i + 8).forEach((n, k) => { if (hit[k]) out.push(n); });
-  }
-  return out.sort((a, b) => a.localeCompare(b));
-}
-
 export function GitSetup({ conn, dir, onRepo }: Props) {
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const [url, setUrl] = useState("");
-  const [repos, setRepos] = useState<string[] | null>(null);
+  const [found, setFound] = useState<Walked | null>(null);
+  // 中にある Git プロジェクト(深さ 3 まで)と、まだ Git ではない直下のフォルダ
   useEffect(() => {
-    let live = true; setRepos(null); setErr("");
-    childRepos(conn, dir).then((r) => { if (live) setRepos(r); }, () => { if (live) setRepos([]); });
-    return () => { live = false; };
+    const sig = { stop: false };
+    setFound(null); setErr("");
+    walkRepos(conn, dir, sig).then((r) => { if (!sig.stop) setFound(r); }, () => { if (!sig.stop) setFound({ repos: [], plain: [] }); });
+    return () => { sig.stop = true; };
   }, [conn, dir]);
 
   const go = async (label: string, body: Record<string, unknown>, to: string) => {
     if (busy) return;
     setBusy(label); setErr("");
     try { await gitWrite(conn, dir, body); onRepo(to); }
+    catch (e) { setErr(msg(e)); }
+    finally { setBusy(""); }
+  };
+  // 直下のフォルダを Git 化して、そのまま開く
+  const initSub = async (rel: string) => {
+    if (busy) return;
+    const to = join(dir, rel);
+    setBusy(`init:${rel}`); setErr("");
+    try { await gitWrite(conn, to, { cmd: "init" }); onRepo(to); }
     catch (e) { setErr(msg(e)); }
     finally { setBusy(""); }
   };
@@ -64,6 +60,32 @@ export function GitSetup({ conn, dir, onRepo }: Props) {
         </div>
       </div>
       {err && <p className="git-setup-err" role="alert">{err}</p>}
+      {found === null ? <p className="git-setup-hint">{i18next.t("中のリポジトリを探しています…")}</p> : (
+        <>
+          {found.repos.length > 0 && (
+            <section className="git-setup-list" aria-label={i18next.t("このフォルダの中のリポジトリ")}>
+              <h3>{i18next.t("このフォルダの中のリポジトリ")}</h3>
+              {found.repos.map((r) => (
+                <button key={r.dir} className="git-setup-repo" disabled={!!busy} title={r.dir} onClick={() => onRepo(r.dir)}>
+                  <FolderGit2 /><span className="truncate">{r.rel.split("/").pop()}</span>{r.rel.includes("/") && <small className="git-setup-rel truncate"><bdi>{r.rel}</bdi></small>}
+                </button>
+              ))}
+            </section>
+          )}
+          {found.plain.length > 0 && (
+            <section className="git-setup-list" aria-label={i18next.t("Git ではないフォルダ")}>
+              <h3>{i18next.t("Git ではないフォルダ")}</h3>
+              {found.plain.slice(0, GIT_SCAN_DIRS).map((r) => (
+                <div key={r.dir} className="git-setup-repo git-setup-plain" title={r.dir}>
+                  <Folder /><span className="truncate">{r.rel}</span>
+                  <button className="git-setup-mini" disabled={!!busy} onClick={() => void initSub(r.rel)}>{busy === `init:${r.rel}` ? i18next.t("作成しています…") : i18next.t("Git 化")}</button>
+                </div>
+              ))}
+            </section>
+          )}
+        </>
+      )}
+      <div className="git-setup-or" role="separator"><span>{i18next.t("新しく作る")}</span></div>
       <section className="git-setup-sec">
         <h3>{i18next.t("このフォルダを Git で管理する")}</h3>
         <button className="git-setup-btn" disabled={!!busy} onClick={() => void go("init", { cmd: "init" }, dir)}>
@@ -82,14 +104,6 @@ export function GitSetup({ conn, dir, onRepo }: Props) {
         <p className="git-setup-hint" role={busy === "clone" ? "status" : undefined}>{busy === "clone" ? i18next.t("複製しています…")
           : i18next.t("「{{dir}}」の中に「{{name}}」フォルダを作って複製します。", { dir: here, name: name || "repo" })}</p>
       </form>
-      {repos === null ? <p className="git-setup-hint">{i18next.t("中のリポジトリを探しています…")}</p> : repos.length > 0 && (
-        <section className="git-setup-list" aria-label={i18next.t("このフォルダの中のリポジトリ")}>
-          <h3>{i18next.t("このフォルダの中のリポジトリ")}</h3>
-          {repos.map((r) => (
-            <button key={r} className="git-setup-repo" disabled={!!busy} onClick={() => onRepo(join(dir, r))}><FolderGit2 /><span className="truncate">{r}</span></button>
-          ))}
-        </section>
-      )}
     </div>
   );
 }

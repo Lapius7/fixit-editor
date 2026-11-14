@@ -62,9 +62,18 @@ const SECRET_FILE = [/^\.env(\..*)?$/, /\.(pem|key|p12|pfx|jks|keystore|kdbx)$/,
 export const secretName = (name: string) => { const n = name.toLowerCase(); return SECRET_DIR.has(n) || SECRET_FILE.some((r) => r.test(n)); };
 
 // AI が指定したパスを、/ から始まる形に直す。使えないパスは null(.. ・ \ ・ : ・ NUL ・ 触らせない名前)
-export function cleanPath(p: unknown): string | null {
+// root は、開いているフォルダの絶対パス(わかるときだけ)。AI が絶対パスで答えても、中の相対パスに直す。
+// 絶対パスのままだと、開いたフォルダの中に home/… という別のフォルダを作ってしまう
+export function cleanPath(p: unknown, root?: string): string | null {
   if (typeof p !== "string" || p.length > 1000 || ["\0", "\\", ":"].some((c) => p.includes(c))) return null;
-  const seg = p.split("/").filter((s) => s !== "" && s !== ".");
+  let seg = p.split("/").filter((s) => s !== "" && s !== ".");
+  const r = root ? root.split("/").filter(Boolean) : [];
+  if (r.length && p.startsWith("/")) {
+    const under = r.every((s, i) => seg[i] === s);
+    if (under) seg = seg.slice(r.length);
+    // 開いたフォルダの外を指す絶対パス(/home/lap7/ までは同じで、そのあとが違う)は、触らせない
+    else if (r.length >= 2 && seg[0] === r[0] && seg[1] === r[1]) return null;
+  }
   if (seg.some((s) => s === ".." || secretName(s))) return null;
   return "/" + seg.join("/");
 }
@@ -141,15 +150,16 @@ export type Parsed =
 
 const int = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.floor(v) : typeof v === "string" && /^\d+$/.test(v) ? Number(v) : undefined);
 
-export function parseCall(c: ToolCall): Parsed {
+export function parseCall(c: ToolCall, root?: string): Parsed {
   const a = obj(c.args);
+  const cp = (v: unknown) => cleanPath(v, root);
   if (c.name === "list_files") {
-    const path = a.path === undefined || a.path === "" ? "/" : cleanPath(a.path);
+    const path = a.path === undefined || a.path === "" ? "/" : cp(a.path);
     if (path === null) return { k: "bad", err: "That path is not allowed." };
     return { k: "list", path, depth: Math.min(4, Math.max(1, int(a.depth) ?? 2)) };
   }
   if (c.name === "read_file" || c.name === "edit_file") {
-    const path = cleanPath(a.path);
+    const path = cp(a.path);
     if (path === null || path === "/") return { k: "bad", err: "That path is not allowed. Use a file path inside the opened folder, like /src/app.ts." };
     if (c.name === "read_file") return { k: "read", path, start: int(a.start_line), end: int(a.end_line) };
     if (typeof a.old_text !== "string" || typeof a.new_text !== "string") return { k: "bad", err: "old_text and new_text must be strings." };
@@ -157,7 +167,7 @@ export function parseCall(c: ToolCall): Parsed {
     // エディタの中の改行は LF にそろえてある
     return { k: "edit", path, old: a.old_text.replace(/\r\n/g, "\n"), neu: a.new_text.replace(/\r\n/g, "\n") };
   }
-  const file = (v: unknown) => { const p = cleanPath(v); return p === null || p === "/" ? null : p; };
+  const file = (v: unknown) => { const p = cp(v); return p === null || p === "/" ? null : p; };
   const NO = "That path is not allowed. Use a path inside the opened folder, like /src/app.ts.";
   if (c.name === "create_file") {
     const path = file(a.path);
@@ -181,7 +191,7 @@ export function parseCall(c: ToolCall): Parsed {
   if (c.name === "search_files") {
     if (typeof a.query !== "string" || !a.query) return { k: "bad", err: "query must be a non-empty string." };
     if (a.query.length > 500) return { k: "bad", err: "query is too long." };
-    const path = a.path === undefined || a.path === "" ? "/" : cleanPath(a.path);
+    const path = a.path === undefined || a.path === "" ? "/" : cp(a.path);
     if (path === null) return { k: "bad", err: NO };
     const regex = a.regex === true;
     if (regex) { try { new RegExp(a.query); } catch { return { k: "bad", err: "query is not a valid regular expression." }; } }
@@ -243,6 +253,7 @@ type OpAct = OpKind extends infer K ? K extends OpKind ? { id: string; k: K; pat
 
 // 画面(App)が用意する、フォルダの中身を読む・直す窓口。AI が指定するパスは、ここで開いているフォルダの中に限る
 export type FileHost = {
+  root?: string; // 開いているフォルダの絶対パス(わかるときだけ)
   list(dir: string): Promise<Entry[] | null>;
   read(path: string): Promise<{ text: string } | { err: "none" | "binary" | "big" | "dir" | "denied" }>;
   apply(path: string, old: string, neu: string): Promise<"ok" | "stale" | "fail">;

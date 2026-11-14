@@ -21,7 +21,7 @@ fn key_of(name: &str) -> Option<String> {
 }
 
 // API キーやログインのトークンを含むキー。Windows では DPAPI でユーザーごとに暗号化して書く
-const SECRET: &[&str] = &["fixit:ai:v1", "fixit:account:v1"];
+const SECRET: &[&str] = &["fixit:ai:v1", "fixit:account:v1", "fixit:gh:v1"];
 const SEALED: &str = "dpapi:";
 fn secret(key: &str) -> bool { SECRET.contains(&key) }
 

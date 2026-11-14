@@ -9,7 +9,7 @@ import { enterRow } from "@/workbench/treeAnim";
 import { usePending, type PendingItem } from "@/workbench/pending";
 import { useCut } from "@/workbench/treeclip";
 import { isMulti, isSelectedPath, knownNode, selectOnly, selectRange, selectedNodes, toggleSel, useSelected } from "@/workbench/selection";
-import { dirOf } from "@/workbench/treeops"; import { bulkFor, bulkTake, dropWarm, isOpen, readDir, readWarm, setOpenPath, subBulk, takePrefetched, rememberKids, recallKids, warmDir, warmKids } from "@/workbench/treeOpen";
+import { dirOf } from "@/workbench/treeops"; import { bulkFor, bulkTake, dropWarm, isOpen, inRefreshScope, readDir, readWarm, setOpenPath, subBulk, takePrefetched, rememberKids, recallKids, warmDir, warmKids } from "@/workbench/treeOpen";
 
 // ドラッグ中のものを、このフォルダへ移せるか(自分の中・今いる場所へは移せない)
 export const canDrop = (dest: Node) => {
@@ -175,7 +175,7 @@ function Item({ enter, n, activePath, ctxPath, rev, onOpen, onContext, onMove, o
 
   // 作成・削除のあとに、開いているフォルダの中身を読み直す
   useEffect(() => {
-    if (isDir && n.handle && loaded) readDir(n.handle as FileSystemDirectoryHandle, n.path).then(setLoaded, () => {}); // 読み直せなくても、いま出ている中身は残す
+    if (isDir && n.handle && loaded && inRefreshScope(rev, n.path)) readDir(n.handle as FileSystemDirectoryHandle, n.path).then(setLoaded, () => {}); // 読み直せなくても、いま出ている中身は残す
   }, [rev]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const click = async () => {

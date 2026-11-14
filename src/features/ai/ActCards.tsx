@@ -21,8 +21,8 @@ function OpCard({ a, onDecide }: { a: Op; onDecide: Decide }) {
     <div className="ai-edit" data-st={a.st} data-op={a.k}>
       <div className="ai-edit-h"><Icon aria-hidden /><span className="ai-edit-ht">{title}</span>{a.k === "create" && a.size != null ? <small>{bytes(a.size)}</small> : null}</div>
       <div className="ai-op-p" title={a.k === "move" ? `${a.path} → ${a.to}` : a.path}>
-        <code className="truncate">{a.path}</code>
-        {a.k === "move" && <><ArrowRight aria-hidden /><code className="truncate">{a.to}</code></>}
+        <code>{a.path}</code>
+        {a.k === "move" && <><ArrowRight aria-hidden /><code>{a.to}</code></>}
       </div>
       <div className="ai-edit-f">
         {a.st === "pending" ? (

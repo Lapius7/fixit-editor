@@ -44,6 +44,10 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, .field:focus-
 /* ---- アプリなので、文字は基本選択できない(入力欄・エディタ・ターミナル・ビューアは除く) ---- */
 body { -webkit-user-select: none; user-select: none; cursor: default; }
 input, textarea, [contenteditable="true"], .cm-content, .cm-line, .xterm, .xterm *, .viewer, .viewer *, .selectable, .selectable * { -webkit-user-select: text; user-select: text; }
+/* AI チャットの発言は、ブラウザのように文字を選んでコピーできる。ボタンの文字は選ばせない */
+.ai-scroll { -webkit-user-select: text; user-select: text; }
+.ai-scroll :is(p, li, pre, code, td, th, h1, h2, h3, h4, blockquote, small, span, div):not(button *) { cursor: text; }
+.ai-scroll :is(button, [role="button"], a, img), .ai-scroll :is(button, [role="button"], a) * { -webkit-user-select: none; user-select: none; cursor: default; }
 /* テキストの編集・選択ができる場所は、文字用のカーソル(I ビーム)にする */
 .cm-content, .cm-content *, .cm-scroller, .viewer, .viewer *, .selectable, .selectable * { cursor: text; }
 .cm-gutters, .cm-gutters *, .cm-foldPlaceholder { cursor: default; }

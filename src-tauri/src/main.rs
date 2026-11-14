@@ -394,6 +394,17 @@ async fn copilot_poll(device_code: String) -> Result<serde_json::Value, String> 
     tauri::async_runtime::spawn_blocking(move || copilot::poll(&device_code)).await.map_err(|e| e.to_string())?
 }
 
+// GitHub 管理用のログイン(自分の OAuth App)。client_id は画面側の設定から渡される
+#[tauri::command]
+async fn gh_device(client_id: String, scope: String) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || copilot::device_for(&client_id, &scope)).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn gh_poll(client_id: String, device_code: String) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || copilot::poll_for(&client_id, &device_code)).await.map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 async fn copilot_token(oauth: String) -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(move || copilot::token(&oauth)).await.map_err(|e| e.to_string())?
@@ -584,7 +595,7 @@ fn main() {
             tauri::webview::PermissionKind::ClipboardRead => tauri::webview::PermissionResponse::Allow,
             _ => tauri::webview::PermissionResponse::Default,
         })
-        .invoke_handler(tauri::generate_handler![pv_put, pv_drop, clip_read, clip_write, clip_files, pty_open, pty_shells, pty_write, pty_resize, pty_close, lsp_start, copilot_chat, lsp_send, lsp_stats, lsp_stop, launch_target, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_usage, claude_login, claude_cancel, copilot_device, copilot_poll, copilot_token, store_load, store_read, store_stamps, store_save, apply_update, list_fonts, open_url, os_open])
+        .invoke_handler(tauri::generate_handler![pv_put, pv_drop, clip_read, clip_write, clip_files, pty_open, pty_shells, pty_write, pty_resize, pty_close, lsp_start, copilot_chat, lsp_send, lsp_stats, lsp_stop, launch_target, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_usage, claude_login, claude_cancel, copilot_device, gh_device, gh_poll, copilot_poll, copilot_token, store_load, store_read, store_stamps, store_save, apply_update, list_fonts, open_url, os_open])
         .build(tauri::generate_context!())
         .expect("フィクシットエディタを起動できませんでした")
         .run(|app, ev| {
@@ -593,6 +604,9 @@ fn main() {
                 use tauri::Manager;
                 let all: Vec<_> = app.state::<Lsps>().0.lock().unwrap().drain().map(|x| x.1).collect();
                 for s in all { s.stop(); }
+                // 画面に出していない端末(ポートの公開など)も含め、残っている端末の子プロセスを止める
+                let ptys: Vec<_> = app.state::<Ptys>().0.lock().unwrap().drain().map(|x| x.1).collect();
+                for mut p in ptys { let _ = p.child.kill(); }
             }
         });
 }

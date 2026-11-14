@@ -77,6 +77,7 @@ pub fn plan(body: &[u8]) -> Result<Plan, FsError> {
     const FAST: u64 = 30_000;
     let (rest, ms, merge): (Vec<String>, u64, bool) = match cmd {
         // 読み取り
+        "remotes" => (strs(&["remote", "-v"]), FAST, false),
         "changes" => (strs(&["status", "--porcelain=v1", "-z", "-uall", "-b"]), FAST, false),
         "log" => (strs(&["log", "--all", "--no-color", "-n", "300", "-z", "--date-order", "--format=%H%x1f%P%x1f%an%x1f%at%x1f%D%x1f%s"]), FAST, false),
         "branches" => (
@@ -144,6 +145,7 @@ pub fn plan(body: &[u8]) -> Result<Plan, FsError> {
         }
         // リポジトリではないフォルダで使う
         "init" => (strs(&["init"]), FAST, true),
+        "remote-add" => (vec!["remote".into(), "add".into(), ref_name(&v, "name")?, clone_url(&v)?], FAST, true),
         "clone" => (vec!["clone".into(), "--".into(), clone_url(&v)?, clone_name(&v)?], NET * 5, true),
         _ => return Err(bad("この Git 操作は使えません")),
     };

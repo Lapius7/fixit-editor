@@ -32,6 +32,7 @@ import StatusPop, { type PopKind } from "@/workbench/StatusPop";
 import Palette, { type Cmd } from "@/workbench/Palette";
 import Settings from "@/features/settings/Settings";
 import StatsView from "@/features/stats/StatsView";
+import GithubView from "@/features/github/GithubView";
 import Setup, { needSetup } from "@/app/Setup";
 import { noteSave } from "@/features/stats/stats";
 import { moveFile, recordSave } from "@/features/history/history";
@@ -39,7 +40,7 @@ import LocalHistory from "@/features/history/LocalHistory";
 import { sendPing } from "@/features/telemetry/telemetry";
 import { installErrorHooks, startUsageReports } from "@/features/telemetry/report";
 import FeedbackView from "@/features/telemetry/FeedbackView";
-import { useAccount } from "@/features/account/auth";
+import { useAccount, openExternal } from "@/features/account/auth";
 import { useReplies } from "@/features/account/replies";
 import { Avatar } from "@/features/account/AccountUI";
 import UpdateView from "@/features/update/UpdateView";
@@ -49,15 +50,21 @@ import ContextMenu, { type Item } from "@/workbench/ContextMenu";
 import Dialog from "@/workbench/Dialog";
 import Connect from "@/features/workspaces/Connect";
 import Workspaces from "@/features/workspaces/Workspaces";
-import { GitBranch, Pin, History, MessageSquareText, RefreshCw, ArrowUpCircle } from "lucide-react";
-import { Play, FolderSearch, AppWindow, FolderGit2, ChevronsUpDown } from "lucide-react";
+import { Globe, GitBranch, GitPullRequest, Pin, History, MessageSquareText, RefreshCw, ArrowUpCircle } from "lucide-react";
+import { X as XIcon, Play, FolderSearch, AppWindow, FolderGit2, ChevronsUpDown } from "lucide-react";
 import { runnerFor, buildCommand, shq } from "@/features/run/runners";
+import { DELA_CHECK, DELA_INSTALL, findUrl, installAndPublish, publishCmd, stripAnsi, type Pub } from "@/features/dela/dela";
+import { startBg, type Bg } from "@/features/dela/bg";
+import { logAppend, logDrop } from "@/features/dela/logs";
+import PortLog from "@/features/dela/PortLog";
+import { PortsPanel } from "@/features/dela/PortsPanel";
+import { rememberPublish } from "@/features/dela/history";
 import { Sparkles, Server, FolderKanban, Eye, Maximize2, Minimize2, ImageIcon, ClipboardCopy, ChevronUp, Camera } from "lucide-react";
 import { createTemp, createWs, emptyWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, patchWs, removeWs, rootLabel, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
 import { displayPath, setRootNames, splitRoot } from "@/workbench/rootpath";
 import { getProfiles, switchProfile, useProfiles } from "@/features/settings/profiles";
 import { copyWithNotice, writeClip } from "@/platform/clipboard";
-import { prefetchOpen, setAllOpen, setOpenPath, shownOpen } from "@/workbench/treeOpen";
+import { prefetchOpen, setAllOpen, setOpenPath, setRefreshScope, shownOpen } from "@/workbench/treeOpen";
 import { revealPaths, startCreating } from "@/workbench/creating";
 import { beginPending } from "@/workbench/pending";
 import { clearSel, isMulti, isSelectedPath, selectedNodes } from "@/workbench/selection";
@@ -207,7 +214,7 @@ export default function App() {
   const unreplies = useReplies().unread;
   const [wsDlg, setWsDlg] = useState<null | "ws" | "profile">(null);
   const [lh, setLh] = useState<string | null>(null); // ローカル履歴を開いているファイルのパス
-  const [statsOpen, setStatsOpen] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false); const [ghOpen, setGhOpen] = useState(false);
   const [fbOpen, setFbOpen] = useState(false);
   const { found: upd } = useUpdateState();
   const [updOpen, setUpdOpen] = useState(false);
@@ -267,7 +274,7 @@ export default function App() {
   const [dlg, setDlg] = useState<Dlg | null>(null);
   // 外から閉じられても、閉じるアニメーションが終わるまで残す
   const pQo = usePresence(qo), pPal = usePresence(pal), pSetts = usePresence(setts), pDlg = usePresence(dlg), pCn = usePresence(cn);
-  const pTp = usePresence(tp, 400), pWs = usePresence(wsDlg), pLh = usePresence(lh), pStats = usePresence(statsOpen), pFb = usePresence(fbOpen), pUp = usePresence(updOpen), pSetup = usePresence(setupOpen), pPop = usePresence(pop, 140), pMenu = usePresence(menu, 140);
+  const pTp = usePresence(tp, 400), pWs = usePresence(wsDlg), pLh = usePresence(lh), pStats = usePresence(statsOpen), pGh = usePresence(ghOpen), pFb = usePresence(fbOpen), pUp = usePresence(updOpen), pSetup = usePresence(setupOpen), pPop = usePresence(pop, 140), pMenu = usePresence(menu, 140);
   const views = useRef<Pm<EditorView | null>>({});
   const apis = useRef(new Map<number, TermApi>());
   const seq = useRef(0);
@@ -576,6 +583,13 @@ export default function App() {
     setRoots((p) => p.map((r) => { const g = got.find((x) => x.prefix === r.prefix && x.handle === r.handle); return g?.nodes ? { ...r, nodes: g.nodes } : r; }));
     setRev((r) => r + 1);
   };
+  // フォルダの右クリックの「更新」。そのフォルダより下だけを読み直す(見出しは全体)
+  const reloadUnder = async (n: Node | null) => {
+    if (!n || n.kind !== "dir") return reload();
+    const next = rev + 1;
+    setRefreshScope(next, n.path);
+    setRev(next);
+  };
   // 画像の編集結果を書く。同じ名前なら上書きして表示を差し替え、別の形式(.ico など)は空いている名前の .png で隣に作る
   const saveImage = async (t: Tab, blob: Blob, outName: string) => {
     const h = t.node.handle as FileSystemFileHandle | undefined;
@@ -682,7 +696,10 @@ export default function App() {
       seedCursors(hit?.cur);
       setTabs(restored);
       const has = (p: string | null | undefined) => !!p && restored.some((t) => t.node.path === p);
-      const L: Lay = hit?.split && restored.length > 0 ? (hit.lay && validLay(hit.lay) ? hit.lay : fromPair(true, st.splitDir as Dir, st.splitRatio)) : LEAF0;
+      const L0: Lay = hit?.split && restored.length > 0 ? (hit.lay && validLay(hit.lay) ? hit.lay : fromPair(true, st.splitDir as Dir, st.splitRatio)) : LEAF0;
+      // 開き直したときに、タブが 1 つも戻らなかった画面は、空のトップページを出さずにたたむ
+      let L: Lay = L0;
+      if (hit?.g && leaves(L0).length > 1) for (const k of leaves(L0)) if (!(hit.g[k] ?? []).some(has)) L = (L && removeLeaf(L, k)) ?? { id: leaves(L0)[0] };
       const ids = leaves(L);
       const a0 = hit && has(hit.act[0]) ? hit.act[0] : restored[0]?.node.path ?? null;
       const nextAct: Pm<string | null> = {}, nextGrp: Pm<Set<string>> = {};
@@ -1424,6 +1441,7 @@ export default function App() {
     let hit = fp, b: Box = { x: 0, y: 0, w: 1, h: 1 };
     for (const [id, x] of boxes(lay)) if (fx >= x.x && fx <= x.x + x.w && fy >= x.y && fy <= x.y + x.h) { hit = id; b = x; break; }
     const lx = (fx - b.x) / b.w, ly = (fy - b.y) / b.h;
+    if (!paneTabs(hit).length) return { pane: hit }; // タブのない画面(トップ画面)は分割先にしない
     const m = Math.min(lx, 1 - lx, ly, 1 - ly);
     if (m > 0.28) return { pane: hit };
     return { pane: hit, edge: m === lx ? "L" : m === 1 - lx ? "R" : m === ly ? "T" : "B" };
@@ -1513,6 +1531,51 @@ export default function App() {
   const typeInTerm = (id: number, text: string, tries = 0) => {
     const api = apis.current.get(id);
     if (api) { if (st.runClear) api.clear(); api.send(text + "\r"); api.focus(); } else if (tries < 40) setTimeout(() => typeInTerm(id, text, tries + 1), 100);
+  };
+  // ▶ ポートの公開(dela): 専用のターミナルで dela を動かし、出た公開 URL を拾う。止めるときはそのターミナルへ Ctrl+C
+  // ポートの公開は、画面に出さない端末(bg.ts)の中で動かす。止める・アプリを閉じるときは、その端末ごと止める
+  const [delas, setDelas] = useState<Pub[]>([]);
+  const bgs = useRef(new Map<number, Bg>());
+  const bgSeq = useRef(0);
+  const [portsOpen, setPortsOpen] = useState(false);
+  const [logId, setLogId] = useState<number | null>(null); // ログを見ているポート(delas の id)
+  const pLog = usePresence(delas.find((d) => d.id === logId));
+  const patchDela = (id: number, f: (d: Pub) => Pub) => setDelas((p) => p.map((d) => (d.id === id ? f(d) : d)));
+  const startDela = (port: string, o: { dir?: string; rel?: string; temp?: boolean; name?: string } = {}) => {
+    if (delas.some((d) => d.port === port && d.state !== "fail")) return flash(i18next.t("ポート {{port}} はすでに公開しています", { port }));
+    void (async () => {
+      const c = root.conn;
+      // 入っているかを先に調べる(exe だけ。調べられないときは、起動したシェルで確かめる)
+      let have = true;
+      if (IS_TAURI && c) { try { have = (await execCmd(c, c.path, DELA_CHECK, 15)).code === 0; } catch { have = true; } }
+      if (!have && !(await ask({ message: i18next.t("dela が見つかりません。{{cmd}} で入れてから公開します。続けますか?", { cmd: DELA_INSTALL }), ok: i18next.t("入れて公開する") }))) return;
+      const id = ++bgSeq.current + 100000; // 画面のターミナルの番号とぶつからないように離す
+      let tail = "", up = false;
+      setDelas((p) => [...p.filter((d) => d.port !== port), { id, port, state: "start", dir: o.dir, rel: o.rel, temp: o.temp, name: o.name }]);
+      bgs.current.set(id, startBg({
+        id, command: have ? publishCmd(port, o) : installAndPublish(port, o), host: c?.kind === "ssh" ? c.host : undefined, cwd: o.dir ?? c?.path,
+        onOut: (chunk) => {
+          logAppend(id, chunk);
+          tail = (tail + stripAnsi(chunk)).slice(-400);
+          const url = findUrl(chunk);
+          if (url) { up = true; patchDela(id, (d) => (d.url ? d : { ...d, url, state: "up" })); if (!o.temp && o.dir && c) rememberPublish(`${c.kind}:${c.host ?? ""}`, o.dir, o.name, port); } // URL が出たら履歴に残し、ポート管理から同じ設定でもう一度公開できるようにする
+          else { const last = tail.split(/\r?\n/).map((x) => x.trim()).filter(Boolean).pop(); if (last) patchDela(id, (d) => (d.url || d.state === "fail" ? d : { ...d, note: last.slice(0, 160) })); } // 待っている間の途中経過(ホバーで見える)
+        },
+        onEnd: () => {
+          bgs.current.delete(id);
+          const note = tail.split(/\r?\n/).map((x) => x.trim()).filter(Boolean).slice(-2).join(" ").slice(0, 160);
+          setDelas((p) => p.flatMap((d) => (d.id !== id ? [d] : d.url ? [] : [{ ...d, state: "fail" as const, note }])));
+          if (up) logDrop(id); // 公開していた行は消えるので、ログも捨てる(失敗した行は、閉じるまで残す)
+        },
+      }));
+    })();
+  };
+  const stopDela = (id: number) => {
+    bgs.current.get(id)?.stop();
+    bgs.current.delete(id);
+    logDrop(id);
+    setLogId((x) => (x === id ? null : x));
+    setDelas((p) => p.filter((d) => d.id !== id));
   };
   const runFile = async () => {
     if (!tab || !isText(tab) || !tab.node.handle) return flash(i18next.t("実行できるファイルを開いてください"));
@@ -1644,8 +1707,14 @@ export default function App() {
     { id: "bg", label: i18next.t("背景の色を変える"), group: i18next.t("表示"), run: () => setSetts("look") },
     { id: "refresh", label: i18next.t("ファイル一覧を更新"), group: i18next.t("全般"), run: reload },
     { id: "newDir", label: i18next.t("新規フォルダ"), group: i18next.t("全般"), run: () => create("dir", null) },
+    { id: "dela-pub", label: i18next.t("ポート管理パネルの表示"), group: i18next.t("全般"), run: () => setPortsOpen((v) => !v) },
+    ...delas.filter((d) => d.url).flatMap((d) => [
+      { id: `dela-copy-${d.id}`, label: i18next.t("公開 URL をコピー(ポート {{port}})", { port: d.port }), group: i18next.t("全般"), run: () => copyText(d.url!) },
+      { id: `dela-open-${d.id}`, label: i18next.t("公開 URL をブラウザで開く(ポート {{port}})", { port: d.port }), group: i18next.t("全般"), run: () => void openExternal(d.url!) },
+    ]),
+    ...delas.map((d) => ({ id: `dela-stop-${d.id}`, label: i18next.t("公開を止める(ポート {{port}})", { port: d.port }), group: i18next.t("全般"), run: () => stopDela(d.id) })),
     { id: "copyPath", label: i18next.t("開いているファイルのパスをコピー"), group: i18next.t("全般"), run: () => act[fp] && copyText(act[fp]!.slice(1)) },
-  ], [st.keys, tabs, act, fp, split, term, st.fontSize, st.wrap, st.mode, root]); // eslint-disable-line react-hooks/exhaustive-deps
+  ], [st.keys, tabs, act, fp, split, term, st.fontSize, st.wrap, st.mode, root, delas]); // eslint-disable-line react-hooks/exhaustive-deps
   const wsCmds: Cmd[] = [
     ...cmds,
     ...wsStore.list.map((w) => ({ id: `ws-${w.id}`, label: i18next.t("ワークスペース: {{name}}", { name: w.name }), group: i18next.t("ワークスペース"), icon: <FolderKanban />, run: () => { switchWs(w).catch((e) => flash((e as Error).message, "error")); } })),
@@ -1828,6 +1897,7 @@ export default function App() {
         try { await go(dir, await dirAt(dir)); } catch { /* 読めないフォルダは飛ばす */ }
       },
       // コマンドは exe(Tauri)で、PC・WSL・SSH のフォルダを開いているときだけ動かす(ブラウザ版の開発サーバーには動かす道を作っていない)
+      ...(isRemote(mainDir) ? { root: mainDir.path } : {}),
       ...(IS_TAURI && isRemote(mainDir) ? {
         async exec(cmd: string, secs: number) {
           try { return await execCmd(mainDir.conn, mainDir.path, cmd, secs); } catch (e) { return (e as Error).message || "Could not run the command."; }
@@ -1978,6 +2048,7 @@ export default function App() {
           { type: "sep" as const },
           { label: i18next.t("中の階層をすべて開く"), icon: ic(ChevronsUpDown), run: () => setAllOpen(n.path, true) },
           { label: i18next.t("中の階層をすべて閉じる"), icon: ic(ChevronsDownUp), run: () => setAllOpen(n.path, false) },
+          { label: i18next.t("このフォルダ以下を更新"), icon: ic(RotateCw), run: () => void reloadUnder(n) },
         ] : []),
         ...(n && head ? [
           { type: "sep" as const },
@@ -2061,6 +2132,7 @@ export default function App() {
         ] : []),
         { type: "sep" },
         { label: i18next.t("パスをコピー"), icon: ic(Link), run: () => copyText(p.slice(1)) },
+        { label: i18next.t("絶対パスをコピー"), icon: ic(Link), run: () => copyText(abs(t.node)), disabled: !abs(t.node) },
         { label: i18next.t("名前をコピー"), icon: ic(Copy), run: () => copyText(t.node.name) },
         { label: i18next.t("名前の変更"), icon: ic(Pencil), run: () => rename(t.node) },
       ],
@@ -2103,6 +2175,7 @@ export default function App() {
         { type: "sep" },
         { label: i18next.t("設定"), icon: ic(Cog), keys: K("settings"), run: () => setSetts("look") },
         { label: i18next.t("統計を見る(作業時間・入力)"), keys: K("stats"), run: () => setStatsOpen(true) },
+        ...(root.conn ? [{ label: i18next.t("GitHub の管理(Issue・PR・Actions など)"), run: () => setGhOpen(true) }] : []),
         { label: i18next.t("ショートカットの一覧"), keys: K("shortcuts"), run: () => setSetts("keys") },
         { label: i18next.t("アカウント"), run: () => setSetts("account") },
         { label: i18next.t("フィードバックを送る"), icon: ic(MessageSquareText), run: () => setFbOpen(true) },
@@ -2179,6 +2252,8 @@ export default function App() {
           <>
             {upd && <button className="up-pill" title={i18next.t("v{{v}} に更新できます", { v: upd.version })} onClick={() => setUpdOpen(true)}><ArrowUpCircle size={14} /><span>{i18next.t("更新あり")}</span></button>}
             {root.conn && <button className="icon-btn" data-on={gitOpen} aria-label={i18next.t("Git パネルの表示")} title={i18next.t("Git パネルの表示")} onClick={() => setGitOpen((v) => !v)}><GitBranch /></button>}
+            <button className="icon-btn" data-on={portsOpen} aria-label={i18next.t("ポート管理パネルの表示")} title={i18next.t("ポート管理パネルの表示")} onClick={() => setPortsOpen((v) => !v)}><Globe /></button>
+            {root.conn && <button className="icon-btn" aria-label={i18next.t("GitHub の管理")} title={i18next.t("GitHub の管理")} onClick={() => setGhOpen(true)}><GitPullRequest /></button>}
             <button className="icon-btn" data-on={ai} aria-label={i18next.t("AI パネルの表示")} title={`${i18next.t("AI パネルの表示")} (${chips(K("toggleAi")).join(" ")})`} onClick={() => setAi((v) => !v)}><Sparkles /></button>
             {runCmd && <button className="icon-btn run-btn" aria-label={i18next.t("このファイルを実行")} title={`${i18next.t("このファイルを実行")} (${chips(K("runFile")).join(" ")})`} onClick={runFile}><Play /></button>}
                 <button className="icon-btn" data-on={term} aria-label={i18next.t("ターミナル")} title={i18next.t("ターミナル")} onClick={() => showTerm()}><SquareTerminal /></button>
@@ -2201,6 +2276,7 @@ export default function App() {
         {!onTop(lay, i) && strip(i)}
         {!t ? (
           <div className="empty">
+            {split && <button className="icon-btn empty-x" aria-label={i18next.t("この画面を閉じる")} title={i18next.t("この画面を閉じる")} onClick={(e) => { e.stopPropagation(); const rest = leaves(lay).filter((k) => k !== i); settle(removeLeaf(lay, i) ?? { id: rest[0] ?? first }, rest[0]); }}><XIcon /></button>}
             <p className="empty-title">{APP_NAME}</p>
             <p className="empty-sub">{roots.every((r) => r.ref.kind === "demo") ? i18next.t("左下の「フォルダを開く」から始めます。") : <Trans i18nKey="左のファイルを選ぶと、ここで開きます。" />}</p>
             <FolderCards list={wsStore.list.filter((w) => !w.temp)} current={ws?.id ?? null} canNew={supportsFs()} onNew={openFolder} onOpen={(w) => void switchWs(w).catch((e) => flash((e as Error).message, "error"))} />
@@ -2400,6 +2476,7 @@ export default function App() {
             {br && <BrowserDock onClose={() => setBr(false)} />}
             {ai && <ColGrip width={st.aiW} def={440} min={280} max={900} dir={-1} onChange={(w) => update({ aiW: w })} />}
             <AiDock open={ai} job={aiJob} quote={aiQuote} resolve={aiSource} files={aiFiles} onClose={() => setAi(false)} onSettings={() => setSetts("ai")} />
+            <PortsPanel open={portsOpen} items={delas} conn={root?.conn} rootPath={root?.conn?.path} onClose={() => setPortsOpen(false)} onPublish={startDela} onStop={stopDela} onCopy={(u) => copyText(u)} onOpen={(u) => void openExternal(u)} onLog={setLogId} />
             {gitOpen && <ColGrip width={st.gitW} def={440} min={280} max={900} dir={-1} onChange={(w) => update({ gitW: w })} />}
             <GitPanel open={gitOpen} conn={gitView?.conn ?? null} root={gitView?.root} dir={gitView?.dir}
               canDrop={() => drag.node?.kind === "dir" && !!rootOf(drag.node).conn}
@@ -2467,6 +2544,8 @@ export default function App() {
       {pSetup.v && <Setup key={pSetup.key} out={pSetup.out} onClose={() => setSetupOpen(false)} />}
       {pFb.v && <FeedbackView key={pFb.key} out={pFb.out} onClose={() => setFbOpen(false)} />}
       {pUp.v && upd && <UpdateView key={pUp.key} m={upd} out={pUp.out} onClose={() => setUpdOpen(false)} />}
+      {pLog.v && <PortLog key={pLog.key} pub={pLog.v} conn={root?.conn} out={pLog.out} onClose={() => setLogId(null)} onCopy={(u) => copyText(u)} onOpen={(u) => void openExternal(u)} />}
+      {pGh.v && gitView && <GithubView key={pGh.key} out={pGh.out} conn={gitView.conn} root={gitView.root ?? gitView.dir} onClose={() => setGhOpen(false)} />}
       {pStats.v && <StatsView key={pStats.key} out={pStats.out} onClose={() => setStatsOpen(false)} />}
       {pCn.v && <Connect key={pCn.key} out={pCn.out} current={cnAdd ? null : root.conn ?? null} adding={cnAdd} onConnect={cnAdd ? addConn : connect} onClose={() => setCn(false)} />}
       {pPop.v && <StatusPop key={pPop.key} out={pPop.out} kind={pPop.v} view={ev() ?? null} eol={tab?.eol ?? "lf"} lang={tab ? langName(tab.node.name) : ""} onEol={toggleEol} lspKey={lspKey} onSettings={(c) => setSetts(c)} onClose={() => setPop(null)} />}

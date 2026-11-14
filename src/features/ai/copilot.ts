@@ -25,11 +25,11 @@ const wait = (ms: number, signal: AbortSignal) => new Promise<void>((ok, ng) => 
 
 export type LoginResult = { ok: true; token: string } | { ok: false; why: "denied" | "expired" | "network" | "cancel" };
 
-// ログインを始める。コードと URL を onCode で知らせ、利用者が GitHub で承認するまで待つ(押されたときだけ動かす)
-export async function copilotLogin(onCode: (d: Device) => void, signal: AbortSignal): Promise<LoginResult> {
+// デバイスフローの待ち合わせ(Copilot と GitHub 管理で共通)。コードと URL を onCode で知らせ、利用者が GitHub で承認するまで待つ
+export async function deviceLogin(start: () => Promise<Device & { error?: string }>, poll: (deviceCode: string) => Promise<Poll>, onCode: (d: Device) => void, signal: AbortSignal): Promise<LoginResult> {
   let d: Device;
   try {
-    const r = await call<Device & { error?: string }>("device", {});
+    const r = await start();
     if (r.error || !r.device_code) return { ok: false, why: "network" };
     d = r;
   } catch { return { ok: false, why: "network" }; }
@@ -41,7 +41,7 @@ export async function copilotLogin(onCode: (d: Device) => void, signal: AbortSig
     while (Date.now() < end) {
       await wait(every, signal);
       let p: Poll;
-      try { p = await call<Poll>("poll", { device_code: d.device_code }); bad = 0; } catch { if (++bad >= 3) return { ok: false, why: "network" }; continue; }
+      try { p = await poll(d.device_code); bad = 0; } catch { if (++bad >= 3) return { ok: false, why: "network" }; continue; }
       if (p.status === "ok" && p.token) return { ok: true, token: p.token };
       if (p.status === "slow") every += 5000;
       else if (p.status === "denied") return { ok: false, why: "denied" };
@@ -51,6 +51,24 @@ export async function copilotLogin(onCode: (d: Device) => void, signal: AbortSig
   } catch { return { ok: false, why: "cancel" }; }
   return { ok: false, why: "expired" };
 }
+
+// Copilot のログインを始める(押されたときだけ動かす)
+export const copilotLogin = (onCode: (d: Device) => void, signal: AbortSignal) =>
+  deviceLogin(() => call<Device & { error?: string }>("device", {}), (c) => call<Poll>("poll", { device_code: c }), onCode, signal);
+
+// GitHub 管理用のログイン(自分の OAuth App)。client_id と scope は画面側の設定から渡す
+export const githubLogin = (clientId: string, scope: string, onCode: (d: Device) => void, signal: AbortSignal) => {
+  const run = async <T,>(cmd: "device" | "poll", args: Record<string, string>): Promise<T> => {
+    if (IS_TAURI) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<T>(`gh_${cmd}`, cmd === "poll" ? { clientId, deviceCode: args.device_code } : { clientId, scope });
+    }
+    const res = await fetch(`/__copilot/gh-${cmd}`, { method: "POST", headers: { "X-Fixit": "1", "Content-Type": "application/json" }, body: JSON.stringify({ client_id: clientId, ...args }) });
+    if (!res.ok) throw new Error("network");
+    return (await res.json()) as T;
+  };
+  return deviceLogin(() => run<Device & { error?: string }>("device", { scope }), (c) => run<Poll>("poll", { device_code: c }), onCode, signal);
+};
 
 // 会話用のトークン。期限の 1 分前まで使い回す(期限は 30 分ほど)
 let cache: { oauth: string; s: Session } | null = null;

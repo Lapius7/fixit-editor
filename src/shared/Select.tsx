@@ -34,8 +34,10 @@ export function Select({ value, options, onChange, label, title, disabled, class
     const h = el.scrollHeight + 12, room = innerHeight - r.bottom - 10, up = room < Math.min(h, 220) && r.top > room;
     const max = Math.max(120, (up ? r.top : room) - 6);
     const hh = Math.min(h, max);
-    const w = Math.max(r.width, 140);
-    setAt({ left: Math.max(8, Math.min(r.left, innerWidth - 8 - w)), top: up ? r.top - 4 - hh : r.bottom + 4, width: w, up, max });
+    // 一覧の実際の幅(長い項目名で広がる)で、画面の右にはみ出さないように置く。収まらないときはボタンの右端にそろえる
+    const w = Math.max(r.width, 140), lw = Math.max(w, el.getBoundingClientRect().width);
+    const fit = r.left + lw <= innerWidth - 8 ? r.left : r.right - lw;
+    setAt({ left: Math.max(8, Math.min(fit, innerWidth - 8 - lw)), top: up ? r.top - 4 - hh : r.bottom + 4, width: w, up, max });
     setSel(cur >= 0 ? cur : 0);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 

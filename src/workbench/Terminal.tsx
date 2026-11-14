@@ -71,6 +71,7 @@ export default function TerminalSession({ id, active, open, focusKey, host: sshH
     })();
     ws.current = sock;
     // 「実行」の入力は、シェルの起動(rc の読み込みなど)が終わって出力が落ち着くまで預かる。起動中に送ると、シェルに捨てられる
+    const dec = new TextDecoder();
     const pending: string[] = [];
     let ready = false, idle = 0;
     const flush = () => { clearTimeout(idle); ready = true; if (sock.readyState === 1) for (const x of pending.splice(0)) sock.send(x); };

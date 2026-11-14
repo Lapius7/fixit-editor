@@ -1,7 +1,7 @@
 // AI チャットのパネル。右側に出す(アプリ内ブラウザと同じ置き場所)。
 // 送るのは「利用者が操作したとき」だけ。送る前に、相手と送る範囲を画面に出し、初回は同意を取る。
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, Check, Copy, MousePointerClick, Replace, RotateCcw, Settings as Cog, Square, Trash2, X, History, SquarePen, ChevronLeft, FileText, Quote as QuoteIcon, FileDown, ImagePlus, Hand, Zap, ShieldOff } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Copy, MousePointerClick, Replace, RotateCcw, Settings as Cog, Square, Trash2, X, History, SquarePen, ChevronLeft, FileText, Quote as QuoteIcon, FileDown, ImagePlus, Hand, Zap, ShieldOff, FolderOpen } from "lucide-react";
 import i18next from "i18next";
 import { AI_MAX_HISTORY_CHARS, AI_TOOL_SEARCH_MAX, AI_MAX_HISTORY_IMAGES, AI_MAX_IMAGES } from "@/shared/config";
 import { AiError, isAbort, streamChat, type AiErrorKind, type Img, type Msg, type Stop } from "@/features/ai/providers";
@@ -81,7 +81,7 @@ const Reply = memo(function Reply({ m, retry, onReplace, onRetry, onDecide }: { 
 }, (a, b) => a.m === b.m && a.retry === b.retry);
 
 // 会話がまだ無いときの案内。できることを短く並べる
-function EmptyChat() {
+function EmptyChat({ files }: { files: boolean }) {
   return (
     <div className="ai-start">
       <h3>{i18next.t("AI に質問")}</h3>
@@ -89,6 +89,7 @@ function EmptyChat() {
         <li><QuoteIcon aria-hidden />{i18next.t("エディタを右クリックして「AI チャットに引用」を選ぶと、コードを添えられます")}</li>
         <li><ImagePlus aria-hidden />{i18next.t("画像は、貼り付けかドロップで添えられます")}</li>
         <li><MousePointerClick aria-hidden />{i18next.t("右クリックの「AI」から、要約・翻訳・説明もできます")}</li>
+        {!files && <li><FolderOpen aria-hidden />{i18next.t("フォルダを開くと、AI がファイルを作ったり編集したりできます。開いていない間は、コードを書くだけでファイルは作られません")}</li>}
       </ul>
     </div>
   );
@@ -278,7 +279,7 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
     const host = p === "claude-cli" ? null : filesRef.current;
     // AI のファイル操作。読む・一覧は結果を返すだけ。変更は、差分を見せて許可を待ち(自動適用がオンなら待たない)、結果を AI に返す
     const onTool = host ? async (call: ToolCall): Promise<string> => {
-      const pr = parseCall(call);
+      const pr = parseCall(call, host.root);
       if (pr.k === "bad") return pr.err;
       const id = `${aid}-${++actSeq.current}`, pos = acc.length;
       const add = (a: Act) => pat(aid, (m) => ({ ...m, acts: [...(m.acts ?? []), a] }));
@@ -347,7 +348,7 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
     } : undefined;
     const flush = () => { raf = 0; pat(aid, (m) => ({ ...m, content: acc })); };
     try {
-      const stop = await streamChat({ provider: p, model: c.models[p], effort: hasEffort(p) ? c.effort : "", key: c.keys[p], system: systemPrompt(!!host, !!host?.exec), messages, signal: ac.signal, onTool, exec: !!host?.exec, onNoTools: () => pat(aid, (m) => ({ ...m, noTools: true })), onText: (s) => { acc += s; if (!raf) raf = requestAnimationFrame(flush); }, onUsage: (t) => pat(aid, (m) => ({ ...m, tok: addTok(m.tok, t) })) });
+      const stop = await streamChat({ provider: p, model: c.models[p], effort: hasEffort(p) ? c.effort : "", key: c.keys[p], system: systemPrompt(!!host, !!host?.exec, host?.root), messages, signal: ac.signal, onTool, exec: !!host?.exec, onNoTools: () => pat(aid, (m) => ({ ...m, noTools: true })), onText: (s) => { acc += s; if (!raf) raf = requestAnimationFrame(flush); }, onUsage: (t) => pat(aid, (m) => ({ ...m, tok: addTok(m.tok, t) })) });
       if (raf) cancelAnimationFrame(raf);
       pat(aid, (m) => ({ ...m, content: acc, busy: false, at: Date.now(), note: stop === "end" ? undefined : stop }));
     } catch (e) {
@@ -488,7 +489,7 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
             <ModelPicker />
           </div>
         ) : !msgs.length ? (
-          <EmptyChat />
+          <EmptyChat files={!!files} />
         ) : msgs.map((m) => m.role === "user"
           ? <div key={m.id} className="ai-u">{m.imgs && <div className="ai-u-imgs">{m.imgs.map((i, k) => <button key={k} className="ai-pic-open" title={i.name} aria-label={i18next.t("{{name}} を大きく見る", { name: i.name })} onClick={() => setPeek({ src: imgSrc(i), name: i.name })}><img src={imgSrc(i)} alt="" /></button>)}</div>}<p>{m.label}</p>{m.ctx && <small>{m.ctx}</small>}{m.at && <Stamp t={m.at} />}</div>
           : <Reply key={m.id} m={m} retry={!busy && m.id === lastId} onReplace={replace} onRetry={retry} onDecide={decide} />)}

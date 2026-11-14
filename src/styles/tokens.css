@@ -33,7 +33,7 @@
   --active-line: color-mix(in srgb, var(--accent) calc(7% * var(--line-k, 1)), transparent); --sel: color-mix(in srgb, var(--accent) calc(22% * var(--sel-k, 1)), transparent);
   --match: rgba(255, 200, 60, 0.4); --match-now: rgba(255, 150, 40, 0.5);
   --indent: rgba(30, 40, 70, 0.1); --indent-on: rgba(59, 111, 217, 0.45);
-  --c-kw: #9b2393; --c-type: #8a5a00; --c-fn: #3b6fd9; --c-str: #c41a16; --c-num: #1c00cf; --c-com: #6c7986; --c-prop: #326d74; --c-meta: #643820;
+  --c-kw: #8250df; --c-type: #9a6700; --c-fn: #0550ae; --c-str: #1a7f37; --c-num: #b35900; --c-com: #6e7781; --c-prop: #0a7a82; --c-meta: #bf3989;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -62,7 +62,7 @@
   --active-line: rgba(255, 255, 255, calc(0.045 * var(--line-k, 1))); --sel: color-mix(in srgb, var(--accent) calc(30% * var(--sel-k, 1)), transparent);
   --match: rgba(255, 200, 60, 0.28); --match-now: rgba(255, 150, 40, 0.42);
   --indent: rgba(255, 255, 255, 0.08); --indent-on: rgba(120, 160, 255, 0.55);
-  --c-kw: #fc5fa3; --c-type: #5dd8ff; --c-fn: #67b7a4; --c-str: #fc6a5d; --c-num: #d0bf69; --c-com: #7f8c98; --c-prop: #a8d5ff; --c-meta: #fd8f3f;
+  --c-kw: #c4a7f5; --c-type: #f0c987; --c-fn: #7cb7ff; --c-str: #a6d189; --c-num: #f2a679; --c-com: #7f8c98; --c-prop: #8fd6d0; --c-meta: #f09ab9;
 }
 
 * { box-sizing: border-box; }

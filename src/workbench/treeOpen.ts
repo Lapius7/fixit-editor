@@ -146,3 +146,8 @@ export const rememberKids = (path: string, kids: Node[]) => {
   if (last.size > 600) last.delete(last.keys().next().value as string);
 };
 export const recallKids = (path: string) => last.get(path);
+
+// 更新の範囲。フォルダの右クリックからは、そのフォルダより下だけを読み直す(rev が一致するときだけ有効。null は全体)
+let scope: { rev: number; path: string } | null = null;
+export const setRefreshScope = (rev: number, path: string | null) => { scope = path ? { rev, path } : null; };
+export const inRefreshScope = (rev: number, path: string) => !scope || scope.rev !== rev || path === scope.path || path.startsWith(scope.path + "/");

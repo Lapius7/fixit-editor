@@ -31,6 +31,29 @@ pub fn device() -> Result<Value, String> {
     Ok(device_out(&v))
 }
 
+// GitHub 管理用のログイン(自分の OAuth App)。client_id は公開してよい値で、画面側から受け取る。形が違えば拒否する
+pub fn client_ok(id: &str) -> bool {
+    (1..=64).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'_' || b == b'-')
+}
+
+pub fn device_for(client_id: &str, scope: &str) -> Result<Value, String> {
+    if !client_ok(client_id) || scope.len() > 200 || !scope.bytes().all(|b| b.is_ascii_alphanumeric() || b == b':' || b == b'_' || b == b',' || b == b' ') {
+        return Err("bad".into());
+    }
+    Ok(device_out(&post("https://github.com/login/device/code", &[("client_id", client_id), ("scope", scope)])?))
+}
+
+pub fn poll_for(client_id: &str, device_code: &str) -> Result<Value, String> {
+    if !client_ok(client_id) || device_code.is_empty() || device_code.len() > 256 {
+        return Err("bad".into());
+    }
+    let v = post(
+        "https://github.com/login/oauth/access_token",
+        &[("client_id", client_id), ("device_code", device_code), ("grant_type", "urn:ietf:params:oauth:grant-type:device_code")],
+    )?;
+    Ok(poll_out(&v))
+}
+
 // 受け取った値から、画面に必要なものだけを取り出す。足りなければ { error: "other" }
 pub fn device_out(v: &Value) -> Value {
     let s = |k: &str| v.get(k).and_then(|x| x.as_str()).filter(|x| x.len() <= 256);
@@ -120,6 +143,13 @@ fn api_ok(u: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn client_idの形を確かめる() {
+        assert!(client_ok("Iv1.b507a08c87ecfe98") && client_ok("Ov23liAbC_d-1"));
+        assert!(!client_ok("") && !client_ok("a b") && !client_ok("x&y=1") && !client_ok(&"a".repeat(65)));
+        assert!(device_for("bad id", "repo").is_err() && device_for("Iv1.x", "repo;rm").is_err());
+    }
 
     #[test]
     fn コードの返事から必要な値だけ取り出す() {

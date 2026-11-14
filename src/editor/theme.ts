@@ -35,6 +35,7 @@ const base = EditorView.theme({
   ".cm-git-add": { background: "var(--git-add)" },
   ".cm-git-mod": { background: "var(--git-mod)" },
   ".cm-git-del": { background: "var(--git-del)", height: "3px", width: "6px", marginTop: "-1px" },
+  ".cm-indent-markers::before": { left: "calc(var(--pad-x, 2px) - 0.5ch)" }, // 縦線は既定だと列より 0.5 文字右に描かれるので、文字の左端に合わせる(左余白の設定にも追従)
   ".cm-activeLine": { backgroundColor: "var(--active-line)" },
   "&.cm-hasSel": { "--indent-on": "var(--indent)" }, // 範囲を選んでいる間は、いまの階層の濃い縦線を通常の線に戻す(選択と同時に出ない)
   "&.cm-hasSel .cm-activeLine": { backgroundColor: "transparent" }, // 範囲を選んでいるときは、カーソル行の帯を消す(選択の上に濃い帯が重ならない)

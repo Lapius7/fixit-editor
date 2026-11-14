@@ -119,3 +119,7 @@ export const LSP_MAX_DOC_CHARS = 3_000_000; // これより大きいファイル
 export const LSP_STATS_MS = 1500; // 言語サーバーの一覧をひらいている間、負荷(CPU・メモリ)を測り直す間隔
 export const LSP_STATS_HIST = 30; // 負荷のグラフに残す点の数
 export const LSP_BUSY_SHOW_MS = 250; // 解析が続いたとき、バーに「解析中」を出すまでの時間(ちらつき防止)
+
+// GitHub 管理のログイン(デバイスフロー)に使う OAuth App の client_id。公開してよい値。空のあいだは「GitHub でログイン」を出さない
+export const GH_CLIENT_ID = "Ov23liT0bYq74mBfo6sG";
+export const GH_SCOPES = "repo workflow admin:repo_hook delete_repo";

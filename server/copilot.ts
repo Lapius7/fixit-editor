@@ -61,6 +61,22 @@ export function copilotBridge(): Plugin {
             send(pollOut(await post("https://github.com/login/oauth/access_token", { client_id: CLIENT_ID, device_code: d, grant_type: "urn:ietf:params:oauth:grant-type:device_code" })));
             return;
           }
+          // GitHub 管理用のログイン(自分の OAuth App)。client_id は公開してよい値で、画面側から受け取る
+          if (path === "/gh-device" || path === "/gh-poll") {
+            const j = JSON.parse((await body(req, 4096)).toString("utf8")) as { client_id?: unknown; scope?: unknown; device_code?: unknown };
+            const cid = typeof j.client_id === "string" ? j.client_id : "";
+            if (!/^[A-Za-z0-9._-]{1,64}$/.test(cid)) { send({ error: "bad" }, 400); return; }
+            if (path === "/gh-device") {
+              const sc = typeof j.scope === "string" ? j.scope : "";
+              if (sc.length > 200 || !/^[A-Za-z0-9:_, ]*$/.test(sc)) { send({ error: "bad" }, 400); return; }
+              send(deviceOut(await post("https://github.com/login/device/code", { client_id: cid, scope: sc })));
+              return;
+            }
+            const d = str(j.device_code);
+            if (!d) { send({ error: "bad" }, 400); return; }
+            send(pollOut(await post("https://github.com/login/oauth/access_token", { client_id: cid, device_code: d, grant_type: "urn:ietf:params:oauth:grant-type:device_code" })));
+            return;
+          }
           if (path === "/chat") {
             const j = JSON.parse((await body(req, 20 * 1024 * 1024)).toString("utf8")) as { url?: unknown; token?: unknown; body?: unknown };
             const url = typeof j.url === "string" ? j.url : "", tok = typeof j.token === "string" ? j.token : "", payload = typeof j.body === "string" ? j.body : "";

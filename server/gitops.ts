@@ -52,6 +52,7 @@ export function gitPlan(raw: Buffer): GitPlan {
   let rest: string[], ms = FAST, merge = false;
   switch (v.cmd) {
     // 読み取り
+    case "remotes": rest = ["remote", "-v"]; break;
     case "changes": rest = ["status", "--porcelain=v1", "-z", "-uall", "-b"]; break;
     case "log": rest = ["log", "--all", "--no-color", "-n", "300", "-z", "--date-order", "--format=%H%x1f%P%x1f%an%x1f%at%x1f%D%x1f%s"]; break;
     case "branches": rest = ["for-each-ref", "--format=%(refname)%1f%(refname:short)%1f%(upstream:short)%1f%(upstream:track,nobracket)%1f%(HEAD)%1f%(objectname:short)%1f%(subject)", "refs/heads", "refs/remotes"]; break;
@@ -84,6 +85,7 @@ export function gitPlan(raw: Buffer): GitPlan {
     case "push": rest = v.setUpstream === true ? ["push", "-u", typeof v.remote === "string" ? refName(v, "remote") : "origin", refName(v, "name")] : ["push"]; ms = NET; merge = true; break;
     // リポジトリではないフォルダで使う
     case "init": rest = ["init"]; ms = FAST; merge = true; break;
+    case "remote-add": rest = ["remote", "add", refName(v, "name"), cloneUrl(v)]; ms = FAST; merge = true; break;
     case "clone": rest = ["clone", "--", cloneUrl(v), cloneName(v)]; ms = NET * 5; merge = true; break;
     default: throw bad("この Git 操作は使えません");
   }
