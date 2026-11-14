@@ -10,7 +10,7 @@
 ![Platform](https://img.shields.io/badge/platform-Windows-0078d4)
 ![Built with](https://img.shields.io/badge/built%20with-Tauri%20%C2%B7%20React%20%C2%B7%20CodeMirror%206-444)
 
-[Website](https://fixit-editor.lapius7.com) · [Docs](https://fixit-editor.lapius7.com/docs) · [Changelog](https://fixit-editor.lapius7.com/changelog) · [License](#license)
+[Website](https://fixit-editor.lapius7.com) · [Docs](https://fixit-editor.lapius7.com/docs) · [Changelog](https://fixit-editor.lapius7.com/en/changelog) · [License](#license)
 
 **English** · [日本語](README.ja.md) · [한국어](README.ko.md) · [简体中文](README.zh-CN.md) · [Español](README.es.md)
 
@@ -29,7 +29,7 @@ Settings, statistics, and workspaces are stored on your PC. Nothing about your c
 
 ## Features
 
-Everything below is in the latest version, 1.0.8. See the [changelog](https://fixit-editor.lapius7.com/changelog) for what changed in each release.
+Everything below is in the latest version, 1.0.8. See the [changelog](https://fixit-editor.lapius7.com/en/changelog) for what changed in each release.
 
 ### Editing
 

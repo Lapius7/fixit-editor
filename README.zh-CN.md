@@ -10,7 +10,7 @@
 ![Platform](https://img.shields.io/badge/platform-Windows-0078d4)
 ![Built with](https://img.shields.io/badge/built%20with-Tauri%20%C2%B7%20React%20%C2%B7%20CodeMirror%206-444)
 
-[官网](https://fixit-editor.lapius7.com) · [文档](https://fixit-editor.lapius7.com/docs) · [更新日志](https://fixit-editor.lapius7.com/changelog) · [许可证](#许可证)
+[官网](https://fixit-editor.lapius7.com) · [文档](https://fixit-editor.lapius7.com/docs) · [更新日志](https://fixit-editor.lapius7.com/zh-CN/changelog) · [许可证](#许可证)
 
 [English](README.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · **简体中文** · [Español](README.es.md)
 
@@ -29,7 +29,7 @@ Fixit Editor 是一款磨砂玻璃风格的小型代码编辑器。Windows 版�
 
 ## 功能
 
-下面列出的功能都可以在最新版本 1.0.8 中使用。各版本的变化见[更新日志](https://fixit-editor.lapius7.com/changelog)。
+下面列出的功能都可以在最新版本 1.0.8 中使用。各版本的变化见[更新日志](https://fixit-editor.lapius7.com/zh-CN/changelog)。
 
 ### 编辑
 

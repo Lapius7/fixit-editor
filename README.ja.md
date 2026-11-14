@@ -10,7 +10,7 @@
 ![Platform](https://img.shields.io/badge/platform-Windows-0078d4)
 ![Built with](https://img.shields.io/badge/built%20with-Tauri%20%C2%B7%20React%20%C2%B7%20CodeMirror%206-444)
 
-[公式サイト](https://fixit-editor.lapius7.com) · [ドキュメント](https://fixit-editor.lapius7.com/docs) · [更新履歴](https://fixit-editor.lapius7.com/changelog) · [ライセンス](#ライセンス)
+[公式サイト](https://fixit-editor.lapius7.com) · [ドキュメント](https://fixit-editor.lapius7.com/docs) · [更新履歴](https://fixit-editor.lapius7.com/ja/changelog) · [ライセンス](#ライセンス)
 
 [English](README.md) · **日本語** · [한국어](README.ko.md) · [简体中文](README.zh-CN.md) · [Español](README.es.md)
 
@@ -29,7 +29,7 @@ Fixit Editor は、すりガラス調の小さなコードエディタです。W
 
 ## 機能
 
-ここに書いた機能はすべて最新版の 1.0.8 で使えます。版ごとの変更は[更新履歴](https://fixit-editor.lapius7.com/changelog)にあります。
+ここに書いた機能はすべて最新版の 1.0.8 で使えます。版ごとの変更は[更新履歴](https://fixit-editor.lapius7.com/ja/changelog)にあります。
 
 ### 編集
 

@@ -10,7 +10,7 @@
 ![Platform](https://img.shields.io/badge/platform-Windows-0078d4)
 ![Built with](https://img.shields.io/badge/built%20with-Tauri%20%C2%B7%20React%20%C2%B7%20CodeMirror%206-444)
 
-[웹사이트](https://fixit-editor.lapius7.com) · [문서](https://fixit-editor.lapius7.com/docs) · [변경 내역](https://fixit-editor.lapius7.com/changelog) · [라이선스](#라이선스)
+[웹사이트](https://fixit-editor.lapius7.com) · [문서](https://fixit-editor.lapius7.com/docs) · [변경 내역](https://fixit-editor.lapius7.com/ko/changelog) · [라이선스](#라이선스)
 
 [English](README.md) · [日本語](README.ja.md) · **한국어** · [简体中文](README.zh-CN.md) · [Español](README.es.md)
 
@@ -29,7 +29,7 @@ Fixit Editor는 반투명 유리 느낌의 작은 코드 에디터입니다. Win
 
 ## 기능
 
-여기에 적은 기능은 모두 최신 버전인 1.0.8에서 사용할 수 있습니다. 버전별 변경 사항은 [변경 내역](https://fixit-editor.lapius7.com/changelog)에서 볼 수 있습니다.
+여기에 적은 기능은 모두 최신 버전인 1.0.8에서 사용할 수 있습니다. 버전별 변경 사항은 [변경 내역](https://fixit-editor.lapius7.com/ko/changelog)에서 볼 수 있습니다.
 
 ### 편집
 
