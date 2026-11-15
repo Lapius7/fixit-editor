@@ -15,7 +15,6 @@ export function useLoad<T>(fn: () => Promise<T>, deps: unknown[]) {
   const seq = useRef(0);
   const fnRef = useRef(fn);
   fnRef.current = fn;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const reload = useCallback(async () => {
     const n = ++seq.current;
     setBusy(true);

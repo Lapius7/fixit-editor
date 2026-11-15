@@ -159,7 +159,7 @@ function Body({ conn, root, onClose }: { conn: Conn; root: string; onClose: () =
   const here = dir ? all.find((f) => f.dir === dir) : undefined; // 開いたら、まず一覧を見せる(1 件でも)
   const remotes = here?.remotes ?? [];
   const cur = remotes.find((r) => r.name === pick) ?? remotes.find((r) => r.name === "origin") ?? remotes[0];
-  const s: Slug | null = useMemo(() => (cur ? { owner: cur.owner, repo: cur.repo } : null), [cur]);
+  const s: Slug | null = cur ? { owner: cur.owner, repo: cur.repo } : null // React Compiler が自動でメモ化する;
   const choose = (d: string) => { setDir(d); setPick(""); setTab("overview"); };
   // トークンが拒まれたら、保存を消して入力画面へ戻す
   const me = useLoad(async () => {

@@ -102,10 +102,11 @@ export default function Preview({ kind, text, name, source }: { kind: PreviewKin
     addEventListener("focus", on);
     return () => removeEventListener("focus", on);
   }, [kind, source?.root]);
+  // Markdown は DOMPurify 済みでスクリプトを含まない。allow-scripts はスクロール位置を保つ内部スクリプト用(これが無いと sandbox にブロックされる)。
   // HTML は JS を動かせるが、allow-same-origin は付けない(エディタの localStorage などに届かせない)
   return (
     <div className="pv-wrap">
-      <iframe ref={frame} className="pv-frame" title={i18next.t("プレビュー") + ": " + name} sandbox={kind === "html" ? "allow-scripts allow-forms allow-modals" : ""} {...(IS_TAURI ? { src } : { srcDoc: doc })} />
+      <iframe ref={frame} className="pv-frame" title={i18next.t("プレビュー") + ": " + name} sandbox={kind === "html" ? "allow-scripts allow-forms allow-modals" : "allow-scripts"} {...(IS_TAURI ? { src } : { srcDoc: doc })} />
       <button className="icon-btn pv-reload" aria-label={i18next.t("プレビューを更新")} title={i18next.t("プレビューを更新")} onClick={() => { y.current = 0; setNonce((n) => n + 1); }}><RotateCw /></button>
     </div>
   );

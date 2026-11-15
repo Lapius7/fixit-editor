@@ -18,7 +18,7 @@ export function loadHist(): Hist {
     for (const [k, v] of Object.entries(j as Record<string, unknown>)) {
       const e = v as { port?: unknown; at?: unknown } | null;
       if (typeof e?.port !== "string" || !/^\d{1,5}$/.test(e.port)) continue;
-      const key = k.replace(/\u0000app$/, "\u0000"); // 以前に「app」と打って残った履歴は、名前なしにまとめる
+      const key = (k.endsWith("\u0000app") ? k.slice(0, -3) : k); // 以前に「app」と打って残った履歴は、名前なしにまとめる
       const at = typeof e.at === "number" ? e.at : 0;
       if (!out[key] || out[key].at < at) out[key] = { port: e.port, at };
     }

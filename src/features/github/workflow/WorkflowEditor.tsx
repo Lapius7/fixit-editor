@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import i18next from "i18next";
 import { ArrowDown, ArrowUp, ExternalLink, FilePlus2, GitBranch, Play, Plus, RefreshCw, Save, Trash2, TriangleAlert, Undo2 } from "lucide-react";
-import { Select } from "@/shared/Select";
 import { ask } from "@/shared/ask";
 import { notify } from "@/shared/notify";
 import { openExternal } from "@/features/account/auth";
@@ -178,12 +177,13 @@ export default function WorkflowEditor(ctx: Ctx) {
     return r ? { run: r, jobs: await gh.jobs(s, r.id) } : [];
   }, [wf?.id]);
   const lastRun = live.data && !Array.isArray(live.data) ? live.data.run : null;
+  const runId = lastRun?.id, runStatus = lastRun?.status;
   const liveJobs = live.data && !Array.isArray(live.data) ? live.data.jobs : [];
   useEffect(() => {
-    if (!lastRun || lastRun.status === "completed") return;
+    if (!runId || runStatus === "completed") return;
     const t = setInterval(() => void live.reload(), 5000);
     return () => clearInterval(t);
-  }, [lastRun?.id, lastRun?.status, live]);
+  }, [runId, runStatus, live]);
 
   // 保存前のウィンドウ閉じ・ファイル切り替えで、書きかけを失わせない
   const dirtyRef = useRef(dirty);

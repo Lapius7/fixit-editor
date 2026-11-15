@@ -44,6 +44,7 @@
 .icon-btn::after { content: ""; position: absolute; inset: -6px; } /* 当たり判定を 40px に */
 .icon-btn:hover { background: var(--s2); color: var(--ink); }
 .icon-btn[data-on="true"] { background: var(--s1); color: var(--accent); }
+:root[data-theme="dark"] .icon-btn[data-on="true"] { color: color-mix(in srgb, var(--accent) 45%, #fff); } /* 暗い背景でアクセント色が沈まないよう明るくする */
 .icon-btn:active { transform: scale(var(--ps)); }
 .icon-btn svg { width: 16px; height: 16px; stroke-width: 1.7; flex: none; }
 

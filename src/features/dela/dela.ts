@@ -8,6 +8,8 @@ export const DELA_CHECK = `command -v dela >/dev/null 2>&1 || [ -x "\${PNPM_HOME
 // dir/rel: dela を動かしたフォルダ(rel は開いたフォルダからの相対。"" は開いたフォルダ)。temp: .delaconfig を使わない一時公開
 export type Pub = { id: number; port: string; url?: string; state: "start" | "up" | "fail"; note?: string; dir?: string; rel?: string; temp?: boolean; name?: string };
 
+// ANSI エスケープを取り除くため、制御文字を意図して使う
+// eslint-disable-next-line no-control-regex
 const ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]|\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)|\u001b[@-Z\\-_]/g;
 export const stripAnsi = (s: string) => s.replace(ANSI, "");
 

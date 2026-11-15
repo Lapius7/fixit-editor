@@ -13,6 +13,7 @@ export function ModelPicker({ disabled }: { disabled?: boolean }) {
   const ps = connected(cfg, link);
   const list: Provider[] = ps.includes(cfg.provider) || !cfg.enabled[cfg.provider] ? ps : [...ps, cfg.provider];
   const label = (p: Provider, m: string) => `${m || i18next.t("claude の既定")} (${i18next.t(PROVIDER_SHORT[p])})`;
+  if (!list.length) return null; // 使えるプロバイダーがなければ、空の選択欄は出さない
   const cur = cfg.provider + SEP + cfg.models[cfg.provider];
   return (
     <div className="ai-pick">

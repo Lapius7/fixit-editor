@@ -42,7 +42,7 @@ export default function Overview(ctx: Ctx & { onClose: () => void }) {
   const [newOwner, setNewOwner] = useState("");
   const [starred, setStarred] = useState<boolean | null>(null);
   useEffect(() => { setDesc(repo.description ?? ""); setHome(bare(repo.homepage ?? "")); setTopics(repo.topics ?? []); }, [repo]);
-  useEffect(() => { let on = true; gh.isStarred(s).then((v) => on && setStarred(v)).catch(() => on && setStarred(null)); return () => { on = false; }; }, [s.owner, s.repo]);
+  useEffect(() => { let on = true; gh.isStarred({ owner: s.owner, repo: s.repo }).then((v) => on && setStarred(v)).catch(() => on && setStarred(null)); return () => { on = false; }; }, [s.owner, s.repo]);
   const branches = useLoad(() => gh.branches(s), [s.owner, s.repo]);
   const r = repo as Repo & Record<string, unknown>;
   const dirty = desc !== (repo.description ?? "") || full(home) !== (repo.homepage ?? "") || topics.join() !== (repo.topics ?? []).join();
