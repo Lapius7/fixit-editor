@@ -1,7 +1,7 @@
 // JS/TS の言語機能(ホバーの型情報・定義へ移動・参照の検索・シンボルのリネーム)。
 // 実体は Worker の言語サービス(`ts/worker.ts`)。ここは CodeMirror とのつなぎだけ。
 import { Facet, type Extension } from "@codemirror/state";
-import { EditorView, hoverTooltip, keymap } from "@codemirror/view";
+import { EditorView, hoverTooltip } from "@codemirror/view";
 import i18next from "i18next";
 import { ask, isScript, type Edit, type Hover, type Loc } from "@/editor/ts/client";
 import { notify } from "@/shared/notify";
@@ -92,9 +92,11 @@ export const langService = (): Extension => [
       return true;
     },
   }),
-  keymap.of([
-    { key: "F12", run: (v) => { if (!liveSvc(v)) return false; void goDefinition(v); return true; } },
-    { key: "Shift-F12", run: (v) => { if (owned(v, "refs")) return false; void findRefs(v); return live(v); } },
-    { key: "F2", run: (v) => { if (owned(v, "rename")) return false; void startRename(v); return live(v); } },
-  ]),
 ];
+
+// 設定のショートカットから呼ぶ操作(Worker の言語サービス用)。動かなければ false を返す
+export const svcRun: Record<string, (v: EditorView) => boolean> = {
+  lspDef: (v) => { if (!liveSvc(v)) return false; void goDefinition(v); return true; },
+  lspRefs: (v) => { if (owned(v, "refs")) return false; void findRefs(v); return live(v); },
+  lspRename: (v) => { if (owned(v, "rename")) return false; void startRename(v); return live(v); },
+};

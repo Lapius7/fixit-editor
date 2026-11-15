@@ -1770,5 +1770,11 @@
   "「app」は、名前を付けない公開の名前です。ほかの名前にしてください": "\"app\" is the default name (no name). Please use another one",
   "このフォルダ・名前を上の欄に入れる": "Fill the folder and name into the form above",
   "ステージされた変更がないとき、すべての変更をコミットする": "When nothing is staged, commit all changes",
-  "Git パネルのコミットで、ステージ済みが 0 件なら、変更のあるファイルをすべてステージしてからコミットします(新規ファイルも含む)": "In the Git panel, if nothing is staged, commit stages every changed file first (new files included)"
+  "Git パネルのコミットで、ステージ済みが 0 件なら、変更のあるファイルをすべてステージしてからコミットします(新規ファイルも含む)": "In the Git panel, if nothing is staged, commit stages every changed file first (new files included)",
+  "ファイル一覧": "File list",
+  "言語機能": "Language features",
+  "参照を探す": "Find references",
+  "シンボルの名前を変える": "Rename symbol",
+  "コードアクション(クイックフィックス)": "Code actions (quick fix)",
+  "引数のヒントを出す": "Show parameter hints"
 }

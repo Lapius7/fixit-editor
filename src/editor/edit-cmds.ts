@@ -5,6 +5,8 @@ import { copyLineDown, copyLineUp, deleteLine, indentLess, indentMore, insertBla
 import { findNext, findPrevious, gotoLine, openSearchPanel, selectNextOccurrence, selectSelectionMatches } from "@codemirror/search";
 import { foldAll, foldCode, unfoldAll, unfoldCode } from "@codemirror/language";
 
+import { lspRun } from "@/editor/lsp/ext";
+import { svcRun } from "@/editor/langsvc";
 export type Run = (v: EditorView) => unknown;
 
 const text = (v: EditorView) => {
@@ -36,6 +38,7 @@ const lines = (f: (l: string[]) => string[]): Run => (v) => {
 const clip = (s: string) => writeClip(s);
 
 export const EDIT: Record<string, Run> = {
+  ...Object.fromEntries(["lspDef", "lspRefs", "lspRename", "lspAction", "lspSig"].map((id) => [id, (v: EditorView) => !!(lspRun[id]?.(v) || svcRun[id]?.(v))])),
   undo, redo, redoAlt: redo, comment: toggleComment, blockComment: toggleBlockComment, indentMore, indentLess,
   dupDown: copyLineDown, dupUp: copyLineUp, moveDown: moveLineDown, moveUp: moveLineUp, deleteLine, blankBelow: insertBlankLine, blankAbove, selectLine,
   find: openSearchPanel, replace: openSearchPanel, findNext, findPrev: findPrevious, gotoLine, selectNext: selectNextOccurrence, selectMatches: selectSelectionMatches,

@@ -13,7 +13,7 @@ import About from "@/features/settings/About";
 import { AiSettings } from "@/features/ai/AiSettings";
 import { AccountSettings } from "@/features/account/AccountUI";
 import { ask } from "@/shared/ask";
-import { KEYS, chips, comboOf, keyMatch, keyOf, rec, table } from "@/features/settings/keys";
+import { DEF, KEYS, bindable, chips, comboOf, keyMatch, keyOf, overlap, rec, table } from "@/features/settings/keys";
 import { notify } from "@/shared/notify";
 import i18next from 'i18next'
 import { Trans } from 'react-i18next'
@@ -148,14 +148,14 @@ function Keys() {
     const on = (e: KeyboardEvent) => {
       e.preventDefault(); e.stopPropagation();
       if (e.key === "Escape") return setRecId(null);
-      if (e.key === "Backspace" || e.key === "Delete") { update({ keys: { ...s.keys, [recId]: "" } }); setNote(i18next.t("割り当てを外しました")); return setRecId(null); }
+      if (e.key === "Backspace" || (e.key === "Delete" && DEF[recId]?.scope !== "tree")) { update({ keys: { ...s.keys, [recId]: "" } }); setNote(i18next.t("割り当てを外しました")); return setRecId(null); }
       const c = comboOf(e);
       if (!c) return;
-      if (!c.includes("Mod") && !c.includes("Alt") && !/^F\d+$/.test(c.replace("Shift+", ""))) return setNote(i18next.t("Ctrl・Alt・F1 などのキーと組み合わせてください"));
-      const used = table(s.keys).get(c);
+      if (!bindable(c, DEF[recId])) return setNote(i18next.t("Ctrl・Alt・F1 などのキーと組み合わせてください"));
+      const used = (table(s.keys).get(c) ?? []).filter((k) => k.id !== recId && overlap(k, DEF[recId]));
       const next = { ...s.keys, [recId]: c };
       let msg = "";
-      if (used && used !== recId) { next[used] = ""; msg = i18next.t("「{{label}}」から外して割り当てました", { label: i18next.t(KEYS.find((k) => k.id === used)!.label) }); }
+      if (used.length) { for (const k of used) next[k.id] = ""; msg = i18next.t("「{{label}}」から外して割り当てました", { label: used.map((k) => i18next.t(k.label)).join("・") }); }
       update({ keys: next });
       setNote(msg);
       setRecId(null);

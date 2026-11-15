@@ -1,6 +1,6 @@
 // TypeScript 言語サーバーの機能を CodeMirror につなぐ(エラーの波線・補完・ホバー・定義へ移動)。
 // サーバーが使える状態のファイルだけで動く。使えないときは、これまでの Worker の言語サービスが受け持つ。
-import { EditorSelection, EditorState, StateEffect, StateField, type ChangeSet, type Extension, type Text } from "@codemirror/state";
+import { EditorSelection, EditorState, Facet, StateEffect, StateField, type ChangeSet, type Extension, type Text } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, WidgetType, hoverTooltip, keymap, showTooltip, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import { completionStatus, type Completion, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
 import { linter, type Diagnostic } from "@codemirror/lint";
@@ -527,15 +527,23 @@ const inlayPlugin = ViewPlugin.fromClass(class {
 
 // ---------- まとめ ----------
 type LspFeatures = { tsLspDiag: boolean; tsLspComplete: boolean; tsLspHover: boolean; tsLspDef: boolean; tsLspSig: boolean; tsLspRefs: boolean; tsLspRename: boolean; tsLspAction: boolean; tsLspInlay: boolean };
+// 設定のショートカットから呼ぶ操作。言語サーバーが受け持っているファイルでだけ動き、動かなければ false を返す
+const lspOn = Facet.define<Record<string, boolean>, Record<string, boolean>>({ combine: (v) => v[0] ?? {} });
+const ON = (id: string, f: (v: EditorView) => unknown) => (v: EditorView) => { if (!v.state.facet(lspOn)[id] || !handleOf(v)) return false; void f(v); return true; };
+export const lspRun: Record<string, (v: EditorView) => boolean> = {
+  lspDef: ON("lspDef", (v) => goDefinition(v)),
+  lspRefs: ON("lspRefs", findRefs),
+  lspRename: ON("lspRename", startRename),
+  lspAction: ON("lspAction", codeActions),
+  lspSig: (v) => { if (!v.state.facet(lspOn).lspSig || !handleOf(v)) return false; return askSig(v); },
+};
+
 export const lspExtension = (o: LspFeatures): Extension => [
   lspTake.of({ refs: o.tsLspRefs, rename: o.tsLspRename }),
+  lspOn.of({ lspDef: o.tsLspDef, lspRefs: o.tsLspRefs, lspRename: o.tsLspRename, lspAction: o.tsLspAction, lspSig: o.tsLspSig }),
   o.tsLspSig ? [sigField, sigPlugin, keymap.of([
     { key: "Escape", run: (v) => { if (!v.state.field(sigField)) return false; v.dispatch({ effects: setSig.of(null) }); return true; } },
-    { key: "Mod-Shift-Space", run: askSig },
   ])] : [],
-  o.tsLspRefs ? keymap.of([{ key: "Shift-F12", run: (v) => { if (!handleOf(v)) return false; void findRefs(v); return true; } }]) : [],
-  o.tsLspRename ? keymap.of([{ key: "F2", run: (v) => { if (!handleOf(v)) return false; void startRename(v); return true; } }]) : [],
-  o.tsLspAction ? keymap.of([{ key: "Mod-.", run: (v) => { if (!handleOf(v)) return false; void codeActions(v); return true; } }]) : [],
   o.tsLspInlay ? [inlayField, inlayPlugin] : [],
   o.tsLspDiag ? [
     linter((v) => pullDiagnostics(v), { delay: LSP_LINT_DELAY_MS, needsRefresh: (u) => u.transactions.some((t) => t.effects.some((e) => e.is(relintNow))) }),
@@ -555,6 +563,5 @@ export const lspExtension = (o: LspFeatures): Extension => [
         return true;
       },
     }),
-    keymap.of([{ key: "F12", run: (v) => { if (!handleOf(v)) return false; void goDefinition(v); return true; } }]),
   ] : [],
 ];

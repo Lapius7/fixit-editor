@@ -1,9 +1,10 @@
 // ショートカットの定義。key は "Mod+Shift+P" の形(Mod は Ctrl または Cmd)。空文字は未割り当て
-export type KeyDef = { id: string; label: string; group: string; key: string; scope?: "editor"; inTerm?: boolean };
+export type KeyDef = { id: string; label: string; group: string; key: string; scope?: "editor" | "tree"; inTerm?: boolean };
 
-const G = { app: "全般", view: "表示", tab: "タブ", find: "検索", edit: "編集", line: "行", fold: "折りたたみ", sel: "選択", term: "ターミナル" };
+const G = { app: "全般", view: "表示", tab: "タブ", find: "検索", edit: "編集", line: "行", fold: "折りたたみ", sel: "選択", term: "ターミナル", tree: "ファイル一覧", lsp: "言語機能" };
 const d = (group: string, id: string, label: string, key: string, o: Partial<KeyDef> = {}): KeyDef => ({ id, label, group, key, ...o });
 const e = { scope: "editor" as const };
+const t = { scope: "tree" as const };
 
 export const KEYS: KeyDef[] = [
   d(G.app, "palette", "コマンドパレット", "Mod+Shift+P", { inTerm: true }),
@@ -87,6 +88,15 @@ export const KEYS: KeyDef[] = [
   d(G.term, "prevTerm", "前のターミナル", "Mod+Alt+,", { inTerm: true }),
   d(G.term, "renameTerm", "ターミナルの名前を変える", "", { inTerm: true }),
   d(G.term, "clearTerm", "ターミナルの画面を消す", "", { inTerm: true }),
+  d(G.tree, "treeRename", "名前を変える", "F2", t),
+  d(G.tree, "treeDelete", "削除", "Delete", t),
+  d(G.tree, "treeCopy", "コピー", "Mod+C", t),
+  d(G.tree, "treeCut", "切り取り", "Mod+X", t),
+  d(G.lsp, "lspDef", "定義へ移動", "F12", e),
+  d(G.lsp, "lspRefs", "参照を探す", "Shift+F12", e),
+  d(G.lsp, "lspRename", "シンボルの名前を変える", "F2", e),
+  d(G.lsp, "lspAction", "コードアクション(クイックフィックス)", "Mod+.", e),
+  d(G.lsp, "lspSig", "引数のヒントを出す", "Mod+Shift+Space", e),
 ];
 
 export const DEF = Object.fromEntries(KEYS.map((k) => [k.id, k])) as Record<string, KeyDef>;
@@ -128,9 +138,22 @@ export const keyMatch = (combo: string, query: string): boolean => {
   return words.length > 0 && words.every((w) => parts.some((p) => p.includes(w)));
 };
 
-// 重複を調べるための、組み合わせ → 機能の対応表
+// 組み合わせ → 機能の対応表。同じ組み合わせでも、効く場所(scope)が違えば共存できる(ファイル一覧の F2 と、エディタの F2 など)
 export function table(over: Record<string, string>) {
-  const m = new Map<string, string>();
-  for (const k of KEYS) { const c = keyOf(k.id, over); if (c && !m.has(c)) m.set(c, k.id); }
+  const m = new Map<string, KeyDef[]>();
+  for (const k of KEYS) { const c = keyOf(k.id, over); if (c) m.set(c, [...(m.get(c) ?? []), k]); }
   return m;
 }
+
+// 2つの機能が同じ場所で効くか(どちらかが全体用なら、必ず重なる)
+export const overlap = (a: KeyDef, b: KeyDef) => !a.scope || !b.scope || a.scope === b.scope;
+
+// 押された場所に合う機能を選ぶ。エディタ・ファイル一覧の中ならその専用の機能を先に、なければ全体用を使う
+export function pick(list: KeyDef[] | undefined, where: { editor: boolean; tree: boolean }): KeyDef | undefined {
+  if (!list) return undefined;
+  return list.find((k) => (k.scope === "editor" && where.editor) || (k.scope === "tree" && where.tree)) ?? list.find((k) => !k.scope);
+}
+
+// ファイル一覧用は、Del や Enter のような単独のキーも割り当てられる。それ以外は Ctrl・Alt・F1 などが必要
+export const bindable = (c: string, d: KeyDef) =>
+  c.includes("Mod") || c.includes("Alt") || /^F\d+$/.test(c.replace("Shift+", "")) || (d.scope === "tree" && /^(Shift\+)?(Delete|Enter|Insert|Home|End|PageUp|PageDown)$/.test(c));

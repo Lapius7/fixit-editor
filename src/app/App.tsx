@@ -85,7 +85,7 @@ import { GitPanel } from "@/features/git/GitPanel";
 import type { AiAction, AiJob, Ctx } from "@/features/ai/prompts";
 import { applyAnchor, secretName, type FileHost } from "@/features/ai/tools";
 import Preview, { previewKind } from "@/features/preview/Preview";
-import { KEYS, DEF, chips, comboOf, keyOf, rec, table } from "@/features/settings/keys";
+import { KEYS, chips, comboOf, keyOf, pick, rec, table } from "@/features/settings/keys";
 import { EDIT } from "@/editor/edit-cmds";
 import { codeToPng, copyShot } from "@/editor/shot";
 import { showShot } from "@/editor/shotPreview";
@@ -1611,6 +1611,10 @@ export default function App() {
   const ev = () => views.current[fp];
   const run = (id: string) => {
     const f: Record<string, () => unknown> = {
+      treeRename: () => { const l = selectedNodes(); if (l.length === 1) treeRef.current.rename(l[0]); },
+      treeDelete: () => { const l = selectedNodes(); if (l.length) treeRef.current.removeMany(l); },
+      treeCopy: () => { const l = selectedNodes(); if (l.length) void treeRef.current.copyTree("copy", l); },
+      treeCut: () => { const l = selectedNodes(); if (l.length) void treeRef.current.copyTree("cut", l); },
       palette: () => setPal(true), quickOpen: () => setQo(true), save, openFolder, closeFolder, addFolder, addRemote: () => { if (root.handle) { setCnAdd(true); setCn(true); } }, connect: () => { setCnAdd(false); setCn(true); }, workspaces: () => setWsDlg("ws"), profiles: () => setWsDlg("profile"), saveWorkspace: quickSave, newFile: () => create("file", null), settings: () => setSetts("look"), shortcuts: () => setSetts("keys"),
       newTerm: () => addTerm(), runFile, closeTerm: () => alive().length && endTerm(actT), nextTerm: () => stepTerm(1), prevTerm: () => stepTerm(-1),
       renameTerm: () => { if (alive().length) { showTerm(true); setRenaming(actT); } }, clearTerm: () => apis.current.get(actT)?.clear(),
@@ -1650,15 +1654,17 @@ export default function App() {
       if (rec.on) return;
       const c = comboOf(e);
       if (!c) return;
-      const id = table(st.keys).get(c);
-      if (!id) return;
+      const list = table(st.keys).get(c);
+      if (!list) return;
       const t = e.target as HTMLElement, inEditor = !!t.closest?.(".cm-editor"), inTerm = !!t.closest?.(".xterm"), inField = /^(INPUT|TEXTAREA)$/.test(t.tagName) && !inTerm;
-      const d = DEF[id];
-      if (d.scope === "editor" && !inEditor) return;
+      const d = pick(list, { editor: inEditor, tree: !!t.closest?.(".tree") });
+      if (!d) return;
       if (inTerm && !d.inTerm) return;
-      if (inField && !c.includes("Mod") && !c.includes("Alt")) return;
+      if (inField && (d.scope === "tree" || (!c.includes("Mod") && !c.includes("Alt")))) return;
+      // 言語機能は、そのファイルで動かせないとき(言語サーバーが無いなど)は何もせず、元のキーの動きに任せる
+      if (d.id.startsWith("lsp")) { const v = views.current[fp]; if (!v || EDIT[d.id](v) === false) return; e.preventDefault(); e.stopPropagation(); return; }
       e.preventDefault(); e.stopPropagation();
-      run(id);
+      run(d.id);
     };
     addEventListener("keydown", on, true);
     return () => removeEventListener("keydown", on, true);
@@ -2360,7 +2366,7 @@ export default function App() {
                   )}
                 </div>
               )}
-              <nav className="tree scroll overscroll-contain" data-foot={footOpen} onKeyDown={(e) => { const t = e.target as HTMLElement; if (t.tagName === "INPUT" || t.tagName === "TEXTAREA") return; if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === "c" || e.key === "x")) { const l = selectedNodes(); if (l.length) { e.preventDefault(); void treeRef.current.copyTree(e.key === "x" ? "cut" : "copy", l); } return; } if (e.key === "F2") { const l = selectedNodes(); if (l.length === 1) { e.preventDefault(); treeRef.current.rename(l[0]); } return; } if (e.key !== "Delete") return; const l = selectedNodes(); if (l.length) { e.preventDefault(); treeRef.current.removeMany(l); } }} onPaste={(e) => { if (roots[0].handle) treeFn.paste(e, null); }} style={{ ["--fh" as string]: `${footOpen ? footH : 0}px` }} data-drop={rootDrop || (roots.length === 1 && dropAt === rootKey(roots[0].prefix))}
+              <nav className="tree scroll overscroll-contain" data-foot={footOpen} onPaste={(e) => { if (roots[0].handle) treeFn.paste(e, null); }} style={{ ["--fh" as string]: `${footOpen ? footH : 0}px` }} data-drop={rootDrop || (roots.length === 1 && dropAt === rootKey(roots[0].prefix))}
                 onDragOver={(e) => {
                   if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDropTarget(null); setRootDrop(true); setExtDrop(true); return; }
                   // ここまで来るのは、一番上の階層のファイルか、何もない所の上。フォルダが1つなら、その一番上へ移す
