@@ -44,6 +44,7 @@ function ago(at: number) {
 const REWRITES = new Set(["checkout", "discard", "clean", "pull"]);
 
 export function GitPanel({ open, conn, root, dir, title, rev, onClose, onChanged, onRepo, onBack, guard, canDrop, onDropDir }: Props) {
+  const { gitSmartCommit } = useSettings();
   const [over, setOver] = useState(false);
   const [tab, setTab] = useState<Tab>("changes");
   const [st, setSt] = useState<Status | null>(null);
@@ -98,12 +99,12 @@ export function GitPanel({ open, conn, root, dir, title, rev, onClose, onChanged
   useEffect(() => { setSel(null); setOpenKey(null); }, [tab, root]);
 
   // 書き込み操作。終わったら、パネルとファイルツリーを更新する
-  const run = async (label: string, body: Record<string, unknown>, after?: () => void) => {
+  const run = async (label: string, body: Record<string, unknown>, after?: () => void, before?: Record<string, unknown>) => {
     if (!conn || !root || busy) return;
     // 作業フォルダのファイルを書き換える操作は、未保存のタブがあれば先に確かめる
     if (REWRITES.has(String(body.cmd)) && guard && !(await guard())) return;
     setBusy(label); setErr("");
-    try { await gitWrite(conn, root, body); after?.(); onChanged(); await load(); }
+    try { if (before) await gitWrite(conn, root, before); await gitWrite(conn, root, body); after?.(); onChanged(); await load(); }
     catch (e) { setErr(msg(e)); }
     finally { setBusy(""); }
   };
@@ -115,8 +116,13 @@ export function GitPanel({ open, conn, root, dir, title, rev, onClose, onChanged
 
   if (!open && !mounted) return null;
   const nStaged = st?.staged.length ?? 0;
-  const canCommit = !!text.trim() && nStaged > 0 && !busy;
-  const commit = () => { if (canCommit) void run("commit", { cmd: "commit", message: text.trim() }, () => setText("")); };
+  // スマートコミット: ステージ済みが 0 件なら、変更のあるファイルをすべてステージしてからコミットする
+  const smart = gitSmartCommit && nStaged === 0 && (st?.unstaged.length ?? 0) > 0;
+  const canCommit = !!text.trim() && (nStaged > 0 || smart) && !busy;
+  const commit = () => {
+    if (!canCommit) return;
+    void run("commit", { cmd: "commit", message: text.trim() }, () => setText(""), smart && st ? { cmd: "stage", files: st.unstaged.map((c) => c.path) } : undefined);
+  };
   // ステージした差分から、AI でコミットメッセージを作る。作っている間にもう一度押すと止める
   const aiMsg = async () => {
     if (gen) { gen.abort(); return; }

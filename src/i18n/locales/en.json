@@ -1768,5 +1768,7 @@
   "公開する名前": "Name to publish",
   "英小文字・数字・ハイフン(20 文字まで)": "Lowercase letters, digits, hyphens (up to 20)",
   "「app」は、名前を付けない公開の名前です。ほかの名前にしてください": "\"app\" is the default name (no name). Please use another one",
-  "このフォルダ・名前を上の欄に入れる": "Fill the folder and name into the form above"
+  "このフォルダ・名前を上の欄に入れる": "Fill the folder and name into the form above",
+  "ステージされた変更がないとき、すべての変更をコミットする": "When nothing is staged, commit all changes",
+  "Git パネルのコミットで、ステージ済みが 0 件なら、変更のあるファイルをすべてステージしてからコミットします(新規ファイルも含む)": "In the Git panel, if nothing is staged, commit stages every changed file first (new files included)"
 }

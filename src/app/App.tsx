@@ -2319,8 +2319,8 @@ export default function App() {
   const goHit = (n: Node, h: { line: number; from: number; to: number }) => goto(n, h.line, h.from, h.to);
 
   // ツリーに渡す関数は毎回同じものにする(FileTree は memo なので、打鍵のたびに描き直さない)
-  const treeRef = useRef({ openOrFocus, treeMenu, moveTo, dropInto, pasteInto, removeMany, copyTree });
-  treeRef.current = { openOrFocus, treeMenu, moveTo, dropInto, pasteInto, removeMany, copyTree };
+  const treeRef = useRef({ openOrFocus, treeMenu, moveTo, dropInto, pasteInto, removeMany, copyTree, rename });
+  treeRef.current = { openOrFocus, treeMenu, moveTo, dropInto, pasteInto, removeMany, copyTree, rename };
   const treeFn = useMemo(() => ({
     open: (n: Node, pin?: boolean) => treeRef.current.openOrFocus(n, !!pin),
     ctx: (e: React.MouseEvent, n: Node | null) => void treeRef.current.treeMenu(e, n),
@@ -2360,7 +2360,7 @@ export default function App() {
                   )}
                 </div>
               )}
-              <nav className="tree scroll overscroll-contain" data-foot={footOpen} onKeyDown={(e) => { const t = e.target as HTMLElement; if (t.tagName === "INPUT" || t.tagName === "TEXTAREA") return; if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === "c" || e.key === "x")) { const l = selectedNodes(); if (l.length) { e.preventDefault(); void treeRef.current.copyTree(e.key === "x" ? "cut" : "copy", l); } return; } if (e.key !== "Delete") return; const l = selectedNodes(); if (l.length) { e.preventDefault(); treeRef.current.removeMany(l); } }} onPaste={(e) => { if (roots[0].handle) treeFn.paste(e, null); }} style={{ ["--fh" as string]: `${footOpen ? footH : 0}px` }} data-drop={rootDrop || (roots.length === 1 && dropAt === rootKey(roots[0].prefix))}
+              <nav className="tree scroll overscroll-contain" data-foot={footOpen} onKeyDown={(e) => { const t = e.target as HTMLElement; if (t.tagName === "INPUT" || t.tagName === "TEXTAREA") return; if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === "c" || e.key === "x")) { const l = selectedNodes(); if (l.length) { e.preventDefault(); void treeRef.current.copyTree(e.key === "x" ? "cut" : "copy", l); } return; } if (e.key === "F2") { const l = selectedNodes(); if (l.length === 1) { e.preventDefault(); treeRef.current.rename(l[0]); } return; } if (e.key !== "Delete") return; const l = selectedNodes(); if (l.length) { e.preventDefault(); treeRef.current.removeMany(l); } }} onPaste={(e) => { if (roots[0].handle) treeFn.paste(e, null); }} style={{ ["--fh" as string]: `${footOpen ? footH : 0}px` }} data-drop={rootDrop || (roots.length === 1 && dropAt === rootKey(roots[0].prefix))}
                 onDragOver={(e) => {
                   if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDropTarget(null); setRootDrop(true); setExtDrop(true); return; }
                   // ここまで来るのは、一番上の階層のファイルか、何もない所の上。フォルダが1つなら、その一番上へ移す

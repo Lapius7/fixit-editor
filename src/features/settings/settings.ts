@@ -147,6 +147,7 @@ const RAW = [
   b("finalNewline", "files", "保存するとき、末尾に改行を入れる", false),
   b("reindentOnSave", "files", "保存するとき、インデントを下のバーの設定に合わせる", false, { hint: "ステータスバーの「インデント」(スペース/タブと幅)に、行頭の空白を直して保存します。文字列やコメントの中、Makefile と Markdown は直しません。元の幅を決められないファイルは、そのまま保存します" }),
   n("autoSave", "files", "自動で保存するまでの時間", 0, { min: 0, max: 60, step: 1, unit: "秒", hint: "0 で自動保存しません(フォルダを開いたときだけ)" }),
+  b("gitSmartCommit", "files", "ステージされた変更がないとき、すべての変更をコミットする", false, { sec: "Git", hint: "Git パネルのコミットで、ステージ済みが 0 件なら、変更のあるファイルをすべてステージしてからコミットします(新規ファイルも含む)" }),
   b("confirmClose", "files", "未保存のタブを閉じるとき確かめる", true),
   b("hideBuild", "files", "node_modules などを一覧から除く", true, { sec: "検索と一覧" }),
   n("quickOpenMax", "files", "ファイル検索の表示数", 50, { min: 10, max: 200, step: 10 }),

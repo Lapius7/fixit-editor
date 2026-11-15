@@ -204,7 +204,10 @@ pub fn dispatch(op: &str, q: &Q, body: Option<Vec<u8>>) -> Result<Reply, FsError
         }
         "mv" => {
             let (from, to) = (abs(q, "path")?, abs(q, "to")?);
-            if fs::symlink_metadata(&to).is_ok() { return Err(FsError::new("同じ名前があります", 409, "EEXIST")); }
+            // 大文字小文字を区別しない場所で「Docs」→「docs」のように変えるときは、自分自身が見つかるだけなので通す
+            let same = from != to && from.to_lowercase() == to.to_lowercase()
+                && fs::canonicalize(&from).ok().is_some() && fs::canonicalize(&from).ok() == fs::canonicalize(&to).ok();
+            if fs::symlink_metadata(&to).is_ok() && !same { return Err(FsError::new("同じ名前があります", 409, "EEXIST")); }
             fs::rename(&from, &to).map_err(io_err)?;
             Ok(Reply::Json(json!({ "ok": true })))
         }

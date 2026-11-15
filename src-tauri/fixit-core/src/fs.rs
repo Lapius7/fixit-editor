@@ -402,7 +402,7 @@ pub fn dispatch(op: &str, q: &Q, body: Option<Vec<u8>>) -> Result<Reply, FsError
         }
         "mv" => {
             let (from, to) = (abs_path(q, "path")?, abs_path(q, "to")?);
-            let out = r.sh(&format!("if [ -e {t} ]; then echo exists; else mv -- {f} {t} && echo ok; fi", f = sq(&from), t = sq(&to)), None, 20000, BIG, &[0])?;
+            let out = r.sh(&format!("if [ -e {t} ] && ! {ci}; then echo exists; else mv -- {f} {t} && echo ok; fi", f = sq(&from), t = sq(&to), ci = if from != to && from.to_lowercase() == to.to_lowercase() { format!("[ {} -ef {} ]", sq(&to), sq(&from)) } else { "false".to_string() }), None, 20000, BIG, &[0])?;
             if String::from_utf8_lossy(&out).trim() == "exists" {
                 return Err(FsError::new("同じ名前があります", 409, "EEXIST"));
             }

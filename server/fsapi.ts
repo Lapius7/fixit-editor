@@ -6,6 +6,14 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Plugin } from "vite";
 import { gitPlan, gitResult, gitScript } from "./gitops";
 
+// 大文字小文字だけが違う名前への変更か(「Docs」→「docs」)。大文字小文字を区別しない場所では、移動先として自分自身が見つかる
+const caseOnly = (from: string, to: string) => from !== to && from.toLowerCase() === to.toLowerCase();
+const sameEntry = async (from: string, to: string) => {
+  if (!caseOnly(from, to)) return false;
+  const [a, b] = await Promise.all([fs.stat(from), fs.stat(to)]).catch(() => [null, null] as const);
+  return !!a && !!b && a.ino !== 0 && a.ino === b.ino && a.dev === b.dev;
+};
+
 // WSL(このPC)と SSH 先のファイルを、ブラウザから読み書きするための開発サーバー用 API。
 // 呼び出せるのは、ループバックから来た localhost 系の同一オリジンのページだけ。
 const OK_ORIGIN = /^https?:\/\/([\w-]+\.)*localhost(:\d+)?$|^https?:\/\/127\.0\.0\.1(:\d+)?$/;
@@ -108,7 +116,7 @@ class LocalBackend implements Backend {
   async mkdir(p: string) { await fs.mkdir(p, { recursive: true }); }
   async rm(p: string) { await fs.rm(p, { recursive: true, force: true }); }
   async mv(from: string, to: string) {
-    if (await fs.stat(to).then(() => true, () => false)) throw new FsError("同じ名前があります", 409, "EEXIST");
+    if (await fs.stat(to).then(() => true, () => false) && !(await sameEntry(from, to))) throw new FsError("同じ名前があります", 409, "EEXIST");
     await fs.rename(from, to);
   }
   async stat(p: string) {
@@ -167,7 +175,8 @@ class SshBackend implements Backend {
   async mkdir(p: string) { await this.sh(`mkdir -p -- ${sq(p)}`); }
   async rm(p: string) { await this.sh(`rm -rf -- ${sq(p)}`); }
   async mv(from: string, to: string) {
-    const r = await this.sh(`if [ -e ${sq(to)} ]; then echo exists; else mv -- ${sq(from)} ${sq(to)} && echo ok; fi`);
+    const ci = caseOnly(from, to) ? `[ ${sq(to)} -ef ${sq(from)} ]` : "false";
+    const r = await this.sh(`if [ -e ${sq(to)} ] && ! ${ci}; then echo exists; else mv -- ${sq(from)} ${sq(to)} && echo ok; fi`);
     if (r.toString().trim() === "exists") throw new FsError("同じ名前があります", 409, "EEXIST");
   }
   async stat(p: string) {
