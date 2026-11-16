@@ -834,3 +834,9 @@ body.opening, body.opening .tree-row { cursor: progress; }
 .pl-line { padding: 0 14px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); user-select: text; }
 .pl-empty { margin: 0; padding: 28px 16px; text-align: center; font: 13px/20px var(--font-sans); color: var(--ink-3); text-wrap: balance; }
 @media (max-width: 640px) { .pl-req { grid-template-columns: 56px 44px minmax(0, 1fr) 36px; } .pl-req .pl-num { display: none; } }
+
+/* 拡張機能が宣言した設定(ExtSettingRows) */
+.set-file { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.set-file-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-3); font-size: 12px; line-height: 16px; }
+.set-color { width: 40px; height: 28px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: transparent; cursor: pointer; }
+.set-ext-reset { margin-top: 8px; align-self: flex-start; }

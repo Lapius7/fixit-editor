@@ -6,16 +6,18 @@ import { openExternal } from "@/features/account/auth";
 import { siteLang } from "@/i18n";
 import { SITE_URL } from "@/shared/config";
 import { ms } from "@/features/settings/settings";
+import { shieldExtCss } from "./host/css";
 import { notify } from "@/shared/notify";
 import { checkRevocations, extAvailable, fetchBundle, fetchList, hasNewer, install, isLocal, pickFolder, readLocal, setEnabled, setTheme, uninstall, useInstalled, activeTheme, type Installed, type Listed, type Status } from "./registry";
-import { cmpVer, permLines, type Manifest, type Perms } from "./spec";
+import { cmpVer, permLines, type Manifest, type PermKey, type Perms } from "./spec";
 
 const statusText = (s: Status) => ({ verified: i18next.t("認証済み"), unverified: i18next.t("未認証"), revoked: i18next.t("認証が取り消されました"), blocked: i18next.t("配布が停止されました"), tampered: i18next.t("内容が署名と合いません"), "needs-consent": i18next.t("権限の許可が必要です") })[s];
-const permText = (k: "fsRead" | "fsWrite" | "network" | "exec", v: string) => ({ fsRead: i18next.t("ファイルを読む"), fsWrite: i18next.t("ファイルを書く"), network: i18next.t("ネットワークに接続する: {{v}}", { v }), exec: i18next.t("外部コマンドを実行する: {{v}}", { v }) })[k];
-const kindsText = (m: Manifest) => [m.themes.length ? i18next.t("テーマ {{n}}", { n: m.themes.length }) : "", m.snippets.length ? i18next.t("スニペット {{n}}", { n: m.snippets.length }) : "", m.commands.length ? i18next.t("コマンド {{n}}", { n: m.commands.length }) : ""].filter(Boolean).join(" · ");
+const permText = (k: PermKey | "script", v: string) => ({ editorRead: i18next.t("開いているファイルの内容を読む"), editorWrite: i18next.t("開いているファイルの内容を書き換える"), script: i18next.t("隔離した場所でスクリプトを動かす(宣言した権限の範囲だけ)"), ui: i18next.t("見た目を変える(背景画像・スタイル)"), fsRead: i18next.t("開いているフォルダのファイルを読む"), fsWrite: i18next.t("開いているフォルダのファイルを書く"), network: i18next.t("ネットワークに接続する: {{v}}", { v }), exec: i18next.t("外部コマンドを実行する: {{v}}", { v }) })[k];
+const kindsText = (m: Manifest) => [m.themes.length ? i18next.t("テーマ {{n}}", { n: m.themes.length }) : "", m.snippets.length ? i18next.t("スニペット {{n}}", { n: m.snippets.length }) : "", m.commands.length ? i18next.t("コマンド {{n}}", { n: m.commands.length }) : "", m.main ? i18next.t("スクリプト") : ""].filter(Boolean).join(" · ");
 
-function Perms({ p }: { p: Perms }) {
-  const rows = permLines(p);
+export const rowsOf = (m: Manifest) => [...(m.main ? [{ key: "script" as const, value: "" }] : []), ...permLines(m.perms)];
+function Perms({ m }: { m: Manifest }) {
+  const rows = rowsOf(m);
   if (!rows.length) return <p className="ex-none">{i18next.t("特別な権限は要りません")}</p>;
   return <ul className="ex-perms">{rows.map((r) => <li key={r.key}>{permText(r.key, r.value)}</li>)}</ul>;
 }
@@ -23,7 +25,7 @@ function Perms({ p }: { p: Perms }) {
 // 入れる前の確認。認証済みでも権限は 1 つずつ許可してもらう。未認証は、警告に同意してもらう
 type Pick = { id: string; version: string; sig: string | null; manifest: Manifest; raw: string };
 function Confirm({ id, version, sig, manifest, raw, onClose }: Pick & { onClose: () => void }) {
-  const rows = permLines(manifest.perms);
+  const rows = rowsOf(manifest);
   const [ok, setOk] = useState<Record<string, boolean>>({});
   const [risk, setRisk] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -34,7 +36,7 @@ function Confirm({ id, version, sig, manifest, raw, onClose }: Pick & { onClose:
       <p className="ex-title"><b>{manifest.name}</b> <span className="tnum">v{version}</span> <span className="ex-badge" data-s={sig ? "verified" : "unverified"}>{sig ? i18next.t("認証済み") : i18next.t("未認証")}</span></p>
       <p className="ex-desc">{manifest.description || i18next.t("説明はありません")}</p>
       <h3>{i18next.t("この拡張機能が使う権限")}</h3>
-      <Perms p={manifest.perms} />
+      <Perms m={manifest} />
       {!sig && <p className="ex-warn" role="alert">{isLocal(id) ? i18next.t("このフォルダの拡張機能は、審査も署名もありません。内容は検査していますが、安全とは確かめられていません。自分で作った、または信頼できる作者のものだけ入れてください。") : i18next.t("この版は運営の審査を受けていません。内容は検査していますが、安全とは確かめられていません。信頼できる作者のものだけ入れてください。")}</p>}
       {rows.map((r) => <label key={r.key} className="ex-check"><input type="checkbox" checked={!!ok[r.key]} onChange={(e) => setOk({ ...ok, [r.key]: e.target.checked })} />{i18next.t("許可する: {{p}}", { p: permText(r.key, r.value) })}</label>)}
       {!sig && <label className="ex-check"><input type="checkbox" checked={risk} onChange={(e) => setRisk(e.target.checked)} />{i18next.t("未認証であることを理解したうえで入れる")}</label>}
@@ -119,6 +121,7 @@ function Browse({ installed, q, onlyV, onPick }: { installed: Installed[]; q: st
 
 export function ExtensionsView({ out, onClose }: { out?: boolean; onClose: () => void }) {
   const installed = useInstalled();
+  useEffect(() => { shieldExtCss(true); return () => shieldExtCss(false); }, []);
   const [closing, setClosing] = useState(false);
   const [tab, setTab] = useState<"mine" | "browse">("mine");
   const [pick, setPick] = useState<Pick | null>(null);

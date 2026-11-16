@@ -10,6 +10,8 @@ import { fixitTheme } from "@/editor/theme";
 import { fixitSearch } from "@/editor/search-panel";
 import { power, dynamic } from "@/editor/extensions";
 import { useSettings } from "@/features/settings/settings";
+import { extEditor } from "@/features/extensions/host/extEditor";
+import { clearActive, noteChange, noteOpen, setActive } from "@/features/extensions/host/hub";
 import { noteEdit } from "@/features/stats/stats";
 import { langName } from "@/editor/lang";
 import { setGitBase } from "@/editor/gitgutter"; import { fileName } from "@/editor/intel"; import { filePath } from "@/editor/langsvc";
@@ -65,10 +67,10 @@ export default function Editor({ path, docKey, name, value, onChange, onCursor, 
     const state = cached && cached.doc.toString() === value ? cached : EditorState.create({
       doc: value, ...(seed !== undefined ? { selection: { anchor: Math.min(Math.max(seed, 0), value.length) } } : {}),
       extensions: [
-        history(), fileName.of(name), filePath.of(docKey.slice(docKey.indexOf(":") + 1)), DYN.of(dynamic(st)), LANG.of([]), EMMET.of([]), fixitTheme, fixitSearch, power,
+        history(), fileName.of(name), filePath.of(docKey.slice(docKey.indexOf(":") + 1)), DYN.of(dynamic(st)), LANG.of([]), EMMET.of([]), fixitTheme, fixitSearch, power, extEditor,
         keymap.of(keys),
         EditorView.domEventHandlers({
-          focus: (_e, v) => { lastFocus.v = v; cb.current.onFocus(); },
+          focus: (_e, v) => { lastFocus.v = v; setActive(v, pathOf(docKey)); cb.current.onFocus(); },
           // 最終行より下の空き地をクリックしたら、最後の行の末尾にカーソルを置く
           mousedown: (e, v) => {
             if (e.button !== 0 || (e.target as HTMLElement).closest(".cm-content, .cm-gutters, .cm-panels, .cm-tooltip")) return false;
@@ -91,6 +93,7 @@ export default function Editor({ path, docKey, name, value, onChange, onCursor, 
               if (ty || dl) tr.changes.iterChanges((a, b, _c, _d, ins) => { if (ty) typed += ins.length; del += b - a; });
             }
             noteEdit(typed, del, langName(name));
+            noteChange(pathOf(docKey), () => u.view.state.doc.toString());
           }
           if (u.selectionSet || u.docChanged) { clearTimeout(verT.current); verT.current = setTimeout(() => setVer((n) => n + 1), 160); }
           if (u.selectionSet || u.docChanged || u.startState === u.state) {
@@ -109,10 +112,11 @@ export default function Editor({ path, docKey, name, value, onChange, onCursor, 
     live.set(docKey, v);
     if (seed !== undefined) requestAnimationFrame(() => v.dispatch({ effects: EditorView.scrollIntoView(v.state.selection.main.head, { y: "center" }) }));
     cb.current.onReady(v);
+    setActive(v, pathOf(docKey)); noteOpen(pathOf(docKey));
     // 切り替え直後のカーソル情報を状態バーへ
     const m = v.state.selection.main, l = v.state.doc.lineAt(m.head);
     cb.current.onCursor({ l: l.number, c: m.head - l.from + 1, sel: 0, lines: v.state.doc.lines });
-    return () => { clearTimeout(verT.current); setVw(null); cache.set(docKey, v.state); if (live.get(docKey) === v) live.delete(docKey); cb.current.onReady(null); v.destroy(); };
+    return () => { clearTimeout(verT.current); setVw(null); cache.set(docKey, v.state); if (live.get(docKey) === v) live.delete(docKey); clearActive(v); cb.current.onReady(null); v.destroy(); };
   }, [docKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 設定の反映(開いた直後にも一度流す)。使う項目だけを並べる

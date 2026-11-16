@@ -1,11 +1,13 @@
 import i18next from "i18next";
 import { Trans } from "react-i18next";
 import { useInstalled } from "./registry";
+import { ExtSettingGroups } from "./ExtSettingRows";
 
 // 設定の「拡張機能」。管理の画面(ExtensionsView)は大きいので、ここからはそれを開くだけにする
 export function ExtSettings({ onOpen }: { onOpen: () => void }) {
-  const n = useInstalled().length;
+  const list = useInstalled(), n = list.length;
   return (
+    <>
     <div className="set-theme-link">
       <div>
         <Trans i18nKey="拡張機能の管理" />
@@ -13,5 +15,7 @@ export function ExtSettings({ onOpen }: { onOpen: () => void }) {
       </div>
       <button className="btn" data-primary="true" onClick={onOpen}><Trans i18nKey="拡張機能を開く" /></button>
     </div>
+    <ExtSettingGroups list={list} />
+    </>
   );
 }

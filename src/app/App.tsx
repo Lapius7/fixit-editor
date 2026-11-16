@@ -47,6 +47,14 @@ import UpdateView from "@/features/update/UpdateView";
 import { runCheck, useUpdateState } from "@/features/update/update";
 import { ExtensionsView } from "@/features/extensions/ExtensionsView";
 import { useExtensionCommands, useExtensionEffects } from "@/features/extensions/apply";
+import { contribKeys, contribMenu } from "@/features/extensions/contrib";
+import { runCommand as runExtCommand } from "@/features/extensions/host/runtime";
+import { ExtBackdrop } from "@/features/extensions/host/ExtBackdrop";
+import { formatActive, noteSave as noteExtSave } from "@/features/extensions/host/hub";
+import ExtPrompt from "@/features/extensions/host/ExtPrompt";
+import { ExtDock } from "@/features/extensions/host/ExtDock";
+import { showPanel, usePanels } from "@/features/extensions/host/ui";
+import { setBridge } from "@/features/extensions/host/bridge";
 import { extAvailable, initExtensions, useInstalled } from "@/features/extensions/registry";
 import SearchPanel from "@/workbench/SearchPanel";
 import ContextMenu, { type Item } from "@/workbench/ContextMenu";
@@ -505,7 +513,7 @@ export default function App() {
       if (!(await ask({ message: i18next.t("{{name}} は、開いたあとに外で変更されています。上書きして保存しますか?", { name: t.node.name }), ok: i18next.t("上書きして保存"), danger: true }))) return false;
     }
     conflicts.current.delete(t.node.path);
-    try { await writeFile(t.node.handle as FileSystemFileHandle, t.eol === "crlf" && st.remoteKeepEol ? text.replace(/\n/g, "\r\n") : text); mark(); noteSave(); recordSave(t.node.path, text, t.saved); setGitTick((n) => n + 1); if (!quiet) flash(i18next.t("保存しました")); return true; }
+    try { await writeFile(t.node.handle as FileSystemFileHandle, t.eol === "crlf" && st.remoteKeepEol ? text.replace(/\n/g, "\r\n") : text); mark(); noteSave(); noteExtSave(t.node.path, text); recordSave(t.node.path, text, t.saved); setGitTick((n) => n + 1); if (!quiet) flash(i18next.t("保存しました")); return true; }
     catch (e) { flash(i18next.t("保存できませんでした: {{m}}", { m: (e as Error).message }), "error"); return false; }
   }, [st.trimOnSave, st.reindentOnSave, st.tabSize, st.insertSpaces, st.finalNewline, st.remoteKeepEol]);
   // 改行コードの切り替え。保存し直すまでは、ファイルは変わらない(未保存の印をつける)
@@ -1689,7 +1697,13 @@ export default function App() {
       const c = comboOf(e);
       if (!c) return;
       const list = table(st.keys).get(c);
-      if (!list) return;
+      if (!list) {
+        // 本体が使っていない組み合わせだけ、拡張機能のショートカットが効く(ターミナルと入力欄の中は除く)
+        const eid = extKeys.get(c), tg = e.target as HTMLElement;
+        const it = eid && !tg.closest?.(".xterm") && !/^(INPUT|TEXTAREA)$/.test(tg.tagName) ? extCmds.find((x) => x.id === eid) : undefined;
+        if (it) { e.preventDefault(); e.stopPropagation(); it.run(); }
+        return;
+      }
       const t = e.target as HTMLElement, inEditor = !!t.closest?.(".cm-editor"), inTerm = !!t.closest?.(".xterm"), inField = /^(INPUT|TEXTAREA)$/.test(t.tagName) && !inTerm;
       const d = pick(list, { editor: inEditor, tree: !!t.closest?.(".tree") });
       if (!d) return;
@@ -1741,14 +1755,24 @@ export default function App() {
 
   // 拡張機能のコマンド。ターミナルに打つ(実行する権限は、入れるときに許可したもの)
   const rootAbs = (rr: Root) => (rr.handle && "path" in rr.handle ? (rr.handle as unknown as { path: string }).path : rr.conn?.path ?? null);
-  const extCmds = useExtensionCommands(extList, () => ({ file: tab && isText(tab) && tab.node.handle ? abs(tab.node) : null, root: rootAbs(tab ? rootOf(tab.node) : roots[0]) }), (line, dir) => {
+  const extCtx = () => ({ file: tab && isText(tab) && tab.node.handle ? abs(tab.node) : null, root: rootAbs(tab ? rootOf(tab.node) : roots[0]) });
+  const extRun = (line: string, dir: string | null) => {
     const rr = tab ? rootOf(tab.node) : roots[0], ssh = rr?.conn?.kind === "ssh";
     const cur = alive().find((x) => x.id === actT);
     if (cur && !ssh && !cur.host && !cur.shell && dir?.startsWith("/") && apis.current.get(cur.id)) { showTerm(true); setTermKey((k) => k + 1); typeInTerm(cur.id, `cd ${shq(dir)} && ${line}`); return; }
     const id = seq.current + 1;
     addTerm(dir ?? undefined, undefined, ssh ? rr.conn!.host : null);
     typeInTerm(id, line);
-  }, i18next.t("拡張機能"));
+  };
+  const extCmds = useExtensionCommands(extList, extCtx, extRun, i18next.t("拡張機能"));
+  const extKeys = useMemo(() => contribKeys(extList), [extList]);
+  const extPanels = usePanels();
+  // 右クリックメニューに足す拡張機能の項目(区切り線つき。なければ空)
+  // ファイル一覧では、右クリックしたファイルかフォルダ(arg)を、スクリプトのコマンドへ渡す
+  const extMenu = (where: "editor" | "tree", arg?: { path: string; dir: boolean }): Item[] => {
+    const l = contribMenu(extList, where);
+    return l.length ? [{ type: "sep" as const }, ...l.map((m) => ({ label: m.label, keys: m.keys, run: () => (m.script && arg ? runExtCommand(m.ext, m.command, arg) : extCmds.find((x) => x.id === m.id)?.run()) }))] : [];
+  };
   const cmds: Cmd[] = useMemo(() => [
     ...KEYS.map((k) => ({ id: k.id, label: i18next.t(k.label), group: i18next.t(k.group), keys: keyOf(k.id, st.keys), run: () => run(k.id) })),
     ...delas.filter((d) => d.url).flatMap((d) => [
@@ -1756,8 +1780,8 @@ export default function App() {
       { id: `dela-open-${d.id}`, label: i18next.t("公開 URL をブラウザで開く(ポート {{port}})", { port: d.port }), group: i18next.t("全般"), run: () => void openExternal(d.url!) },
     ]),
     ...delas.map((d) => ({ id: `dela-stop-${d.id}`, label: i18next.t("公開を止める(ポート {{port}})", { port: d.port }), group: i18next.t("全般"), run: () => stopDela(d.id) })),
-    ...(extAvailable ? [{ id: "ext-open", label: i18next.t("拡張機能を開く"), group: i18next.t("拡張機能"), run: () => setExtOpen(true) }, ...extCmds] : []),
-  ], [extCmds, st.keys, tabs, act, fp, split, term, st.fontSize, st.wrap, st.mode, root, delas]); // eslint-disable-line react-hooks/exhaustive-deps
+    ...(extAvailable ? [{ id: "ext-open", label: i18next.t("拡張機能を開く"), group: i18next.t("拡張機能"), run: () => setExtOpen(true) }, { id: "ext-format", label: i18next.t("拡張機能で整形"), group: i18next.t("拡張機能"), run: () => { void formatActive().then((r) => { if (r !== "ok") flash(i18next.t(r === "none" ? "整形できる拡張機能がありません" : "拡張機能で整形できませんでした"), r === "none" ? "info" : "error"); }); } }, ...extCmds, ...extPanels.map((p) => ({ id: `ext-panel-${p.key}`, label: i18next.t("パネルを開く: {{name}} · {{title}}", { name: p.name, title: p.title }), group: i18next.t("拡張機能"), run: () => showPanel(p.key) }))] : []),
+  ], [extCmds, extPanels, st.keys, tabs, act, fp, split, term, st.fontSize, st.wrap, st.mode, root, delas]); // eslint-disable-line react-hooks/exhaustive-deps
   const wsCmds: Cmd[] = [
     ...cmds,
     ...wsStore.list.map((w) => ({ id: `ws-${w.id}`, label: i18next.t("ワークスペース: {{name}}", { name: w.name }), group: i18next.t("ワークスペース"), icon: <FolderKanban />, run: () => { switchWs(w).catch((e) => flash((e as Error).message, "error")); } })),
@@ -1877,6 +1901,19 @@ export default function App() {
         await aiSync.current.reload().catch(() => {});
         return "ok";
       },
+      async write(path, content) {
+        if (bad(path)) return "That path is not allowed.";
+        const t = tabsRef.current.find((x) => x.node.path === path);
+        if (t) { if (t.view.kind !== "text") return "That file is not text."; setTabs((p) => p.map((x) => (x.node.path === path && x.view.kind === "text" ? { ...x, text: content } : x))); return "ok"; }
+        if ((await kind(path)) === "dir") return "That path is a folder.";
+        try {
+          const at = path.lastIndexOf("/");
+          const dir = await ensureDir(path.slice(0, at));
+          await writeFile(await createFile(dir, path.slice(at + 1)), content);
+        } catch (e) { return (e as Error).message || "Could not write the file."; }
+        await aiSync.current.reload().catch(() => {});
+        return "ok";
+      },
       async mkdir(path) {
         if (bad(path)) return "That path is not allowed.";
         const k = await kind(path);
@@ -1948,6 +1985,7 @@ export default function App() {
       } : {}),
     };
   }, [mainDir]);
+  setBridge({ files: aiFiles, term: extRun, termCtx: extCtx }); // 拡張機能の API が借りる窓口(毎回の描画で最新にする)
   const fileToAi = async (n: Node) => {
     const c = await aiSource(n);
     if (!c) { notify(i18next.t("このファイルは文字として読めないため、添えられません"), "error"); return; }
@@ -2024,6 +2062,7 @@ export default function App() {
         ] : [tab ? splitSub(tab.node) : { label: i18next.t("分割して開く"), icon: ic(Columns2), disabled: true }]),
         ...(split ? [{ label: leaves(lay).length > 2 ? i18next.t("この画面を次の画面と入れ替える") : i18next.t("2つの画面を入れ替える"), icon: ic(ArrowLeftRight), keys: K("swapPanes"), run: swapPanes }] : []),
         { label: i18next.t("パスをコピー"), icon: ic(Link), run: () => tab && copyText(displayPath(tab.node.path)), disabled: !tab },
+        ...extMenu("editor"),
       ],
     });
   };
@@ -2125,6 +2164,7 @@ export default function App() {
             ...(dir ? [{ label: i18next.t("Git パネルで開く"), icon: ic(FolderGit2), run: () => void gitHere(rr.conn!, abs(n)) }] : []),
           ] : []),
           { label: i18next.t("名前をコピー"), icon: ic(Copy), run: () => copyText(n.name) },
+          ...extMenu("tree", { path: displayPath(n.path).replace(/^\/?/, "/"), dir: !!dir }),
           { type: "sep" as const },
           { label: i18next.t("削除"), icon: ic(Trash2), danger: true, run: () => remove(n) },
         ] : [
@@ -2378,6 +2418,8 @@ export default function App() {
   return (
     <GitMarks.Provider value={gitMark}>
     <div className="stage" onContextMenu={stageMenu}>
+      <ExtBackdrop />
+      <ExtPrompt />
       <div className="window" data-side={side} data-sb={st.sbShow} data-tp={tp}>
         <ColGrip className="col-grip-side" width={st.sideW} def={280} min={200} max={640} dir={1} onChange={(w) => update({ sideW: w })} />
         <aside className="sidebar" aria-label={i18next.t("サイドバー")}>
@@ -2519,7 +2561,8 @@ export default function App() {
             {br && <BrowserDock onClose={() => setBr(false)} />}
             {ai && <ColGrip width={st.aiW} def={440} min={280} max={900} dir={-1} onChange={(w) => update({ aiW: w })} />}
             <AiDock open={ai} job={aiJob} quote={aiQuote} resolve={aiSource} files={aiFiles} onClose={() => setAi(false)} onSettings={() => setSetts("ai")} />
-            <PortsPanel open={portsOpen} items={delas} conn={root?.conn} rootPath={root?.conn?.path} onClose={() => setPortsOpen(false)} onPublish={startDela} onStop={stopDela} onCopy={(u) => copyText(u)} onOpen={(u) => void openExternal(u)} onLog={setLogId} />
+            <ExtDock />
+        <PortsPanel open={portsOpen} items={delas} conn={root?.conn} rootPath={root?.conn?.path} onClose={() => setPortsOpen(false)} onPublish={startDela} onStop={stopDela} onCopy={(u) => copyText(u)} onOpen={(u) => void openExternal(u)} onLog={setLogId} />
             {gitOpen && <ColGrip width={st.gitW} def={440} min={280} max={900} dir={-1} onChange={(w) => update({ gitW: w })} />}
             <GitPanel open={gitOpen} conn={gitView?.conn ?? null} root={gitView?.root} dir={gitView?.dir}
               canDrop={() => drag.node?.kind === "dir" && !!rootOf(drag.node).conn}

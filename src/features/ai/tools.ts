@@ -260,6 +260,8 @@ export type FileHost = {
   // 作る・移す・消す。結果は "ok" か、失敗の理由(AI に返す文)。存在しない・すでにある、などもここで調べる
   create(path: string, content: string): Promise<"ok" | string>;
   mkdir(path: string): Promise<"ok" | string>;
+  // 中身を丸ごと置き換える(無ければ作る)。開いているタブなら、タブの中身を変える(保存は利用者が行う)。拡張機能の workspace.writeFile が使う
+  write(path: string, content: string): Promise<"ok" | string>;
   move(from: string, to: string): Promise<"ok" | string>;
   remove(path: string): Promise<"ok" | string>;
   // 検索のために、フォルダの下のテキストファイルを 1 つずつ渡す(コールバックが false を返したら打ち切る)

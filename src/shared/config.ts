@@ -123,3 +123,25 @@ export const LSP_BUSY_SHOW_MS = 250; // 解析が続いたとき、バーに「�
 // GitHub 管理のログイン(デバイスフロー)に使う OAuth App の client_id。公開してよい値。空のあいだは「GitHub でログイン」を出さない
 export const GH_CLIENT_ID = "Ov23liT0bYq74mBfo6sG";
 export const GH_SCOPES = "repo workflow admin:repo_hook delete_repo";
+
+// ---- 拡張機能のスクリプト API の上限(host/guard.ts と host/runtime.ts が使う) ----
+export const EXT_PROMPT_MAX_ITEMS = 200; // showQuickPick の項目数
+export const EXT_PROMPT_TEXT = 200; // 項目・題・ヒントの 1 つあたりの文字数
+export const EXT_STATUS_MAX = 6; // 1 つの拡張が出せる状態バーの項目数
+export const EXT_STATUS_TEXT = 40; // 状態バーの文字数
+export const EXT_FS_READ_MAX = 1_000_000; // workspace.readFile で返す文字数
+export const EXT_FS_WRITE_MAX = 1_000_000; // workspace.writeFile で書く文字数
+export const EXT_FS_LIST_MAX = 2000; // workspace.list の件数
+export const EXT_NET_TIMEOUT_MS = 15_000; // net.fetch の待ち時間
+export const EXT_NET_RES_MAX = 1_000_000; // net.fetch の応答の上限(バイト。読みながら数える)
+export const EXT_NET_REQ_MAX = 100_000; // net.fetch の送る本文の上限(文字)
+export const EXT_NET_HEADERS = ["accept", "accept-language", "content-type", "authorization"]; // 送ってよいヘッダー
+export const EXT_NET_PER_MIN = 30; // net.fetch の回数(1 分あたり)
+export const EXT_TERM_PER_MIN = 20; // terminal.run の回数(1 分あたり)
+export const EXT_CHANGE_DEBOUNCE_MS = 400; // onDidChange をまとめる時間
+export const EXT_CHANGE_TEXT_MAX = 500_000; // onDidChange / getText で渡す文書の上限(文字)
+export const EXT_PROVIDER_MS = 400; // 補完・ホバーの提供元を待つ上限
+export const EXT_PROVIDER_MAX = 100; // 補完・診断の結果の件数上限
+export const EXT_PANEL_NODES = 400; // 1 つのパネルの部品の数(一覧の行も 1 つと数える)
+export const EXT_PANELS_MAX = 3; // 1 つの拡張が持てるパネルの数
+export const EXT_PANEL_TEXT = 2000; // パネルの文字 1 つあたりの文字数

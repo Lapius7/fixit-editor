@@ -4,7 +4,10 @@
 import { useSyncExternalStore } from "react";
 import { kvGet, kvSet, kvWatch } from "@/platform/appdata";
 import { IS_TAURI } from "@/shared/chrome";
-import { EXT_ID, EXT_VER, LOCAL_PREFIX, cmpVer, localBundle, permsWithin, readBundle, type Manifest, type Perms } from "./spec";
+import { dataGet, dropExt } from "./host/store";
+import { delBlobsOf } from "./host/blobs";
+import { hostRunning, panelAction, runCommand, stop as stopHost } from "./host/runtime";
+import { FILE_NAME, MAX_FILE_CHARS, EXT_ID, EXT_VER, LOCAL_PREFIX, cmpVer, localBundle, permsWithin, readBundle, type Manifest, type Perms } from "./spec";
 
 export const EXT_KEY = "fixit:extensions:v1";
 const CHECK_MS = 6 * 3600_000; // 失効リストを取り直す間隔
@@ -24,7 +27,7 @@ let snap: Installed[] = [];
 const subs = new Set<() => void>();
 
 const invoke = async <T,>(cmd: string, args?: Record<string, unknown>): Promise<T> => (await import("@tauri-apps/api/core")).invoke<T>(cmd, args);
-export const extAvailable = IS_TAURI; // 拡張機能はデスクトップ版だけ
+export const extAvailable = IS_TAURI || import.meta.env.DEV; // 拡張機能はデスクトップ版だけ(開発サーバーは動作確認用)
 const get = (path: string) => invoke<string>("ext_get", { path });
 
 function persist() { kvSet(EXT_KEY, JSON.stringify(store)); }
@@ -120,13 +123,27 @@ export async function install(id: string, raw: string, sig: string | null, conse
 export async function readLocal(dir: string): Promise<{ id: string; version: string; sig: null; manifest: Manifest; raw: string } | "bad" | "id" | "missing"> {
   let text: string;
   try { text = await invoke<string>("ext_read_local", { dir }); } catch { return "missing"; }
-  const r = localBundle(text);
+  // format 2: main のスクリプトも、選んだフォルダの中のものだけ読む(名前の形は readBundle と同じ規則で先に確かめる)
+  const files: Record<string, string> = {};
+  try {
+    const main = (JSON.parse(text) as { main?: unknown }).main;
+    if (typeof main === "string") {
+      if (!FILE_NAME.test(main) || main.includes("..") || main.startsWith("/") || !main.endsWith(".js")) return "bad";
+      const { RemoteFile } = await import("@/platform/remote");
+      const f = await new RemoteFile({ kind: "pc", path: dir }, `${dir.replace(/[\\/]+$/, "")}/${main}`, main).getFile();
+      if (f.size > MAX_FILE_CHARS * 4) return "bad";
+      files[main] = await f.text();
+    }
+  } catch { return "bad"; }
+  const r = localBundle(text, files);
   return typeof r === "string" ? r : { id: r.manifest.id, version: r.manifest.version, sig: null, manifest: r.manifest, raw: r.raw };
 }
 export const isLocal = (id: string) => id.startsWith(LOCAL_PREFIX);
 export const pickFolder = () => invoke<string | null>("pick_folder", { title: null });
 export function setEnabled(id: string, on: boolean) { const s = store.items[id]; if (!s) return; s.enabled = on; persist(); rebuild(); }
-export function uninstall(id: string) { delete store.items[id]; if (store.theme?.startsWith(`${id}/`)) store.theme = null; delete status[id]; delete manifests[id]; persist(); rebuild(); }
+export function uninstall(id: string) { stopHost(id); dropExt(id); void delBlobsOf(id); delete store.items[id]; if (store.theme?.startsWith(`${id}/`)) store.theme = null; delete status[id]; delete manifests[id]; persist(); rebuild(); }
+/** 入れた拡張のファイル(main のスクリプトなど)。保存した本文から取り出す */
+export const filesOf = (id: string): Record<string, string> => { const s = store.items[id]; return (s && readBundle(s.raw)?.files) || {}; };
 export const consentOf = (id: string): Perms | null => store.items[id]?.consent ?? null;
 
 /** 認証済みの新しい版が出ていて、権限が増えないものだけ自動で入れる(未認証の版や、権限が増える版は入れない) */
@@ -149,3 +166,23 @@ export const hasNewer = (g: Listed, installed: string) => g.versions.some((v) =>
 
 // 起動後も数時間おきに、失効リストを取り直す
 if (extAvailable && typeof window !== "undefined") setInterval(() => { void checkRevocations().then(autoUpdate); }, CHECK_MS);
+
+// 開発サーバーだけ: 画面の確認(Playwright)用に、署名なしの拡張を直接入れる口。アプリ版には出ない
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  (window as unknown as { __extDev: unknown }).__extDev = {
+    install: async (text: string, files: Record<string, string>) => {
+      initDev();
+      const r = localBundle(text, files);
+      if (typeof r === "string") return r;
+      await install(r.manifest.id, r.raw, null, r.manifest.perms);
+      return r.manifest.id;
+    },
+    data: (id: string, k: string) => dataGet(id, k),
+    setEnabled: (id: string, on: boolean) => setEnabled(id, on),
+    runCommand: (id: string, cid: string) => runCommand(id, cid),
+    panelAction: (id: string, p: string, a: string, v: string) => panelAction(id, p, a, v),
+    running: (id: string) => hostRunning(id),
+  };
+  let did = false;
+  const initDev = () => { if (did) return; did = true; load(kvGet(EXT_KEY)); };
+}

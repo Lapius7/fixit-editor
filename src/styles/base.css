@@ -328,3 +328,32 @@ nav.tree .tree-row[data-sel] { --sel-line: color-mix(in srgb, var(--accent) 45%,
 nav.tree .tree-row[data-sel][data-sel-pos="first"] { --sel-top: var(--sel-line); border-radius: 7px 7px 0 0; }
 nav.tree .tree-row[data-sel][data-sel-pos="last"] { --sel-bottom: var(--sel-line); border-radius: 0 0 7px 7px; }
 nav.tree .tree-row[data-sel][data-sel-pos="only"] { --sel-top: var(--sel-line); --sel-bottom: var(--sel-line); border-radius: 7px; }
+
+/* 拡張機能の背景画像(ExtBackdrop)。壁紙と .window の間に入る */
+.ext-bg { position: absolute; background-position: center; pointer-events: none; }
+.ext-shield .ext-bg { display: none; }
+
+/* 拡張機能からの質問。見出し(どの拡張か)は本体が描くので、拡張の CSS では隠せない(質問を開いている間は拡張の CSS を止める) */
+.ext-prompt-from { margin: 0; padding: 10px 16px 0; font-size: 12px; line-height: 16px; opacity: .65; }
+.ext-prompt-title { margin: 0; padding: 4px 16px 0; font-size: 13px; line-height: 20px; }
+.sb-ext { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ext-hover { max-width: 420px; padding: 6px 10px; }
+.ext-hover-by { font-size: 11px; line-height: 16px; opacity: .6; }
+.ext-hover-text { font-size: 12px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* 拡張機能のパネル(右側)。見出しは本体、中身は宣言された部品だけ */
+.ext-dock-sub { margin-left: 8px; font: 400 12px/20px var(--font-sans); color: var(--ink-2); min-width: 0; }
+.ext-dock-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.ext-dock-h { margin: 4px 0 0; font: 600 13px/20px var(--font-sans); color: var(--ink); }
+.ext-dock-t { margin: 0; font: 400 13px/20px var(--font-sans); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ext-dock-code { margin: 0; padding: 8px 10px; border-radius: 9px; background: var(--field); box-shadow: 0 0 0 1px var(--hair) inset; font: 400 12px/18px var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ext-dock-body [data-tone="dim"] { color: var(--ink-2); }
+.ext-dock-body [data-tone="error"] { color: var(--danger, #e5484d); }
+.ext-dock-body [data-tone="ok"] { color: var(--ok, #30a46c); }
+.ext-dock-sep { border: 0; height: 1px; margin: 4px 0; background: var(--hair); }
+.ext-dock-btn { align-self: flex-start; height: 28px; padding: 0 12px; border-radius: 9px; background: var(--accent); color: #fff; font: 500 12.5px/20px var(--font-sans); }
+.ext-dock-in { height: 28px; padding: 0 10px; border: 0; outline: 0; border-radius: 9px; background: var(--field); box-shadow: 0 0 0 1px var(--hair) inset; color: var(--ink); font: 400 13px/20px var(--font-sans); }
+.ext-dock-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.ext-dock-row { width: 100%; min-height: 28px; padding: 4px 8px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border-radius: 7px; text-align: left; font: 400 13px/20px var(--font-sans); color: var(--ink); }
+button.ext-dock-row:hover { background: var(--field-on); }
+.ext-dock-detail { flex: none; max-width: 45%; font-size: 12px; color: var(--ink-2); }

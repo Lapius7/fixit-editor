@@ -2,7 +2,8 @@
 import { useEffect, useMemo, useRef } from "react";
 import { setExtraSnippets } from "@/editor/snippets";
 import { buildExtCommand, type Installed } from "./exports";
-import { activeTheme } from "./registry";
+import { activeTheme, filesOf } from "./registry";
+import { hostRunning, runCommand, runningVersion, startHost, stop as stopHost } from "./host/runtime";
 import { THEME_VARS } from "./spec";
 
 const STYLE_ID = "fixit-ext-theme";
@@ -22,7 +23,19 @@ function applyTheme(list: Installed[], sel: string | null) {
 export function useExtensionEffects(list: Installed[]) {
   const sel = activeTheme();
   useEffect(() => { applyTheme(list, sel); }, [list, sel]);
+  useEffect(() => { syncHosts(list); }, [list]);
   useEffect(() => { setExtraSnippets(list.filter((x) => x.active).flatMap((x) => x.manifest.snippets)); }, [list]);
+}
+
+/** スクリプトを持つ有効な拡張のホストを、状態に合わせて起動・停止する */
+function syncHosts(list: Installed[]) {
+  const want = new Map(list.filter((x) => x.active && x.manifest.main).map((x) => [x.id, x]));
+  for (const x of list) if (!want.has(x.id)) stopHost(x.id);
+  for (const [id, x] of want) {
+    if (hostRunning(id) && runningVersion(id) === x.manifest.version) continue;
+    stopHost(id);
+    void startHost(id, x.manifest, filesOf(id));
+  }
 }
 
 /** コマンドパレットに足す項目。実行は、呼び出し側が渡す run(コマンド行)でターミナルに打つ */
@@ -30,8 +43,11 @@ export function useExtensionCommands(list: Installed[], ctx: () => { file: strin
   // 実行の時点の「開いているファイル」を使うため、最新の ctx / run を ref に持つ(項目の作り直しは、拡張が変わったときだけ)
   const cur = useRef({ ctx, run });
   cur.current = { ctx, run };
-  return useMemo(() => list.filter((x) => x.active).flatMap((x) => x.manifest.commands.map((c) => ({
-    id: `ext-${x.id}-${c.id}`, label: `${x.manifest.name}: ${c.title}`, group,
-    run: () => { const b = buildExtCommand(c, cur.current.ctx()); if (b) cur.current.run(b.line, b.dir); },
-  }))), [list, group]);
+  return useMemo(() => list.filter((x) => x.active).flatMap((x) => [
+    ...x.manifest.commands.map((c) => ({
+      id: `ext-${x.id}-${c.id}`, label: `${x.manifest.name}: ${c.title}`, group,
+      run: () => { const b = buildExtCommand(c, cur.current.ctx()); if (b) cur.current.run(b.line, b.dir); },
+    })),
+    ...x.manifest.scriptCommands.map((c) => ({ id: `ext-${x.id}-${c.id}`, label: `${x.manifest.name}: ${c.title}`, group, run: () => runCommand(x.id, c.id) })),
+  ]), [list, group]);
 }

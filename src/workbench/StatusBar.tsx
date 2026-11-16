@@ -6,6 +6,8 @@ import { briefErr, useLspRunning, useLspStatus, type Status } from "@/editor/lsp
 import { LSP_AVAILABLE } from "@/editor/lsp/transport";
 import { LSP_SERVERS, phaseText, serverById } from "@/editor/lsp/servers";
 import type { PopKind } from "@/workbench/StatusPop";
+import { runCommand } from "@/features/extensions/host/runtime";
+import { useStatusItems } from "@/features/extensions/host/ui";
 import i18next from 'i18next'
 import { Trans } from 'react-i18next'
 
@@ -37,6 +39,7 @@ function LspItem({ k, onPop }: { k: string | null; onPop: (k: PopKind) => void }
 export default function StatusBar({ tab, cur, info, lang, dirtyCount, term, conn, connFull, connKind, onConn, ws, wsColor, onWs, onPop, onTerm, git, onGit, lspKey = null }: Props) {
   const s = useSettings();
   const text = tab?.view.kind === "text";
+  const ext = useStatusItems();
   return (
     <footer className="statusbar" role="status" aria-live="polite">
       {ws !== null && <button className="sb sb-ws" onClick={onWs} title={i18next.t("ワークスペースの切り替え・保存")}><FolderKanban />{ws ? <><i className="ws-dot" style={{ background: wsColor }} /><span className="sb-wsn">{ws}</span></> : i18next.t("ワークスペース")}</button>}
@@ -45,6 +48,9 @@ export default function StatusBar({ tab, cur, info, lang, dirtyCount, term, conn
       {LSP_AVAILABLE && <LspItem k={lspKey} onPop={onPop} />}
       {s.sbTerm && <button className="sb" data-on={term} onClick={onTerm} title={i18next.t("ターミナル")}><SquareTerminal /><Trans i18nKey="ターミナル" /></button>}
       {s.sbSaved && <span className="sb" title={i18next.t("未保存のファイル")} data-on={dirtyCount > 0}>{dirtyCount > 0 ? <><span className="sb-dot" />{dirtyCount} <Trans i18nKey="件未保存" /></> : <><Check /><Trans i18nKey="保存済み" /></>}</span>}
+      {ext.map((x) => (x.command
+        ? <button key={x.key} className="sb sb-ext" onClick={() => runCommand(x.ext, x.command)} title={`${x.name}${x.tip ? `\n${x.tip}` : ""}`}>{x.text}</button>
+        : <span key={x.key} className="sb sb-ext" title={`${x.name}${x.tip ? `\n${x.tip}` : ""}`}>{x.text}</span>))}
       <span className="sb-sp" />
       {tab && !text && <span className="sb">{info}</span>}
       {text && cur && (
