@@ -17,23 +17,30 @@ const MAX_BYTES: u64 = 400_000;
 fn hex(d: &[u8]) -> String { Sha256::digest(d).iter().map(|b| format!("{b:02x}")).collect() }
 
 #[derive(Deserialize)]
-struct Perms { #[serde(rename = "fsRead")] fs_read: bool, #[serde(rename = "fsWrite")] fs_write: bool, network: Vec<String>, exec: Vec<String> }
+struct Perms {
+    #[serde(rename = "fsRead")] fs_read: bool, #[serde(rename = "fsWrite")] fs_write: bool, network: Vec<String>, exec: Vec<String>,
+    // format 2 の権限。format 1 の本文には無い(false 扱い)
+    #[serde(default)] ui: bool, #[serde(default, rename = "editorRead")] editor_read: bool, #[serde(default, rename = "editorWrite")] editor_write: bool,
+}
 #[derive(Deserialize)]
 struct Manifest { id: String, version: String, perms: Perms }
 #[derive(Deserialize)]
 struct Bundle { format: u32, manifest: Manifest }
 
-/// 権限のハッシュ。サイトの permsHash(server/ext.ts)と同じ文字列から作る
-fn perms_hash(p: &Perms) -> String {
+/// 権限のハッシュ。サイトの permsHash(server/ext.ts)と同じ文字列から作る。
+/// format 1 は従来の 4 項目のまま(署名済みの版が変わらないように)。format 2 は新しい権限も含める
+fn perms_hash(p: &Perms, format: u32) -> String {
     let (mut n, mut e) = (p.network.clone(), p.exec.clone());
     n.sort(); e.sort();
-    let s = format!("{{\"fsRead\":{},\"fsWrite\":{},\"network\":{},\"exec\":{}}}", p.fs_read, p.fs_write, serde_json::to_string(&n).unwrap_or_default(), serde_json::to_string(&e).unwrap_or_default());
+    let mut s = format!("{{\"fsRead\":{},\"fsWrite\":{},\"network\":{},\"exec\":{}", p.fs_read, p.fs_write, serde_json::to_string(&n).unwrap_or_default(), serde_json::to_string(&e).unwrap_or_default());
+    if format >= 2 { s.push_str(&format!(",\"ui\":{},\"editorRead\":{},\"editorWrite\":{}", p.ui, p.editor_read, p.editor_write)); }
+    s.push('}');
     hex(s.as_bytes())
 }
 
-/// 署名の対象。サイトの signedPayload と同じ並び
-pub fn signed_payload(id: &str, version: &str, sha256: &str, size: u64, perms: &str) -> String {
-    format!("fixit-ext:v1\n{id}\n{version}\n{sha256}\n{size}\n{perms}")
+/// 署名の対象。サイトの signedPayload と同じ並び。format の数字が先頭に入る(v1 と v2 の署名は取り違えられない)
+pub fn signed_payload(format: u32, id: &str, version: &str, sha256: &str, size: u64, perms: &str) -> String {
+    format!("fixit-ext:v{format}\n{id}\n{version}\n{sha256}\n{size}\n{perms}")
 }
 /// 失効リストの署名の対象。サイトの revocationPayload と同じ並び(items は並べ替えてから)
 pub fn revocation_payload(ts: u64, items: &[String]) -> String {
@@ -59,9 +66,9 @@ fn check_sig(keys: &[&str], payload: &str, sig_b64: &str) -> Result<(), String> 
 pub fn verify_bundle_with(keys: &[&str], raw: &[u8], sig_b64: &str) -> Result<(String, String), String> {
     if raw.len() as u64 > MAX_BYTES { return Err("ファイルが大きすぎます".into()); }
     let b: Bundle = serde_json::from_slice(raw).map_err(|_| "拡張機能の形式ではありません".to_string())?;
-    if b.format != 1 { return Err("対応していない形式です".into()); }
+    if b.format != 1 && b.format != 2 { return Err("対応していない形式です".into()); }
     let m = &b.manifest;
-    check_sig(keys, &signed_payload(&m.id, &m.version, &hex(raw), raw.len() as u64, &perms_hash(&m.perms)), sig_b64)?;
+    check_sig(keys, &signed_payload(b.format, &m.id, &m.version, &hex(raw), raw.len() as u64, &perms_hash(&m.perms, b.format)), sig_b64)?;
     Ok((m.id.clone(), m.version.clone()))
 }
 pub fn verify_bundle(raw: &[u8], sig_b64: &str) -> Result<(String, String), String> { verify_bundle_with(PUBKEYS, raw, sig_b64) }
@@ -101,15 +108,46 @@ mod tests {
     fn pubkey(k: &SigningKey) -> String { STANDARD.encode(k.verifying_key().to_bytes()) }
     fn sign(k: &SigningKey, body: &str) -> String {
         let b: Bundle = serde_json::from_str(body).unwrap();
-        let p = signed_payload(&b.manifest.id, &b.manifest.version, &hex(body.as_bytes()), body.len() as u64, &perms_hash(&b.manifest.perms));
+        let p = signed_payload(b.format, &b.manifest.id, &b.manifest.version, &hex(body.as_bytes()), body.len() as u64, &perms_hash(&b.manifest.perms, b.format));
         STANDARD.encode(k.sign(p.as_bytes()).to_bytes())
     }
 
     #[test]
     fn perms_hash_matches_server() {
-        // bun で server/ext.ts の permsHash({fsRead:false,fsWrite:false,network:[],exec:["echo"]}) を計算した値
-        let p = Perms { fs_read: false, fs_write: false, network: vec![], exec: vec!["echo".into()] };
-        assert_eq!(perms_hash(&p), hex(br#"{"fsRead":false,"fsWrite":false,"network":[],"exec":["echo"]}"#));
+        // bun で server/ext.ts の permsHash(権限, format) を計算した値(format 1 は 4 項目のまま、format 2 は新しい権限も含む)
+        let p = Perms { fs_read: false, fs_write: false, network: vec![], exec: vec!["echo".into()], ui: false, editor_read: false, editor_write: false };
+        assert_eq!(perms_hash(&p, 1), hex(br#"{"fsRead":false,"fsWrite":false,"network":[],"exec":["echo"]}"#));
+        let all = Perms { fs_read: true, fs_write: true, network: vec!["api.example.com".into()], exec: vec!["echo".into()], ui: true, editor_read: true, editor_write: true };
+        assert_eq!(perms_hash(&all, 2), "2c008a25c099ded16d5d9fac33a761335fcf163f8c2e13695fe78ff36c819891");
+        // format 1 の署名には、新しい権限は影響しない(従来の署名のまま通る)
+        assert_eq!(perms_hash(&all, 1), hex(br#"{"fsRead":true,"fsWrite":true,"network":["api.example.com"],"exec":["echo"]}"#));
+    }
+    // format 2 の本文(サーバーの parseBundle が作る形に合わせて手で書いたもの。ハッシュの一致は perms_hash_matches_server が見る)
+    const BODY2: &str = r##"{"format":2,"manifest":{"id":"lap.demo","name":"Demo","version":"1.0.0","description":"","perms":{"fsRead":false,"fsWrite":false,"network":[],"exec":[],"ui":true,"editorRead":false,"editorWrite":false},"themes":[],"snippets":[],"commands":[],"main":"extension.js","settings":[],"scriptCommands":[{"id":"go","title":"Go"}],"keybindings":[],"menus":[]},"files":{"extension.js":"exports.activate = () => {};\n"}}"##;
+    #[test]
+    fn accepts_valid_v2() {
+        let k = key(1);
+        let (id, v) = verify_bundle_with(&[&pubkey(&k)], BODY2.as_bytes(), &sign(&k, BODY2)).unwrap();
+        assert_eq!((id.as_str(), v.as_str()), ("lap.demo", "1.0.0"));
+    }
+    #[test]
+    fn v2_is_bound_to_permissions_and_script() {
+        let k = key(1);
+        let sig = sign(&k, BODY2);
+        let pk = pubkey(&k);
+        // 権限を足す・スクリプトを書き換える・format を 1 にして権限ハッシュの対象から外す、はどれも合わなくなる
+        for bad in [BODY2.replace(r#""ui":true"#, r#""ui":true,"x":1"#), BODY2.replace(r#""editorWrite":false"#, r#""editorWrite":true"#), BODY2.replace(r#""network":[]"#, r#""network":["evil.example.com"]"#), BODY2.replace("exports.activate = () => {};", "exports.activate = () => { evil() };"), BODY2.replacen(r#""format":2"#, r#""format":1"#, 1)] {
+            assert!(verify_bundle_with(&[&pk], bad.as_bytes(), &sig).is_err(), "{bad}");
+        }
+    }
+    #[test]
+    fn v1_and_v2_signatures_are_not_interchangeable() {
+        // v1 として署名したものを format 2 の本文には使えない(先頭が fixit-ext:v1 / v2 で違う)
+        let k = key(1);
+        let b: Bundle = serde_json::from_str(BODY2).unwrap();
+        let as_v1 = signed_payload(1, &b.manifest.id, &b.manifest.version, &hex(BODY2.as_bytes()), BODY2.len() as u64, &perms_hash(&b.manifest.perms, 1));
+        let sig = STANDARD.encode(k.sign(as_v1.as_bytes()).to_bytes());
+        assert!(verify_bundle_with(&[&pubkey(&k)], BODY2.as_bytes(), &sig).is_err());
     }
     #[test]
     fn accepts_valid() {
