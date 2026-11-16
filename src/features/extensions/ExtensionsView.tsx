@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import i18next from "i18next";
 import { Trans } from "react-i18next";
-import { Search as SearchIcon, X } from "lucide-react";
+import { ExternalLink, Search as SearchIcon, X } from "lucide-react";
+import { openExternal } from "@/features/account/auth";
+import { siteLang } from "@/i18n";
+import { SITE_URL } from "@/shared/config";
 import { ms } from "@/features/settings/settings";
 import { notify } from "@/shared/notify";
 import { checkRevocations, extAvailable, fetchBundle, fetchList, hasNewer, install, isLocal, pickFolder, readLocal, setEnabled, setTheme, uninstall, useInstalled, activeTheme, type Installed, type Listed, type Status } from "./registry";
@@ -140,9 +143,12 @@ export function ExtensionsView({ out, onClose }: { out?: boolean; onClose: () =>
         {!extAvailable ? <p className="ex-none">{i18next.t("拡張機能はデスクトップ版で使えます")}</p> : (
           <>
             {pick ? <div className="ex-body"><Confirm {...pick} onClose={() => setPick(null)} /></div> : <>
-            <div className="seg" role="tablist">
-              <button role="tab" aria-selected={tab === "mine"} data-on={tab === "mine"} onClick={() => setTab("mine")}>{i18next.t("入れた拡張機能")}{installed.length ? ` ${installed.length}` : ""}</button>
-              <button role="tab" aria-selected={tab === "browse"} data-on={tab === "browse"} onClick={() => setTab("browse")}>{i18next.t("探す")}</button>
+            <div className="ex-tabs">
+              <div className="seg" role="tablist">
+                <button role="tab" aria-selected={tab === "mine"} aria-pressed={tab === "mine"} onClick={() => setTab("mine")}>{i18next.t("入れた拡張機能")}{installed.length ? ` ${installed.length}` : ""}</button>
+                <button role="tab" aria-selected={tab === "browse"} aria-pressed={tab === "browse"} onClick={() => setTab("browse")}>{i18next.t("探す")}</button>
+              </div>
+              <button className="chipbtn" onClick={() => void openExternal(`${SITE_URL}/${siteLang()}/extensions`)}>{i18next.t("Web の拡張機能ページ")}<ExternalLink size={13} /></button>
             </div>
             <div className="ex-bar">
               <div className="sp-box">

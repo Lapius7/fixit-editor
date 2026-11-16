@@ -1845,5 +1845,6 @@
   "認証済みのみ": "Verified only",
   "「{{q}}」に合う拡張機能はありません": "No extensions match \"{{q}}\"",
   "ほかの版 ({{n}})": "Other versions ({{n}})",
-  "更新する": "Update"
+  "更新する": "Update",
+  "Web の拡張機能ページ": "Extensions on the web"
 }

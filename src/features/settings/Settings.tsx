@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { RotateCcw, Search as SearchIcon, Download, Upload, X, RefreshCw, Plus, Globe, ScrollText, BookOpen, ExternalLink } from "lucide-react";
 import { openExternal } from "@/features/account/auth";
 import { SITE_URL, REPO_URL } from "@/shared/config";
+import { siteLang } from "@/i18n";
 import { RUN_DEFAULTS, RUN_MAX, cleanExt, validExt } from "@/features/run/runners";
 import { useUpdateState } from "@/features/update/update";
 import { IS_TAURI } from "@/shared/chrome";
@@ -21,7 +22,6 @@ import i18next from 'i18next'
 import { Trans } from 'react-i18next'
 
 // 設定の左下から開く先。パスは公式サイトの言語つきの URL の後ろにつなぐ
-const siteLang = () => { const l = (i18next.resolvedLanguage || i18next.language || "ja").slice(0, 2); return l === "en" || l === "ko" ? l : "ja"; };
 const LINKS: [string, string, ReactElement][] = [
   ["公式サイト", "", <Globe key="g" size={14} />],
   ["ドキュメント", "/docs", <BookOpen key="d" size={14} />],

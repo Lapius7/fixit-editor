@@ -36,4 +36,7 @@ const apply = () => {
 };
 apply();
 subscribe(apply);
+/** サイト(fixit-editor.lapius7.com)の言語パス。対応外の言語は日本語 */
+export const siteLang = (): Lang => { const l = (i18next.resolvedLanguage || i18next.language || "ja").slice(0, 2); return l === "en" || l === "ko" ? l : "ja"; };
+
 export default i18next;

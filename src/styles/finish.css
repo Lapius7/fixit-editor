@@ -266,9 +266,10 @@ html.theme-fade, html.theme-fade * { transition: background-color calc(.45s * va
 .drag-chip > span { overflow: hidden; text-overflow: ellipsis; }
 
 /* 拡張機能 */
-.dlg.ex { width: min(640px, calc(100vw - 32px)); padding: 18px 20px 14px; }
-.dlg.ex .seg { margin-bottom: 10px; }
-.ex-body { max-height: min(56vh, 480px); overflow-y: auto; overscroll-behavior: contain; }
+.dlg.ex { width: min(640px, calc(100vw - 32px)); height: min(560px, calc(100vh - 32px)); display: flex; flex-direction: column; padding: 18px 20px 14px; }
+.ex-tabs { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.ex-tabs .chipbtn svg { flex: none; }
+.ex-body { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .ex-list, .ex-vers, .ex-perms { margin: 0; padding: 0; list-style: none; }
 .ex-list { display: grid; gap: 8px; }
 .ex-item { padding: 12px 14px; border-radius: 12px; background: var(--field); box-shadow: 0 0 0 1px var(--hair) inset; }
