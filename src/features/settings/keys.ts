@@ -1,7 +1,7 @@
 // ショートカットの定義。key は "Mod+Shift+P" の形(Mod は Ctrl または Cmd)。空文字は未割り当て
 export type KeyDef = { id: string; label: string; group: string; key: string; scope?: "editor" | "tree"; inTerm?: boolean };
 
-const G = { app: "全般", view: "表示", tab: "タブ", find: "検索", edit: "編集", line: "行", fold: "折りたたみ", sel: "選択", term: "ターミナル", tree: "ファイル一覧", lsp: "言語機能" };
+const G = { app: "全般", view: "表示", tab: "タブ", find: "検索", edit: "編集", line: "行", fold: "折りたたみ", sel: "選択", term: "ターミナル", tree: "ファイル一覧", lsp: "言語機能", ai: "AI" };
 const d = (group: string, id: string, label: string, key: string, o: Partial<KeyDef> = {}): KeyDef => ({ id, label, group, key, ...o });
 const e = { scope: "editor" as const };
 const t = { scope: "tree" as const };
@@ -22,6 +22,17 @@ export const KEYS: KeyDef[] = [
   d(G.app, "newFile", "新規ファイル", "Alt+N"),
   d(G.app, "settings", "設定", "Mod+,", { inTerm: true }),
   d(G.app, "shortcuts", "キーボードショートカット", "Mod+Alt+K", { inTerm: true }),
+  d(G.app, "newWindow", "新しいウィンドウ", "Mod+Shift+N", { inTerm: true }),
+  d(G.app, "newWindowHere", "このフォルダを新しいウィンドウで開く", ""),
+  d(G.app, "closeWindow", "ウィンドウを閉じる", "Mod+Shift+W", { inTerm: true }),
+  d(G.app, "refresh", "ファイル一覧を更新", "Alt+Shift+R"),
+  d(G.app, "newDir", "新規フォルダ", "Alt+Shift+N"),
+  d(G.app, "copyPath", "開いているファイルのパスをコピー", "Mod+Shift+C"),
+  d(G.app, "gitPanel", "Git パネルの表示", "Mod+Alt+G"),
+  d(G.app, "portsPanel", "ポート管理パネルの表示", "Mod+Alt+D"),
+  d(G.app, "github", "GitHub の管理(Issue・PR・Actions など)", "Mod+Alt+Shift+G"),
+  d(G.app, "feedback", "フィードバックを送る", ""),
+  d(G.app, "checkUpdate", "更新を確認", ""),
   d(G.view, "toggleSide", "サイドバーの表示", "Mod+B", { inTerm: true }),
   d(G.view, "togglePreview", "Markdown・HTML のプレビューを切り替え", "Mod+Alt+V"),
   d(G.view, "toggleBrowser", "ブラウザの表示", "Mod+Alt+B"),
@@ -36,6 +47,10 @@ export const KEYS: KeyDef[] = [
   d(G.view, "closePane", "分割を解除して、この画面だけにする", "", { inTerm: true }),
   d(G.view, "explorer", "ファイル一覧を表示", "Mod+Shift+E", { inTerm: true }),
   d(G.view, "toggleTheme", "ライト / ダークを切り替え", "Mod+Alt+T", { inTerm: true }),
+  d(G.view, "modeLight", "テーマ: ライト", ""),
+  d(G.view, "modeDark", "テーマ: ダーク", ""),
+  d(G.view, "modeAuto", "テーマ: OS に合わせる", ""),
+  d(G.view, "bgColor", "背景の色を変える", ""),
   d(G.view, "themePanel", "テーマを編集(右のパネル)", "Mod+Alt+Shift+T", { inTerm: true }),
   d(G.view, "zoomIn", "文字を大きく", "Mod+="),
   d(G.view, "zoomOut", "文字を小さく", "Mod+-"),
@@ -46,6 +61,7 @@ export const KEYS: KeyDef[] = [
   d(G.tab, "nextTab", "次のタブ", "Alt+]"),
   d(G.tab, "prevTab", "前のタブ", "Alt+["),
   d(G.tab, "pinTab", "タブのピン留めを切り替える", "Alt+P"),
+  ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => d(G.tab, `goTab${n}`, `${n} 番目のタブへ移る`, `Alt+${n}`)),
   d(G.edit, "shot", "コードを画像にする(選択範囲、なければ全体)", "Mod+Alt+P"),
   d(G.find, "searchAll", "全文検索", "Mod+Shift+F", { inTerm: true }),
   d(G.find, "find", "検索", "Mod+F", e),
@@ -58,6 +74,7 @@ export const KEYS: KeyDef[] = [
   d(G.sel, "selectNext", "次の同じ語も選択", "Mod+D", e),
   d(G.sel, "selectMatches", "同じ語をすべて選択", "Mod+Shift+L", e),
   d(G.sel, "selectLine", "行を選択", "Mod+L", e),
+  d(G.sel, "selectAll", "すべて選択", "Mod+A", e),
   d(G.edit, "undo", "元に戻す", "Mod+Z", e),
   d(G.edit, "redo", "やり直す", "Mod+Shift+Z", e),
   d(G.edit, "redoAlt", "やり直す(別のキー)", "Mod+Y", e),
@@ -97,6 +114,10 @@ export const KEYS: KeyDef[] = [
   d(G.lsp, "lspRename", "シンボルの名前を変える", "F2", e),
   d(G.lsp, "lspAction", "コードアクション(クイックフィックス)", "Mod+.", e),
   d(G.lsp, "lspSig", "引数のヒントを出す", "Mod+Shift+Space", e),
+  d(G.ai, "aiSummarize", "選択範囲(なければファイル全体)を AI で要約", ""),
+  d(G.ai, "aiExplain", "選択範囲(なければファイル全体)を AI で説明", ""),
+  d(G.ai, "aiReview", "選択範囲(なければファイル全体)の問題点を AI で探す", ""),
+  d(G.ai, "aiComment", "選択範囲(なければファイル全体)に AI でコメントを足す", ""),
 ];
 
 export const DEF = Object.fromEntries(KEYS.map((k) => [k.id, k])) as Record<string, KeyDef>;

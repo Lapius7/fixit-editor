@@ -73,7 +73,7 @@ import { leaveRows } from "@/workbench/treeAnim";
 import { listShells, type ShellOpt } from "@/platform/pty";
 import { RemoteFile, checkDir, execCmd, connKey, isRemote, remoteSig, connLabel, lastDir, normConn, showPath, pushRecent, rootHandle, sshUrl, type Conn, type RemoteDir } from "@/platform/remote";
 import { DEMO_NAME, DEMO_TREE } from "@/shared/demo";
-import { IS_TAURI } from "@/shared/chrome";
+import { IS_TAURI, winAct } from "@/shared/chrome";
 import { canMove, copyInto, createDir, createFile, freeEntryName, moveEntry, pickFolder, pickPcFolder, isJunk, readDir, removeEntry, renameFile, supportsFs, writeFile, writeBlob, freeName, type Node } from "@/platform/fs";
 import { diskText, getFile, isImageName, load, norm } from "@/platform/load";
 import { copyImage } from "@/shared/clipimage";
@@ -815,7 +815,10 @@ export default function App() {
       try {
         // 「fixit ./」のように、起動のときにフォルダを渡されたら、前回のワークスペースではなくそのフォルダを開く
         const given = IS_TAURI ? await import("@tauri-apps/api/core").then((m) => m.invoke<string | null>("launch_target")).catch(() => null) : null;
-        if (given) { setCurrent(null); const conn = normConn({ kind: "pc", path: given }); pushRecent(conn); await connect(conn); }
+        // 「新しいウィンドウ」で起動したときは、前回のワークスペースを開かず、何も開いていない状態で始める(前回の記録も消さない)
+        const blank = !given && IS_TAURI ? await import("@tauri-apps/api/core").then((m) => m.invoke<boolean>("launch_blank")).catch(() => false) : false;
+        if (blank) { /* 何もしない */ }
+        else if (given) { setCurrent(null); const conn = normConn({ kind: "pc", path: given }); pushRecent(conn); await connect(conn); }
         else if (st.wsRestore && w && w.root.kind !== "demo") { flash(i18next.t("ワークスペースを開いています…")); await openWs(w, false); }
         else if (w) setCurrent(null);
       } catch (e) {
@@ -1609,12 +1612,35 @@ export default function App() {
 
   /* ---------- コマンド ---------- */
   const ev = () => views.current[fp];
+  // 新しいウィンドウ(アプリ版は同じ exe をもう 1 つ起動。ブラウザ版は新しいタブ)
+  const newWindow = async (dir?: string) => {
+    if (!IS_TAURI) { window.open(location.href, "_blank"); return; }
+    try { await import("@tauri-apps/api/core").then((m) => m.invoke("new_window", { dir: dir ?? null })); } catch (e) { flash(String(e), "error"); }
+  };
   const run = (id: string) => {
     const f: Record<string, () => unknown> = {
       treeRename: () => { const l = selectedNodes(); if (l.length === 1) treeRef.current.rename(l[0]); },
       treeDelete: () => { const l = selectedNodes(); if (l.length) treeRef.current.removeMany(l); },
       treeCopy: () => { const l = selectedNodes(); if (l.length) void treeRef.current.copyTree("copy", l); },
       treeCut: () => { const l = selectedNodes(); if (l.length) void treeRef.current.copyTree("cut", l); },
+      newWindow: () => void newWindow(),
+      newWindowHere: () => void newWindow(root.conn?.kind === "pc" ? root.conn.path : undefined),
+      closeWindow: () => { if (IS_TAURI) void winAct("close"); else window.close(); },
+      refresh: () => void reload(),
+      newDir: () => create("dir", null),
+      copyPath: () => { if (act[fp]) copyText(act[fp]!.slice(1)); },
+      gitPanel: () => { if (root.conn) setGitOpen((v) => !v); },
+      portsPanel: () => setPortsOpen((v) => !v),
+      github: () => { if (root.conn) setGhOpen(true); },
+      feedback: () => setFbOpen(true),
+      checkUpdate: () => { if (IS_TAURI) void checkNow(); },
+      modeLight: () => update({ mode: "light" }), modeDark: () => update({ mode: "dark" }), modeAuto: () => update({ mode: "auto" }),
+      bgColor: () => setSetts("look"),
+      aiSummarize: () => { const v = ev(); if (v) askAi(v, "summarize"); },
+      aiExplain: () => { const v = ev(); if (v) askAi(v, "explain"); },
+      aiReview: () => { const v = ev(); if (v) askAi(v, "review"); },
+      aiComment: () => { const v = ev(); if (v) askAi(v, "comment"); },
+      ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [`goTab${n}`, () => { const t = paneTabs(fp)[n - 1]; if (t) open(t.node); }])),
       palette: () => setPal(true), quickOpen: () => setQo(true), save, openFolder, closeFolder, addFolder, addRemote: () => { if (root.handle) { setCnAdd(true); setCn(true); } }, connect: () => { setCnAdd(false); setCn(true); }, workspaces: () => setWsDlg("ws"), profiles: () => setWsDlg("profile"), saveWorkspace: quickSave, newFile: () => create("file", null), settings: () => setSetts("look"), shortcuts: () => setSetts("keys"),
       newTerm: () => addTerm(), runFile, closeTerm: () => alive().length && endTerm(actT), nextTerm: () => stepTerm(1), prevTerm: () => stepTerm(-1),
       renameTerm: () => { if (alive().length) { showTerm(true); setRenaming(actT); } }, clearTerm: () => apis.current.get(actT)?.clear(),
@@ -1707,19 +1733,11 @@ export default function App() {
 
   const cmds: Cmd[] = useMemo(() => [
     ...KEYS.map((k) => ({ id: k.id, label: i18next.t(k.label), group: i18next.t(k.group), keys: keyOf(k.id, st.keys), run: () => run(k.id) })),
-    { id: "m-light", label: i18next.t("テーマ: ライト"), group: i18next.t("表示"), run: () => update({ mode: "light" }) },
-    { id: "m-dark", label: i18next.t("テーマ: ダーク"), group: i18next.t("表示"), run: () => update({ mode: "dark" }) },
-    { id: "m-auto", label: i18next.t("テーマ: OS に合わせる"), group: i18next.t("表示"), run: () => update({ mode: "auto" }) },
-    { id: "bg", label: i18next.t("背景の色を変える"), group: i18next.t("表示"), run: () => setSetts("look") },
-    { id: "refresh", label: i18next.t("ファイル一覧を更新"), group: i18next.t("全般"), run: reload },
-    { id: "newDir", label: i18next.t("新規フォルダ"), group: i18next.t("全般"), run: () => create("dir", null) },
-    { id: "dela-pub", label: i18next.t("ポート管理パネルの表示"), group: i18next.t("全般"), run: () => setPortsOpen((v) => !v) },
     ...delas.filter((d) => d.url).flatMap((d) => [
       { id: `dela-copy-${d.id}`, label: i18next.t("公開 URL をコピー(ポート {{port}})", { port: d.port }), group: i18next.t("全般"), run: () => copyText(d.url!) },
       { id: `dela-open-${d.id}`, label: i18next.t("公開 URL をブラウザで開く(ポート {{port}})", { port: d.port }), group: i18next.t("全般"), run: () => void openExternal(d.url!) },
     ]),
     ...delas.map((d) => ({ id: `dela-stop-${d.id}`, label: i18next.t("公開を止める(ポート {{port}})", { port: d.port }), group: i18next.t("全般"), run: () => stopDela(d.id) })),
-    { id: "copyPath", label: i18next.t("開いているファイルのパスをコピー"), group: i18next.t("全般"), run: () => act[fp] && copyText(act[fp]!.slice(1)) },
   ], [st.keys, tabs, act, fp, split, term, st.fontSize, st.wrap, st.mode, root, delas]); // eslint-disable-line react-hooks/exhaustive-deps
   const wsCmds: Cmd[] = [
     ...cmds,
@@ -1937,7 +1955,7 @@ export default function App() {
         { label: i18next.t("切り取り"), icon: ic(Scissors), keys: "Mod+X", run: r("cut") },
         { label: i18next.t("コピー"), icon: ic(Copy), keys: "Mod+C", run: r("copy") },
         { label: i18next.t("貼り付け"), icon: ic(ClipboardPaste), keys: "Mod+V", run: r("paste") },
-        { label: i18next.t("すべて選択"), icon: ic(MousePointerClick), keys: "Mod+A", run: () => { v.focus(); v.dispatch({ selection: { anchor: 0, head: v.state.doc.length } }); } },
+        { label: i18next.t("すべて選択"), icon: ic(MousePointerClick), keys: K("selectAll"), run: () => { v.focus(); v.dispatch({ selection: { anchor: 0, head: v.state.doc.length } }); } },
         { type: "sep" },
         { label: i18next.t("選択"), icon: ic(MousePointerClick), sub: [
           { label: i18next.t("次の同じ語も選択"), keys: K("selectNext"), run: r("selectNext") },

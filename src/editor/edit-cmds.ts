@@ -1,7 +1,7 @@
 import { readClip, writeClip } from "@/platform/clipboard";
 import { EditorSelection } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
-import { copyLineDown, copyLineUp, deleteLine, indentLess, indentMore, insertBlankLine, moveLineDown, moveLineUp, redo, selectLine, toggleBlockComment, toggleComment, undo } from "@codemirror/commands";
+import { copyLineDown, copyLineUp, deleteLine, indentLess, indentMore, insertBlankLine, moveLineDown, moveLineUp, redo, selectAll, selectLine, toggleBlockComment, toggleComment, undo } from "@codemirror/commands";
 import { findNext, findPrevious, gotoLine, openSearchPanel, selectNextOccurrence, selectSelectionMatches } from "@codemirror/search";
 import { foldAll, foldCode, unfoldAll, unfoldCode } from "@codemirror/language";
 
@@ -39,7 +39,7 @@ const clip = (s: string) => writeClip(s);
 
 export const EDIT: Record<string, Run> = {
   ...Object.fromEntries(["lspDef", "lspRefs", "lspRename", "lspAction", "lspSig"].map((id) => [id, (v: EditorView) => !!(lspRun[id]?.(v) || svcRun[id]?.(v))])),
-  undo, redo, redoAlt: redo, comment: toggleComment, blockComment: toggleBlockComment, indentMore, indentLess,
+  selectAll, undo, redo, redoAlt: redo, comment: toggleComment, blockComment: toggleBlockComment, indentMore, indentLess,
   dupDown: copyLineDown, dupUp: copyLineUp, moveDown: moveLineDown, moveUp: moveLineUp, deleteLine, blankBelow: insertBlankLine, blankAbove, selectLine,
   find: openSearchPanel, replace: openSearchPanel, findNext, findPrev: findPrevious, gotoLine, selectNext: selectNextOccurrence, selectMatches: selectSelectionMatches,
   fold: foldCode, unfold: unfoldCode, foldAll, unfoldAll,

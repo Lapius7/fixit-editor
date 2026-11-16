@@ -281,6 +281,20 @@ fn launch_target() -> Option<String> {
     None
 }
 
+// 起動のとき --new が付いていたら、前回のワークスペースを開かずに空の状態で始める(「新しいウィンドウ」で起動したとき)
+#[tauri::command]
+fn launch_blank() -> bool { std::env::args_os().skip(1).any(|a| a == "--new") }
+
+// 新しいウィンドウ。同じ exe をもう 1 つ起動する(ウィンドウごとに別のプロセス)。dir があればそのフォルダを、なければ空の状態で開く
+#[tauri::command]
+fn new_window(dir: Option<String>) -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let mut c = std::process::Command::new(&exe);
+    if let Some(p) = exe.parent() { c.current_dir(p); }
+    match dir.filter(|d| !d.is_empty()) { Some(d) => { c.arg(d); } None => { c.arg("--new"); } }
+    c.spawn().map(|_| ()).map_err(|e| format!("新しいウィンドウを開けませんでした: {e}"))
+}
+
 // ---- アプリのデータ(設定・AI の会話履歴など)。%APPDATA%\Fixit の JSON ファイルに残す ----
 fn data_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     use tauri::Manager;
@@ -595,7 +609,7 @@ fn main() {
             tauri::webview::PermissionKind::ClipboardRead => tauri::webview::PermissionResponse::Allow,
             _ => tauri::webview::PermissionResponse::Default,
         })
-        .invoke_handler(tauri::generate_handler![pv_put, pv_drop, clip_read, clip_write, clip_files, pty_open, pty_shells, pty_write, pty_resize, pty_close, lsp_start, copilot_chat, lsp_send, lsp_stats, lsp_stop, launch_target, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_usage, claude_login, claude_cancel, copilot_device, gh_device, gh_poll, copilot_poll, copilot_token, store_load, store_read, store_stamps, store_save, apply_update, list_fonts, open_url, os_open])
+        .invoke_handler(tauri::generate_handler![launch_blank, new_window, pv_put, pv_drop, clip_read, clip_write, clip_files, pty_open, pty_shells, pty_write, pty_resize, pty_close, lsp_start, copilot_chat, lsp_send, lsp_stats, lsp_stop, launch_target, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_usage, claude_login, claude_cancel, copilot_device, gh_device, gh_poll, copilot_poll, copilot_token, store_load, store_read, store_stamps, store_save, apply_update, list_fonts, open_url, os_open])
         .build(tauri::generate_context!())
         .expect("フィクシットエディタを起動できませんでした")
         .run(|app, ev| {
