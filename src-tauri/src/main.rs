@@ -4,7 +4,7 @@
 use base64::{engine::general_purpose::STANDARD, Engine};
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use std::{collections::HashMap, io::{Read, Write}, sync::Mutex, thread};
-use fixit_core::{claude, copilot, fonts, fs as fxfs, lsp, store, update};
+use fixit_core::{claude, copilot, ext, fonts, fs as fxfs, lsp, store, update};
 use std::sync::Arc;
 use tauri::{ipc::{Channel, Request, Response}, AppHandle, Emitter, State};
 
@@ -541,6 +541,24 @@ async fn apply_update(app: AppHandle, version: String, sha256: String, size: u64
     Ok(())
 }
 
+// 拡張機能。取得はサイトの /api/ext/ だけ。検証は、サイトの署名鍵(fixit-core の ext.rs に埋め込んだ公開鍵)で行う
+// 自作の拡張機能(フォルダ)の fixit-extension.json を読む。フォルダは、利用者が選んだもの
+#[tauri::command]
+async fn ext_read_local(dir: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || ext::read_local_manifest(&dir)).await.map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn ext_get(path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let b = ext::fetch(&format!("{}{}", ext::API_PREFIX, path.trim_start_matches('/')))?;
+        String::from_utf8(b).map_err(|_| "不正な応答です".to_string())
+    }).await.map_err(|e| e.to_string())?
+}
+#[tauri::command]
+fn ext_verify(raw: String, sig: String) -> Result<(String, String), String> { ext::verify_bundle(raw.as_bytes(), &sig) }
+#[tauri::command]
+fn ext_verify_revoked(ts: u64, items: Vec<String>, sig: String) -> Result<(), String> { ext::verify_revoked(ts, &items, &sig) }
+
 // クリップボード。WebView の navigator.clipboard.readText は「クリップボードの参照を求めています」と
 // ブラウザの許可を聞いてくるので、アプリ版の読み書きは OS のクリップボードを直接使う
 #[tauri::command]
@@ -609,7 +627,7 @@ fn main() {
             tauri::webview::PermissionKind::ClipboardRead => tauri::webview::PermissionResponse::Allow,
             _ => tauri::webview::PermissionResponse::Default,
         })
-        .invoke_handler(tauri::generate_handler![launch_blank, new_window, pv_put, pv_drop, clip_read, clip_write, clip_files, pty_open, pty_shells, pty_write, pty_resize, pty_close, lsp_start, copilot_chat, lsp_send, lsp_stats, lsp_stop, launch_target, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_usage, claude_login, claude_cancel, copilot_device, gh_device, gh_poll, copilot_poll, copilot_token, store_load, store_read, store_stamps, store_save, apply_update, list_fonts, open_url, os_open])
+        .invoke_handler(tauri::generate_handler![launch_blank, new_window, pv_put, pv_drop, clip_read, clip_write, clip_files, pty_open, pty_shells, pty_write, pty_resize, pty_close, lsp_start, copilot_chat, lsp_send, lsp_stats, lsp_stop, launch_target, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_usage, claude_login, claude_cancel, copilot_device, gh_device, gh_poll, copilot_poll, copilot_token, store_load, store_read, store_stamps, store_save, apply_update, ext_get, ext_read_local, ext_verify, ext_verify_revoked, list_fonts, open_url, os_open])
         .build(tauri::generate_context!())
         .expect("フィクシットエディタを起動できませんでした")
         .run(|app, ev| {

@@ -45,6 +45,9 @@ import { useReplies } from "@/features/account/replies";
 import { Avatar } from "@/features/account/AccountUI";
 import UpdateView from "@/features/update/UpdateView";
 import { runCheck, useUpdateState } from "@/features/update/update";
+import { ExtensionsView } from "@/features/extensions/ExtensionsView";
+import { useExtensionCommands, useExtensionEffects } from "@/features/extensions/apply";
+import { extAvailable, initExtensions, useInstalled } from "@/features/extensions/registry";
 import SearchPanel from "@/workbench/SearchPanel";
 import ContextMenu, { type Item } from "@/workbench/ContextMenu";
 import Dialog from "@/workbench/Dialog";
@@ -216,6 +219,9 @@ export default function App() {
   const [lh, setLh] = useState<string | null>(null); // ローカル履歴を開いているファイルのパス
   const [statsOpen, setStatsOpen] = useState(false); const [ghOpen, setGhOpen] = useState(false);
   const [fbOpen, setFbOpen] = useState(false);
+  const [extOpen, setExtOpen] = useState(false);
+  const extList = useInstalled();
+  useExtensionEffects(extList);
   const { found: upd } = useUpdateState();
   const [updOpen, setUpdOpen] = useState(false);
   // 手動の確認。見つかれば確認の画面を開く
@@ -225,6 +231,8 @@ export default function App() {
   useEffect(() => { if (!setupOpen) { sendPing(); installErrorHooks(); startUsageReports(); } }, [setupOpen]);
   // 起動して少ししたら、新しい版がないか確かめる(あれば右上に印を出す)。失敗しても何も出さない
   useEffect(() => { if (setupOpen || !import.meta.env.PROD) return; const t = setTimeout(() => { void runCheck(); }, 6000); return () => clearTimeout(t); }, [setupOpen]);
+  // 入れた拡張機能の読み込み(署名の確認と、失効リストの取得)。入れたものがなければ、通信しない
+  useEffect(() => { if (setupOpen) return; const t = setTimeout(() => { void initExtensions(); }, 3000); return () => clearTimeout(t); }, [setupOpen]);
   const [pop, setPop] = useState<PopKind | null>(null);
   const wsStore = useWorkspaces();
   const pfStore = useProfiles();
@@ -274,7 +282,7 @@ export default function App() {
   const [dlg, setDlg] = useState<Dlg | null>(null);
   // 外から閉じられても、閉じるアニメーションが終わるまで残す
   const pQo = usePresence(qo), pPal = usePresence(pal), pSetts = usePresence(setts), pDlg = usePresence(dlg), pCn = usePresence(cn);
-  const pTp = usePresence(tp, 400), pWs = usePresence(wsDlg), pLh = usePresence(lh), pStats = usePresence(statsOpen), pGh = usePresence(ghOpen), pFb = usePresence(fbOpen), pUp = usePresence(updOpen), pSetup = usePresence(setupOpen), pPop = usePresence(pop, 140), pMenu = usePresence(menu, 140);
+  const pTp = usePresence(tp, 400), pWs = usePresence(wsDlg), pLh = usePresence(lh), pStats = usePresence(statsOpen), pGh = usePresence(ghOpen), pFb = usePresence(fbOpen), pUp = usePresence(updOpen), pExt = usePresence(extOpen), pSetup = usePresence(setupOpen), pPop = usePresence(pop, 140), pMenu = usePresence(menu, 140);
   const views = useRef<Pm<EditorView | null>>({});
   const apis = useRef(new Map<number, TermApi>());
   const seq = useRef(0);
@@ -1731,6 +1739,16 @@ export default function App() {
     return () => { dead = true; off?.(); };
   }, []);
 
+  // 拡張機能のコマンド。ターミナルに打つ(実行する権限は、入れるときに許可したもの)
+  const rootAbs = (rr: Root) => (rr.handle && "path" in rr.handle ? (rr.handle as unknown as { path: string }).path : rr.conn?.path ?? null);
+  const extCmds = useExtensionCommands(extList, () => ({ file: tab && isText(tab) && tab.node.handle ? abs(tab.node) : null, root: rootAbs(tab ? rootOf(tab.node) : roots[0]) }), (line, dir) => {
+    const rr = tab ? rootOf(tab.node) : roots[0], ssh = rr?.conn?.kind === "ssh";
+    const cur = alive().find((x) => x.id === actT);
+    if (cur && !ssh && !cur.host && !cur.shell && dir?.startsWith("/") && apis.current.get(cur.id)) { showTerm(true); setTermKey((k) => k + 1); typeInTerm(cur.id, `cd ${shq(dir)} && ${line}`); return; }
+    const id = seq.current + 1;
+    addTerm(dir ?? undefined, undefined, ssh ? rr.conn!.host : null);
+    typeInTerm(id, line);
+  }, i18next.t("拡張機能"));
   const cmds: Cmd[] = useMemo(() => [
     ...KEYS.map((k) => ({ id: k.id, label: i18next.t(k.label), group: i18next.t(k.group), keys: keyOf(k.id, st.keys), run: () => run(k.id) })),
     ...delas.filter((d) => d.url).flatMap((d) => [
@@ -1738,7 +1756,8 @@ export default function App() {
       { id: `dela-open-${d.id}`, label: i18next.t("公開 URL をブラウザで開く(ポート {{port}})", { port: d.port }), group: i18next.t("全般"), run: () => void openExternal(d.url!) },
     ]),
     ...delas.map((d) => ({ id: `dela-stop-${d.id}`, label: i18next.t("公開を止める(ポート {{port}})", { port: d.port }), group: i18next.t("全般"), run: () => stopDela(d.id) })),
-  ], [st.keys, tabs, act, fp, split, term, st.fontSize, st.wrap, st.mode, root, delas]); // eslint-disable-line react-hooks/exhaustive-deps
+    ...(extAvailable ? [{ id: "ext-open", label: i18next.t("拡張機能を開く"), group: i18next.t("拡張機能"), run: () => setExtOpen(true) }, ...extCmds] : []),
+  ], [extCmds, st.keys, tabs, act, fp, split, term, st.fontSize, st.wrap, st.mode, root, delas]); // eslint-disable-line react-hooks/exhaustive-deps
   const wsCmds: Cmd[] = [
     ...cmds,
     ...wsStore.list.map((w) => ({ id: `ws-${w.id}`, label: i18next.t("ワークスペース: {{name}}", { name: w.name }), group: i18next.t("ワークスペース"), icon: <FolderKanban />, run: () => { switchWs(w).catch((e) => flash((e as Error).message, "error")); } })),
@@ -2567,6 +2586,7 @@ export default function App() {
       {pWs.v && <Workspaces key={pWs.key} out={pWs.out} initial={pWs.v} curId={ws?.id ?? null} saveName={root.conn ? root.name : root.handle ? root.name : ""} max={st.wsMax} onOpen={(w) => switchWs(w)} onSaveNew={saveNew} onClose={() => setWsDlg(null)} flash={flash} />}
       {pSetup.v && <Setup key={pSetup.key} out={pSetup.out} onClose={() => setSetupOpen(false)} />}
       {pFb.v && <FeedbackView key={pFb.key} out={pFb.out} onClose={() => setFbOpen(false)} />}
+      {pExt.v && <ExtensionsView key={pExt.key} out={pExt.out} onClose={() => setExtOpen(false)} />}
       {pUp.v && upd && <UpdateView key={pUp.key} m={upd} out={pUp.out} onClose={() => setUpdOpen(false)} />}
       {pLog.v && <PortLog key={pLog.key} pub={pLog.v} conn={root?.conn} out={pLog.out} onClose={() => setLogId(null)} onCopy={(u) => copyText(u)} onOpen={(u) => void openExternal(u)} />}
       {pGh.v && gitView && <GithubView key={pGh.key} out={pGh.out} conn={gitView.conn} root={gitView.root ?? gitView.dir} onClose={() => setGhOpen(false)} />}

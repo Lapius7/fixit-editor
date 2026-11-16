@@ -67,13 +67,22 @@ const ALIAS: Record<string, string> = { typescript: "javascript", jsx: "javascri
 let cache: { lang: string; map: Record<string, Completion[]> } | null = null;
 const table = () => (cache?.lang === i18next.language ? cache.map : (cache = { lang: i18next.language, map: build() }).map);
 
+// 拡張機能が足すスニペット(言語名 → 補完)。有効な拡張が変わるたびに、拡張機能側から丸ごと入れ替える
+let extra: Record<string, Completion[]> = {};
+export function setExtraSnippets(list: { lang: string; label: string; template: string; detail: string }[]): void {
+  const m: Record<string, Completion[]> = {};
+  for (const x of list) (m[x.lang] ??= []).push(s(x.label, x.template, x.detail || undefined));
+  extra = m;
+}
+
 export function snippetSource(ctx: CompletionContext): CompletionResult | null {
   const w = ctx.matchBefore(/[A-Za-z0-9_]+/);
   if (!w && !ctx.explicit) return null;
   // obj.l のようにメンバーを打っているときは定型句を出さない(console.l で console.console.log になるため)
   if (/(?:\.|->|::)$/.test(ctx.state.sliceDoc(Math.max(0, (w ? w.from : ctx.pos) - 2), w ? w.from : ctx.pos))) return null;
   const name = ctx.state.facet(language)?.name ?? "";
-  const list = table()[ALIAS[name] ?? name];
-  if (!list?.length) return null;
+  const key = ALIAS[name] ?? name;
+  const list = [...(table()[key] ?? []), ...(extra[key] ?? []), ...(key !== name ? extra[name] ?? [] : [])];
+  if (!list.length) return null;
   return { from: w ? w.from : ctx.pos, options: list, validFor: /^[A-Za-z0-9_]*$/ };
 }

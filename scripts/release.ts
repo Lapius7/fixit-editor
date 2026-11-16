@@ -29,6 +29,8 @@ if (has("--keygen")) {
   process.exit(0);
 }
 
+// 拡張機能の署名の公開鍵が空のままだと、認証済みの拡張機能がすべて「署名が合わない」になる。出す前に止める
+if (/PUBKEYS: &\[&str\] = &\[\s*\]/.test(readFileSync("src-tauri/fixit-core/src/ext.rs", "utf8"))) { console.error("ext.rs の PUBKEYS が空です。サイトの /api/ext/pubkey を入れてください"); process.exit(1); }
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
 const version: string = pkg.version;
 if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(version)) throw new Error(`版の形が不正です: ${version}`);

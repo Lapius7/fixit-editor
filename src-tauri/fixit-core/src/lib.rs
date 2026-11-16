@@ -11,3 +11,4 @@ pub mod wslpool;
 pub mod store;
 pub mod fonts;
 pub mod update;
+pub mod ext;
