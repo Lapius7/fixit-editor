@@ -1837,5 +1837,13 @@
   "選んだフォルダの直下に fixit-extension.json がありません": "fixit-extension.json is not directly inside the selected folder",
   "自作の拡張機能の id は「local.名前」にしてください": "The id of a local extension must be \"local.name\"",
   "fixit-extension.json の内容が正しくありません。書き方は fixit-editor.lapius7.com の「拡張機能」にあります": "The contents of fixit-extension.json are invalid. See \"Extensions\" on fixit-editor.lapius7.com for the format",
-  "フォルダから入れる(自作)": "Install from folder (local)"
+  "フォルダから入れる(自作)": "Install from folder (local)",
+  "拡張機能の管理": "Manage extensions",
+  "入れた拡張機能: {{n}} 件": "Installed extensions: {{n}}",
+  "探す・フォルダから入れる・無効にする・削除する": "Browse, install from a folder, turn off, remove",
+  "拡張機能を探す": "Search extensions",
+  "認証済みのみ": "Verified only",
+  "「{{q}}」に合う拡張機能はありません": "No extensions match \"{{q}}\"",
+  "ほかの版 ({{n}})": "Other versions ({{n}})",
+  "更新する": "Update"
 }

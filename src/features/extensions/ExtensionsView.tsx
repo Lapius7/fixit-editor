@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import i18next from "i18next";
 import { Trans } from "react-i18next";
+import { Search as SearchIcon, X } from "lucide-react";
 import { ms } from "@/features/settings/settings";
 import { notify } from "@/shared/notify";
 import { checkRevocations, extAvailable, fetchBundle, fetchList, hasNewer, install, isLocal, pickFolder, readLocal, setEnabled, setTheme, uninstall, useInstalled, activeTheme, type Installed, type Listed, type Status } from "./registry";
-import { permLines, type Manifest, type Perms } from "./spec";
+import { cmpVer, permLines, type Manifest, type Perms } from "./spec";
 
 const statusText = (s: Status) => ({ verified: i18next.t("認証済み"), unverified: i18next.t("未認証"), revoked: i18next.t("認証が取り消されました"), blocked: i18next.t("配布が停止されました"), tampered: i18next.t("内容が署名と合いません"), "needs-consent": i18next.t("権限の許可が必要です") })[s];
 const permText = (k: "fsRead" | "fsWrite" | "network" | "exec", v: string) => ({ fsRead: i18next.t("ファイルを読む"), fsWrite: i18next.t("ファイルを書く"), network: i18next.t("ネットワークに接続する: {{v}}", { v }), exec: i18next.t("外部コマンドを実行する: {{v}}", { v }) })[k];
@@ -39,26 +40,32 @@ function Confirm({ id, version, sig, manifest, raw, onClose }: Pick & { onClose:
   );
 }
 
+const hit = (q: string, ...f: string[]) => { const t = q.trim().toLowerCase(); return !t || f.join("\n").toLowerCase().includes(t); };
+
 function Mine({ x }: { x: Installed }) {
   const sel = activeTheme();
+  const toggle = x.status === "verified" || x.status === "unverified";
   return (
     <li className="ex-item">
-      <div className="ex-row">
-        <span className="ex-name">{x.manifest.name}</span><span className="ex-id">{x.id}</span><span className="tnum">v{x.version}</span>
-        <span className="ex-badge" data-s={x.status}>{statusText(x.status)}</span>{isLocal(x.id) && <span className="ex-badge">{i18next.t("自作")}</span>}
+      <div className="ex-top">
+        <div className="ex-row">
+          <span className="ex-name">{x.manifest.name}</span><span className="tnum ex-id">v{x.version}</span>
+          <span className="ex-badge" data-s={x.status}>{statusText(x.status)}</span>{isLocal(x.id) && <span className="ex-badge">{i18next.t("自作")}</span>}
+        </div>
+        {toggle && <button className="switch" role="switch" aria-checked={x.enabled} aria-label={x.enabled ? i18next.t("無効にする") : i18next.t("有効にする")} onClick={() => setEnabled(x.id, !x.enabled)} />}
       </div>
       <p className="ex-desc">{[x.manifest.description, kindsText(x.manifest)].filter(Boolean).join(" · ")}</p>
+      <p className="ex-id">{x.id}</p>
       {x.status === "needs-consent" && <p className="ex-warn">{i18next.t("権限が増えているため止めています。入れ直して、権限を許可してください。")}</p>}
-      {x.manifest.themes.length > 0 && x.active && <div className="ex-themes">{x.manifest.themes.map((th) => { const key = `${x.id}/${th.id}`; return <button key={key} className="btn" data-on={sel === key} onClick={() => setTheme(sel === key ? null : key)}>{th.name}</button>; })}</div>}
       <div className="ex-acts">
-        {(x.status === "verified" || x.status === "unverified") && <button className="btn" onClick={() => setEnabled(x.id, !x.enabled)}>{x.enabled ? i18next.t("無効にする") : i18next.t("有効にする")}</button>}
-        <button className="btn" onClick={() => uninstall(x.id)}>{i18next.t("削除")}</button>
+        {x.manifest.themes.length > 0 && x.active && x.manifest.themes.map((th) => { const key = `${x.id}/${th.id}`; return <button key={key} className="btn" data-on={sel === key} onClick={() => setTheme(sel === key ? null : key)}>{th.name}</button>; })}
+        <button className="btn ex-del" onClick={() => uninstall(x.id)}>{i18next.t("削除")}</button>
       </div>
     </li>
   );
 }
 
-function Browse({ installed, onPick }: { installed: Installed[]; onPick: (p: Pick) => void }) {
+function Browse({ installed, q, onlyV, onPick }: { installed: Installed[]; q: string; onlyV: boolean; onPick: (p: Pick) => void }) {
   const [list, setList] = useState<Listed[] | null>(null);
   const [err, setErr] = useState(false);
   const [busy, setBusy] = useState("");
@@ -72,21 +79,34 @@ function Browse({ installed, onPick }: { installed: Installed[]; onPick: (p: Pic
   };
   if (err) return <p className="ex-warn">{i18next.t("一覧を取得できませんでした。ネットワークを確かめてください")}</p>;
   if (!list) return <p className="ex-none">{i18next.t("読み込み中…")}</p>;
-  if (!list.length) return <p className="ex-none">{i18next.t("公開されている拡張機能はまだありません")}</p>;
+  type V = Listed["versions"][number];
+  const rows = list.map((g) => {
+    const vs = g.versions.filter((v) => v.status !== "revoked" && (!onlyV || v.status === "verified")).sort((a, b) => cmpVer(b.version, a.version));
+    const main: V | undefined = vs.find((v) => v.status === "verified") ?? vs[0];
+    return { g, vs, main };
+  }).filter((r): r is { g: Listed; vs: V[]; main: V } => !!r.main && hit(q, r.main.name, r.g.id, r.main.description));
+  if (!rows.length) return <p className="ex-none">{q.trim() ? i18next.t("「{{q}}」に合う拡張機能はありません", { q: q.trim() }) : i18next.t("公開されている拡張機能はまだありません")}</p>;
+  const pickBtn = (id: string, v: V, cur?: Installed, label?: string) => (
+    <button className="btn" data-primary={(!cur && v.status === "verified") || undefined} disabled={!!busy || cur?.version === v.version} onClick={() => void choose(id, v.version, v.status === "verified" ? v.sig : null)}>{cur?.version === v.version ? i18next.t("入れ済み") : label ?? i18next.t("入れる")}</button>
+  );
   return (
     <ul className="ex-list">
-      {list.map((g) => {
+      {rows.map(({ g, vs, main }) => {
         const cur = installed.find((x) => x.id === g.id);
-        const vs = g.versions.filter((v) => v.status !== "revoked");
-        if (!vs.length) return null;
+        const upd = !!cur && hasNewer(g, cur.version) && cmpVer(main.version, cur.version) > 0;
+        const rest = vs.filter((v) => v !== main);
         return (
           <li key={g.id} className="ex-item">
-            <div className="ex-row"><span className="ex-name">{vs[0].name}</span><span className="ex-id">{g.id}</span>{cur && <span className="tnum">{i18next.t("入れた版 v{{v}}", { v: cur.version })}</span>}{cur && hasNewer(g, cur.version) && <span className="ex-badge" data-s="new">{i18next.t("新しい版あり")}</span>}</div>
-            <p className="ex-desc">{vs[0].description || i18next.t("説明はありません")}</p>
-            <ul className="ex-vers">
-              {vs.map((v) => <li key={v.version}><span className="tnum">v{v.version}</span><span className="ex-badge" data-s={v.status === "verified" ? "verified" : "unverified"}>{v.status === "verified" ? i18next.t("認証済み") : i18next.t("未認証")}</span><span className="ex-perm-sum">{permLines(v.perms).map((r) => permText(r.key, r.value)).join(" / ") || i18next.t("特別な権限なし")}</span>
-                <button className="btn" disabled={!!busy || cur?.version === v.version} onClick={() => void choose(g.id, v.version, v.status === "verified" ? v.sig : null)}>{cur?.version === v.version ? i18next.t("入れ済み") : i18next.t("入れる")}</button></li>)}
-            </ul>
+            <div className="ex-top">
+              <div className="ex-row"><span className="ex-name">{main.name}</span><span className="tnum ex-id">v{main.version}</span><span className="ex-badge" data-s={main.status === "verified" ? "verified" : "unverified"}>{main.status === "verified" ? i18next.t("認証済み") : i18next.t("未認証")}</span>{upd && <span className="ex-badge" data-s="new">{i18next.t("新しい版あり")}</span>}</div>
+              {pickBtn(g.id, main, cur, upd ? i18next.t("更新する") : undefined)}
+            </div>
+            <p className="ex-desc">{main.description || i18next.t("説明はありません")}</p>
+            <p className="ex-id">{g.id} · {permLines(main.perms).map((r) => permText(r.key, r.value)).join(" / ") || i18next.t("特別な権限なし")}</p>
+            {rest.length > 0 && <details className="ex-more"><summary>{i18next.t("ほかの版 ({{n}})", { n: rest.length })}</summary>
+              <ul className="ex-vers">
+                {rest.map((v) => <li key={v.version}><span className="tnum">v{v.version}</span><span className="ex-badge" data-s={v.status === "verified" ? "verified" : "unverified"}>{v.status === "verified" ? i18next.t("認証済み") : i18next.t("未認証")}</span><span className="ex-perm-sum">{permLines(v.perms).map((r) => permText(r.key, r.value)).join(" / ") || i18next.t("特別な権限なし")}</span>{pickBtn(g.id, v, cur)}</li>)}
+              </ul></details>}
           </li>
         );
       })}
@@ -99,6 +119,8 @@ export function ExtensionsView({ out, onClose }: { out?: boolean; onClose: () =>
   const [closing, setClosing] = useState(false);
   const [tab, setTab] = useState<"mine" | "browse">("mine");
   const [pick, setPick] = useState<Pick | null>(null);
+  const [q, setQ] = useState("");
+  const [onlyV, setOnlyV] = useState(false);
   const fromFolder = async () => {
     const dir = await pickFolder().catch(() => null);
     if (!dir) return;
@@ -110,7 +132,7 @@ export function ExtensionsView({ out, onClose }: { out?: boolean; onClose: () =>
   };
   const close = () => { setClosing(true); setTimeout(onClose, ms(180)); };
   useEffect(() => { void checkRevocations(true); }, []);
-  useEffect(() => { const on = (e: KeyboardEvent) => { if (e.key === "Escape") close(); }; addEventListener("keydown", on); return () => removeEventListener("keydown", on); });
+  useEffect(() => { const on = (e: KeyboardEvent) => { if (e.key === "Escape") { if (q && !pick) setQ(""); else close(); } }; addEventListener("keydown", on); return () => removeEventListener("keydown", on); });
   return (
     <div className="qo-backdrop" data-mid data-closing={closing || !!out}>
       <div className="qo dlg ex" role="dialog" aria-label={i18next.t("拡張機能")} onMouseDown={(e) => e.stopPropagation()}>
@@ -119,13 +141,26 @@ export function ExtensionsView({ out, onClose }: { out?: boolean; onClose: () =>
           <>
             {pick ? <div className="ex-body"><Confirm {...pick} onClose={() => setPick(null)} /></div> : <>
             <div className="seg" role="tablist">
-              <button role="tab" aria-selected={tab === "mine"} data-on={tab === "mine"} onClick={() => setTab("mine")}>{i18next.t("入れた拡張機能")}</button>
+              <button role="tab" aria-selected={tab === "mine"} data-on={tab === "mine"} onClick={() => setTab("mine")}>{i18next.t("入れた拡張機能")}{installed.length ? ` ${installed.length}` : ""}</button>
               <button role="tab" aria-selected={tab === "browse"} data-on={tab === "browse"} onClick={() => setTab("browse")}>{i18next.t("探す")}</button>
             </div>
-            <div className="ex-body">
-              {tab === "mine" ? (installed.length ? <ul className="ex-list">{installed.map((x) => <Mine key={x.id} x={x} />)}</ul> : <p className="ex-none">{i18next.t("入れた拡張機能はありません")}</p>) : <Browse installed={installed} onPick={setPick} />}
+            <div className="ex-bar">
+              <div className="sp-box">
+                <SearchIcon size={14} />
+                <input autoFocus placeholder={i18next.t("拡張機能を探す")} value={q} onChange={(e) => setQ(e.target.value)} aria-label={i18next.t("拡張機能を探す")} />
+                {q && <button className="icon-btn" aria-label={i18next.t("消す")} onClick={() => setQ("")}><X /></button>}
+              </div>
+              {tab === "browse" && <button className="chipbtn" aria-pressed={onlyV} onClick={() => setOnlyV(!onlyV)}>{i18next.t("認証済みのみ")}</button>}
+              {tab === "mine" && <button className="chipbtn" onClick={() => void fromFolder()}>{i18next.t("フォルダから入れる(自作)")}</button>}
             </div>
-            {tab === "mine" && <div className="ex-acts"><button className="btn" onClick={() => void fromFolder()}>{i18next.t("フォルダから入れる(自作)")}</button></div>}
+            <div className="ex-body">
+              {tab === "mine" ? (() => {
+                const rows = installed.filter((x) => hit(q, x.manifest.name, x.id, x.manifest.description));
+                if (!installed.length) return <p className="ex-none">{i18next.t("入れた拡張機能はありません")}</p>;
+                if (!rows.length) return <p className="ex-none">{i18next.t("「{{q}}」に合う拡張機能はありません", { q: q.trim() })}</p>;
+                return <ul className="ex-list">{rows.map((x) => <Mine key={x.id} x={x} />)}</ul>;
+              })() : <Browse installed={installed} q={q} onlyV={onlyV} onPick={setPick} />}
+            </div>
             <p className="ex-foot">{i18next.t("公開は fixit-editor.lapius7.com の「拡張機能」から。認証済みは、運営が審査した版です。")}</p>
             </>}
           </>

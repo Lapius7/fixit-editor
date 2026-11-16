@@ -2580,7 +2580,7 @@ export default function App() {
 
       {pQo.v && <QuickOpen key={pQo.key} out={pQo.out} roots={rootsLite} onPick={(n) => openOrFocus(n)} onClose={() => setQo(false)} />}
       {pPal.v && <Palette key={pPal.key} out={pPal.out} cmds={wsCmds} onClose={() => setPal(false)} />}
-      {pSetts.v && <Settings onCheckUpdate={checkNow} onTheme={() => { setSetts(null); setTp(true); }} key={pSetts.key} out={pSetts.out} first={pSetts.v} onClose={() => setSetts(null)} />}
+      {pSetts.v && <Settings onCheckUpdate={checkNow} onTheme={() => { setSetts(null); setTp(true); }} onExt={() => { setSetts(null); setExtOpen(true); }} key={pSetts.key} out={pSetts.out} first={pSetts.v} onClose={() => setSetts(null)} />}
       {pLh.v && (() => { const lt = tabs.find((x) => x.node.path === pLh.v); return lt && isText(lt) ? <LocalHistory key={pLh.key} out={pLh.out} path={lt.node.path} name={lt.node.name} current={lt.text} onRestore={(text) => setTabs((p) => p.map((x) => (x.node.path === lt.node.path && isText(x) ? { ...x, text } : x)))} onClose={() => setLh(null)} /> : null; })()}
       {pDlg.v && <Dialog key={pDlg.key} out={pDlg.out} {...pDlg.v} onClose={() => setDlg(null)} />}
       {pWs.v && <Workspaces key={pWs.key} out={pWs.out} initial={pWs.v} curId={ws?.id ?? null} saveName={root.conn ? root.name : root.handle ? root.name : ""} max={st.wsMax} onOpen={(w) => switchWs(w)} onSaveNew={saveNew} onClose={() => setWsDlg(null)} flash={flash} />}

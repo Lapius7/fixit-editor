@@ -10,6 +10,8 @@ import { CATS, DEFS, changedCount, exportJson, importJson, isChanged, ms, resetA
 import { Rows, Look } from "@/features/settings/SettingsParts";
 import HistoryView from "@/features/settings/HistoryView";
 import About from "@/features/settings/About";
+import { ExtSettings } from "@/features/extensions/ExtSettings";
+import { extAvailable } from "@/features/extensions/registry";
 import { AiSettings } from "@/features/ai/AiSettings";
 import { AccountSettings } from "@/features/account/AccountUI";
 import { ask } from "@/shared/ask";
@@ -27,7 +29,7 @@ const LINKS: [string, string, ReactElement][] = [
   ["GitHub", REPO_URL, <ExternalLink key="r" size={14} />],
 ];
 
-export default function Settings({ onClose, first, out, onTheme, onCheckUpdate }: { onClose: () => void; first?: string; out?: boolean; onTheme?: () => void; onCheckUpdate?: () => void }) {
+export default function Settings({ onClose, first, out, onTheme, onCheckUpdate, onExt }: { onClose: () => void; first?: string; out?: boolean; onTheme?: () => void; onCheckUpdate?: () => void; onExt?: () => void }) {
   const { checking, found: newVer } = useUpdateState();
   const [cat, setCat] = useState(CATS.some((c) => c.id === first) ? first! : "look");
   const [q, setQ] = useState("");
@@ -80,7 +82,7 @@ export default function Settings({ onClose, first, out, onTheme, onCheckUpdate }
       <div className="qo set" role="dialog" aria-label={i18next.t("設定")} onMouseDown={(e) => e.stopPropagation()}>
         <nav className="set-nav" ref={nav} aria-label={i18next.t("設定の分類")}>
           <h2><Trans i18nKey="設定" /></h2>
-          {CATS.map((c) => (
+          {CATS.filter((c) => c.id !== "ext" || extAvailable).map((c) => (
             <button key={c.id} className="set-tab" aria-current={!searching && cat === c.id} onClick={() => { setQ(""); setOnly(false); setCat(c.id); }}>
               <span>{i18next.t(c.label)}</span>{!!count.get(c.id) && <b className="set-n">{count.get(c.id)}</b>}
             </button>
@@ -120,7 +122,7 @@ export default function Settings({ onClose, first, out, onTheme, onCheckUpdate }
             <div key={searching ? "search" : cat} className="set-fade">
             {searching ? (
               found.length ? <Rows defs={found} flat /> : <p className="set-none"><Trans i18nKey="見つかりません" /></p>
-            ) : cat === "keys" ? <Keys /> : cat === "history" ? <HistoryView /> : cat === "ai" ? <AiSettings /> : cat === "account" ? <AccountSettings /> : cat === "about" ? <About /> : (
+            ) : cat === "keys" ? <Keys /> : cat === "history" ? <HistoryView /> : cat === "ai" ? <AiSettings /> : cat === "ext" && extAvailable ? <ExtSettings onOpen={() => { setClosing(true); setTimeout(() => onExt?.(), ms(180)); }} /> : cat === "account" ? <AccountSettings /> : cat === "about" ? <About /> : (
               <>
                 {cat === "look" && onTheme && <div className="set-theme-link"><div><Trans i18nKey="プレビューを見ながら編集" /><small><Trans i18nKey="エディタの右にパネルをひらき、画面そのままで変えられます" /></small></div><button className="btn" data-primary="true" onClick={() => { setClosing(true); setTimeout(onTheme, ms(180)); }}><Trans i18nKey="パネルで編集" /></button></div>}
                 {cat === "look" && <Look />}
