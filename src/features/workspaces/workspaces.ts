@@ -15,6 +15,7 @@ export type WsState = {
   side: boolean; panel: "files" | "search"; term: boolean; terms: TermRef[]; actTerm: number;
   g?: string[][]; // 分割時、それぞれの画面(番号ごと)に属するタブ
   cur?: Record<string, number>; // タブごとのカーソル位置(パス → 文書の先頭からの位置)
+  pins?: string[]; // ピン留めしたタブ
   pv?: { mode?: "split" | "preview"; pin?: string | null; r?: number }; // プレビューの表示・固定・幅の割合
 };
 // 複数のフォルダを同時に開くとき、2 つ目以降の道しるべ。prefix は、ツリー上のパスの先頭につく「/@xxxx」(先頭のフォルダは空)

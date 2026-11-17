@@ -646,7 +646,7 @@ export default function App() {
   const snapshot = (): WsState => ({
     tabs: tabs.map((t) => t.node.path), ...savedPanes(), side, panel, term: term && alive().length > 0,
     cur: (() => { const c = cursorsNow(), keep = new Set(tabs.map((t) => t.node.path)); return Object.fromEntries(Object.entries(c).filter(([k]) => keep.has(k))); })(),
-    pv: { mode: pvMode, pin: pvPin, r: pvR },
+    pv: { mode: pvMode, pin: pvPin, r: pvR }, pins: tabs.map((t) => t.node.path).filter((p) => pinned.has(p)),
     terms: st.wsTerms ? alive().map((x) => ({ name: x.name, cwd: x.cwd ?? (x.shell ? undefined : root.conn?.path), shell: x.shell, label: x.label, host: x.host })) : [],
     actTerm: Math.max(0, alive().findIndex((x) => x.id === actT)),
   });
@@ -713,6 +713,7 @@ export default function App() {
       seedCursors(hit?.cur);
       setTabs(restored);
       const has = (p: string | null | undefined) => !!p && restored.some((t) => t.node.path === p);
+      setPinned(new Set((hit?.pins ?? []).filter(has)));
       const L0: Lay = hit?.split && restored.length > 0 ? (hit.lay && validLay(hit.lay) ? hit.lay : fromPair(true, st.splitDir as Dir, st.splitRatio)) : LEAF0;
       // 開き直したときに、タブが 1 つも戻らなかった画面は、空のトップページを出さずにたたむ
       let L: Lay = L0;
@@ -1494,6 +1495,7 @@ export default function App() {
     const on = !pinned.has(path), next = new Set(pinned);
     if (on) next.add(path); else next.delete(path);
     setPinned(next);
+    if (on) setPreview((v) => (v === path ? null : v)); // ピン留めしたら一時表示を解除する
     setTabs((p) => {
       const m = p.find((t) => t.node.path === path);
       if (!m) return p;
@@ -2613,7 +2615,10 @@ export default function App() {
             <ExtDock />
         <PortsPanel open={portsOpen} items={delas} conn={root?.conn} rootPath={root?.conn?.path} onClose={() => setPortsOpen(false)} onPublish={startDela} onStop={stopDela} onCopy={(u) => copyText(u)} onOpen={(u) => void openExternal(u)} onLog={setLogId} />
             {gitOpen && <ColGrip width={st.gitW} def={440} min={280} max={900} dir={-1} onChange={(w) => update({ gitW: w })} />}
-            <GitPanel open={gitOpen} conn={gitView?.conn ?? null} root={gitView?.root} dir={gitView?.dir}
+            <GitPanel
+              onOpenFile={(rel) => { const c = gitView?.conn; if (c) void lspUi.openAt?.(c, `${(gitView.root ?? gitView.dir ?? c.path).replace(/\/+$/, "")}/${rel}`, 0, 0).then((ok: boolean) => { if (!ok) flash(i18next.t("このフォルダの外のファイルは開けません"), "error"); }); }}
+              onOpenDiff={(rel, raw, label) => { void open({ name: `${rel.split("/").pop()} (${label}).diff`, path: `.git-diff/${label}/${rel}.diff`, kind: "file", demo: raw || "\n" }); }}
+              open={gitOpen} conn={gitView?.conn ?? null} root={gitView?.root} dir={gitView?.dir}
               canDrop={() => drag.node?.kind === "dir" && !!rootOf(drag.node).conn}
               onDropDir={() => { const n = drag.node; dragEnd(); if (n?.kind === "dir" && rootOf(n).conn) void gitHere(rootOf(n).conn!, abs(n)); }}
               title={gitAt ? (gitAt.root ?? gitAt.dir).replace(/\/+$/, "").split("/").pop() || "/" : undefined} onBack={gitAt ? () => setGitAt(null) : undefined}

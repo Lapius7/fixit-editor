@@ -1,6 +1,6 @@
 {
   "name": "fixit-editor",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "private": true,
   "type": "module",
   "description": "軽くて見た目のいいコードエディタ(フィクシットエディタ)",

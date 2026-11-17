@@ -1,11 +1,12 @@
 // 右側の Git パネル。変更(ステージ・コミット)・ツリー・履歴・ブランチを、タブで切り替える。
 // Git の操作は gitRead / gitWrite で、固定の操作名だけを backend に渡す。
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowUp, Check, GitBranch, GitCommitHorizontal, Minus, Plus, RefreshCw, Sparkles, Square, Trash2, Undo2, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Check, FileText, GitBranch, GitCompare, GitCommitHorizontal, Minus, Plus, RefreshCw, Sparkles, Square, Trash2, Undo2, X } from "lucide-react";
 import { aiConsent, aiConsented, aiErrText, aiProviderName, aiReady, askOnce } from "@/features/ai/oneshot";
 import { commitPrompt, commitSystem } from "@/features/ai/prompts";
 import { useAi } from "@/features/ai/store";
 import i18next from "i18next";
+import { notify } from "@/shared/notify";
 import type { Conn } from "@/platform/remote";
 import { ms, update, useSettings } from "@/features/settings/settings";
 import {
@@ -19,6 +20,8 @@ type Side = "staged" | "unstaged" | "conflict";
 // root: リポジトリの最上位(null はリポジトリではない、undefined はまだ調べている)。dir: 見ているフォルダ
 // title・onBack: 右クリックで別のフォルダを選んでいるとき、その名前と、開いているフォルダに戻すボタン
 type Props = {
+  onOpenFile?: (rel: string) => void; // 変更ファイルをエディタで開く
+  onOpenDiff?: (rel: string, raw: string, label: string) => void; // 差分をエディタのタブで開く
   open: boolean; conn: Conn | null; root: string | null | undefined; dir?: string; title?: string; rev: number;
   // ファイル一覧からフォルダを落としたとき。受け取れるフォルダなら true(canDrop)
   canDrop?: () => boolean; onDropDir?: () => void;
@@ -43,7 +46,7 @@ function ago(at: number) {
 // 作業フォルダのファイルを書き換える操作
 const REWRITES = new Set(["checkout", "discard", "clean", "pull"]);
 
-export function GitPanel({ open, conn, root, dir, title, rev, onClose, onChanged, onRepo, onBack, guard, canDrop, onDropDir }: Props) {
+export function GitPanel({ onOpenFile, onOpenDiff, open, conn, root, dir, title, rev, onClose, onChanged, onRepo, onBack, guard, canDrop, onDropDir }: Props) {
   const { gitSmartCommit } = useSettings();
   const [over, setOver] = useState(false);
   const [tab, setTab] = useState<Tab>("changes");
@@ -109,6 +112,16 @@ export function GitPanel({ open, conn, root, dir, title, rev, onClose, onChanged
     finally { setBusy(""); }
   };
   // 取り消せない操作は、2回押すと実行する(3秒で元に戻る)
+  // 変更ファイルをエディタで開く・差分をエディタのタブで開く
+  const ops = (c: Change, side: Side) => ({
+    onFile: onOpenFile ? () => onOpenFile(c.path) : undefined,
+    onDiff: onOpenDiff && conn && root ? () => {
+      const untracked = c.x === "?";
+      gitRead(conn, root, { cmd: "diff", file: c.path, staged: side === "staged", untracked })
+        .then((raw) => onOpenDiff(c.path, raw, side === "staged" ? i18next.t("ステージ済み") : i18next.t("変更")))
+        .catch((e) => notify(msg(e), "error"));
+    } : undefined,
+  });
   const twice = (key: string, go: () => void) => () => {
     if (arm === key) { clearTimeout(armT.current); setArm(""); go(); return; }
     setArm(key); clearTimeout(armT.current); armT.current = setTimeout(() => setArm(""), 3000);
@@ -194,14 +207,14 @@ export function GitPanel({ open, conn, root, dir, title, rev, onClose, onChanged
                 </div>
               </div>
               <div className="git-body scroll">
-                {st.conflicts.length > 0 && <Group title={i18next.t("衝突")} n={st.conflicts.length}>{st.conflicts.map((c) => <Row key={"c" + c.path} c={c} side="conflict" conn={conn} root={root} open={openKey === "c" + c.path} onOpen={() => setOpenKey(openKey === "c" + c.path ? null : "c" + c.path)} onStage={() => void run("stage", { cmd: "stage", files: [c.path] })} />)}</Group>}
+                {st.conflicts.length > 0 && <Group title={i18next.t("衝突")} n={st.conflicts.length}>{st.conflicts.map((c) => <Row key={"c" + c.path} c={c} side="conflict" conn={conn} root={root} {...ops(c, "conflict")} open={openKey === "c" + c.path} onOpen={() => setOpenKey(openKey === "c" + c.path ? null : "c" + c.path)} onStage={() => void run("stage", { cmd: "stage", files: [c.path] })} />)}</Group>}
                 <Group title={i18next.t("ステージ済み")} n={st.staged.length} act={st.staged.length > 0 && <button className="icon-btn" aria-label={i18next.t("すべてステージから外す")} title={i18next.t("すべてステージから外す")} disabled={!!busy} onClick={() => void run("unstage", { cmd: "unstage", files: st.staged.map((c) => c.path) })}><Minus /></button>}>
-                  {st.staged.map((c) => <Row key={"s" + c.path} c={c} side="staged" conn={conn} root={root} open={openKey === "s" + c.path} onOpen={() => setOpenKey(openKey === "s" + c.path ? null : "s" + c.path)} onUnstage={() => void run("unstage", { cmd: "unstage", files: [c.path] })} />)}
+                  {st.staged.map((c) => <Row key={"s" + c.path} c={c} side="staged" conn={conn} root={root} {...ops(c, "staged")} open={openKey === "s" + c.path} onOpen={() => setOpenKey(openKey === "s" + c.path ? null : "s" + c.path)} onUnstage={() => void run("unstage", { cmd: "unstage", files: [c.path] })} />)}
                 </Group>
                 <Group title={i18next.t("変更")} n={st.unstaged.length} act={st.unstaged.length > 0 && <button className="icon-btn" aria-label={i18next.t("すべてステージ")} title={i18next.t("すべてステージ")} disabled={!!busy} onClick={() => void run("stage", { cmd: "stage", files: st.unstaged.map((c) => c.path) })}><Plus /></button>}>
                   {st.unstaged.map((c) => {
                     const k = "u" + c.path, untracked = c.x === "?";
-                    return <Row key={k} c={c} side="unstaged" conn={conn} root={root} open={openKey === k} onOpen={() => setOpenKey(openKey === k ? null : k)} armed={arm === k}
+                    return <Row key={k} c={c} side="unstaged" conn={conn} root={root} {...ops(c, "unstaged")} open={openKey === k} onOpen={() => setOpenKey(openKey === k ? null : k)} armed={arm === k}
                       onStage={() => void run("stage", { cmd: "stage", files: [c.path] })}
                       onDiscard={twice(k, () => void run("discard", untracked ? { cmd: "clean", files: [c.path] } : { cmd: "discard", files: [c.path] }))} />;
                   })}
@@ -242,7 +255,8 @@ function Group({ title, n, act, children }: { title: string; n: number; act?: Re
   );
 }
 
-function Row({ c, side, conn, root, open, onOpen, onStage, onUnstage, onDiscard, armed }: {
+function Row({ c, side, conn, root, open, onOpen, onStage, onUnstage, onDiscard, armed, onFile, onDiff }: {
+  onFile?: () => void; onDiff?: () => void;
   c: Change; side: Side; conn: Conn; root: string; open: boolean; onOpen: () => void; onStage?: () => void; onUnstage?: () => void; onDiscard?: () => void; armed?: boolean;
 }) {
   const l = letter(c, side), d = dirOf(c.path);
@@ -252,6 +266,8 @@ function Row({ c, side, conn, root, open, onOpen, onStage, onUnstage, onDiscard,
         <i className="git-l" data-l={l}>{l}</i>
         <span className="git-name truncate">{base(c.path)}{d && <small>{d}</small>}</span>
         <span className="git-acts" onClick={(e) => e.stopPropagation()}>
+          {onFile && c.x !== "D" && c.y !== "D" && <button className="icon-btn" aria-label={i18next.t("ファイルを開く")} title={i18next.t("ファイルを開く")} onClick={onFile}><FileText /></button>}
+          {onDiff && <button className="icon-btn" aria-label={i18next.t("差分をエディタで開く")} title={i18next.t("差分をエディタで開く")} onClick={onDiff}><GitCompare /></button>}
           {onDiscard && <button className="icon-btn" data-armed={armed} aria-label={armed ? i18next.t("もう一度押すと元に戻します") : i18next.t("変更を元に戻す")} title={armed ? i18next.t("もう一度押すと元に戻します") : c.x === "?" ? i18next.t("ファイルを削除") : i18next.t("変更を元に戻す")} onClick={onDiscard}>{c.x === "?" ? <Trash2 /> : <Undo2 />}</button>}
           {onStage && <button className="icon-btn" aria-label={i18next.t("ステージ")} title={i18next.t("ステージ")} onClick={onStage}><Plus /></button>}
           {onUnstage && <button className="icon-btn" aria-label={i18next.t("ステージから外す")} title={i18next.t("ステージから外す")} onClick={onUnstage}><Minus /></button>}
