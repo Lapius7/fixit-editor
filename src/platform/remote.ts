@@ -12,6 +12,8 @@ class RemoteError extends Error {
 }
 
 export const connLabel = (c: Conn) => (c.kind === "ssh" ? i18next.t("SSH · {{host}}", { host: c.host }) : c.kind === "pc" ? i18next.t("PC") : "WSL");
+// 削除をごみ箱へ移す形で行うか(設定がオンで、SSH 以外)
+export const trashes = (c: Conn) => c.kind !== "ssh" && get().trashOnDelete;
 export const connKey = (c: Conn) => `${c.kind}:${c.host ?? ""}:${c.path}`;
 export const sshUrl = (c: Conn, abs: string) => (c.kind === "ssh" ? `ssh://${c.host}${abs}` : abs);
 
@@ -94,7 +96,7 @@ export class RemoteDir {
   }
   // 別のフォルダへ移す(同じ接続先の中だけ)
   async moveTo(name: string, dest: RemoteDir) { await post(this.conn, "mv", { path: join(this.path, name), to: join(dest.path, name) }); }
-  async removeEntry(name: string) { await post(this.conn, "rm", { path: join(this.path, name) }); }
+  async removeEntry(name: string) { await post(this.conn, "rm", { path: join(this.path, name), ...(trashes(this.conn) ? { trash: "1" } : {}) }); }
   // 名前の変更(フォルダも可)。同じ名前があれば失敗する
   async rename(from: string, to: string) { await post(this.conn, "mv", { path: join(this.path, from), to: join(this.path, to) }); }
 }

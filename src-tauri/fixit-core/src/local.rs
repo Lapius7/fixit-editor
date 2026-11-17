@@ -95,6 +95,41 @@ fn wsl_rm(distro: &str, lin: &str) -> Result<(), FsError> {
     if r.code == 0 { Ok(()) } else { Err(FsError::new(r.err.trim().to_string(), 500, "EIO")) }
 }
 
+// ごみ箱へ移す。Windows は SHFileOperationW(元に戻せる)、それ以外は gio trash
+fn trash_path(p: &str) -> Result<(), FsError> {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::UI::Shell::{SHFileOperationW, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, FO_DELETE, SHFILEOPSTRUCTW};
+        let mut w: Vec<u16> = p.replace('/', "\\").encode_utf16().collect();
+        w.extend([0, 0]);
+        let mut op: SHFILEOPSTRUCTW = unsafe { std::mem::zeroed() };
+        op.wFunc = FO_DELETE;
+        op.pFrom = w.as_ptr();
+        op.fFlags = (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT) as u16;
+        let rc = unsafe { SHFileOperationW(&mut op) };
+        if rc == 0 && op.fAnyOperationsAborted == 0 { return Ok(()); }
+        Err(FsError::new(format!("ごみ箱へ移せませんでした(コード {rc})"), 500, "EIO"))
+    }
+    #[cfg(not(windows))]
+    {
+        let mut c = std::process::Command::new("gio");
+        c.args(["trash", "--", p]);
+        let r = crate::run::run(c, None, std::time::Duration::from_secs(60), 1024 * 1024)?;
+        if r.code == 0 { Ok(()) } else { Err(FsError::new(format!("ごみ箱へ移せませんでした: {}", r.err.trim()), 500, "EIO")) }
+    }
+}
+
+// WSL の中のファイルを、WSL 側のごみ箱へ移す(gio trash が要る)
+fn wsl_trash(distro: &str, lin: &str) -> Result<(), FsError> {
+    if !cfg!(windows) {
+        return Err(FsError::new("WSL は使えません", 500, "EIO"));
+    }
+    let mut c = std::process::Command::new("wsl.exe");
+    c.args(["-d", distro, "-e", "gio", "trash", "--", lin]);
+    let r = crate::run::run(c, None, std::time::Duration::from_secs(120), 1024 * 1024)?;
+    if r.code == 0 { Ok(()) } else { Err(FsError::new(format!("ごみ箱へ移せませんでした(WSL に gio が要ります): {}", r.err.trim()), 500, "EIO")) }
+}
+
 pub fn protected(p: &str) -> bool {
     p == "/" || (is_drive(p) && p.len() == 3) || p.eq_ignore_ascii_case(&home())
 }
@@ -183,16 +218,25 @@ pub fn dispatch(op: &str, q: &Q, body: Option<Vec<u8>>) -> Result<Reply, FsError
             if protected(&p) {
                 return Err(FsError::new("このフォルダは削除できません", 400, "EARG"));
             }
+            let trash = q.get("trash").map(|v| v == "1").unwrap_or(false);
             // WSL の中のフォルダ(UNC)は、9P 越しに 1 ファイルずつ消すと極端に遅い。WSL の中で rm -rf を 1 回動かす
             if let Some((distro, lin)) = wsl_unc(&p) {
                 let depth = lin.matches('/').count();
                 if depth < 2 || (lin.starts_with("/home/") && depth < 3) {
                     return Err(FsError::new("このフォルダは削除できません", 400, "EARG"));
                 }
+                if trash {
+                    wsl_trash(&distro, &lin)?; // 失敗しても完全に消さない
+                    return Ok(Reply::Json(json!({ "ok": true })));
+                }
                 if wsl_rm(&distro, &lin).is_ok() {
                     return Ok(Reply::Json(json!({ "ok": true })));
                 }
                 // wsl.exe が動かないときは、下の std::fs に任せる
+            }
+            if trash {
+                trash_path(&p)?;
+                return Ok(Reply::Json(json!({ "ok": true })));
             }
             // リンク自体を消す(先のフォルダの中身は消さない)
             match fs::symlink_metadata(&p) {

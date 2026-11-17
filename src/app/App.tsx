@@ -82,7 +82,7 @@ import { clearSel, isMulti, isSelectedPath, selectedNodes } from "@/workbench/se
 import { clearTreeClip, getTreeClip, hasTreeClip, setTreeClip, treeClipFor } from "@/workbench/treeclip";
 import { leaveRows } from "@/workbench/treeAnim";
 import { listShells, type ShellOpt } from "@/platform/pty";
-import { RemoteFile, checkDir, execCmd, connKey, isRemote, remoteSig, connLabel, lastDir, normConn, showPath, pushRecent, rootHandle, sshUrl, type Conn, type RemoteDir } from "@/platform/remote";
+import { RemoteFile, checkDir, execCmd, connKey, isRemote, remoteSig, connLabel, lastDir, normConn, showPath, pushRecent, rootHandle, sshUrl, trashes, type Conn, type RemoteDir } from "@/platform/remote";
 import { DEMO_NAME, DEMO_TREE } from "@/shared/demo";
 import { IS_TAURI, winAct } from "@/shared/chrome";
 import { canMove, copyInto, createDir, createFile, freeEntryName, moveEntry, pickFolder, pickPcFolder, isJunk, readDir, removeEntry, renameFile, supportsFs, writeFile, writeBlob, freeName, type Node } from "@/platform/fs";
@@ -1350,7 +1350,7 @@ export default function App() {
   const remove = (n: Node) => {
     const rr = rootOf(n);
     setDlg({
-      title: i18next.t("「{{name}}」を削除", { name: n.name }), desc: n.kind === "dir" ? i18next.t("中のファイルもすべて消えます。元に戻せません。") : i18next.t("元に戻せません。"), ok: i18next.t("削除"), danger: true,
+      title: i18next.t("「{{name}}」を削除", { name: n.name }), desc: rr.handle && trashes((rr.handle as unknown as RemoteDir).conn) ? i18next.t("ごみ箱に移します。") : n.kind === "dir" ? i18next.t("中のファイルもすべて消えます。元に戻せません。") : i18next.t("元に戻せません。"), ok: i18next.t("削除"), danger: true,
       onSubmit: async () => {
         const out = leaveRows([n.path]); // 先に畳んで見せる(遅い場所でも、すぐ消えたように見える)
         try {
@@ -1369,7 +1369,7 @@ export default function App() {
     if (list.length === 1) return remove(list[0]);
     setDlg({
       title: i18next.t("{{n}} 件を削除", { n: list.length }),
-      desc: list.slice(0, 5).map((x) => x.name).join("、") + (list.length > 5 ? " …" : "") + "\n" + (list.some((x) => x.kind === "dir") ? i18next.t("中のファイルもすべて消えます。元に戻せません。") : i18next.t("元に戻せません。")),
+      desc: list.slice(0, 5).map((x) => x.name).join("、") + (list.length > 5 ? " …" : "") + "\n" + (list.every((x) => { const h = rootOf(x).handle; return h && trashes((h as unknown as RemoteDir).conn); }) ? i18next.t("ごみ箱に移します。") : list.some((x) => x.kind === "dir") ? i18next.t("中のファイルもすべて消えます。元に戻せません。") : i18next.t("元に戻せません。")),
       ok: i18next.t("削除"), danger: true,
       onSubmit: async () => {
         let ok = 0, last = "";
