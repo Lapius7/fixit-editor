@@ -1,4 +1,4 @@
-// 入れた拡張機能の保存と状態。外部へ送るのは、サイトの /api/ext/ への取得(GET)だけで、ユーザー・ファイルの情報は含まない。
+// 入れた拡張機能の保存と状態。外部へ送るのは、サイトの /api/ext/ と、利用者が指定した GitHub の公開リポジトリのファイル(raw.githubusercontent.com)への取得(GET)だけで、ユーザー・ファイルの情報は含まない。
 // 状態の決め方: 署名つきで本文が署名と合えば verified、署名なしでユーザーが許可したものは unverified、
 // 失効リストに載れば revoked / blocked(動かさない)、署名が合わなくなれば tampered(動かさない)。
 import { useSyncExternalStore } from "react";
@@ -7,16 +7,17 @@ import { IS_TAURI } from "@/shared/chrome";
 import { dataGet, dropExt } from "./host/store";
 import { delBlobsOf } from "./host/blobs";
 import { hostRunning, panelAction, runCommand, stop as stopHost } from "./host/runtime";
+import { githubSrc, type GithubRef } from "./github";
 import { FILE_NAME, MAX_FILE_CHARS, EXT_ID, EXT_VER, LOCAL_PREFIX, cmpVer, localBundle, permsWithin, readBundle, type Manifest, type Perms } from "./spec";
 
 export const EXT_KEY = "fixit:extensions:v1";
 const CHECK_MS = 6 * 3600_000; // 失効リストを取り直す間隔
 
-type Saved = { version: string; raw: string; sig: string | null; consent: Perms; enabled: boolean; at: number };
+type Saved = { version: string; raw: string; sig: string | null; consent: Perms; enabled: boolean; at: number; src?: string }; // src: 署名のない版の入手元(github:owner/repo@ref)。フォルダから入れたものは無い
 type Revoked = { ts: number; items: string[]; sig: string };
 type Store = { v: 1; items: Record<string, Saved>; theme: string | null; rev: Revoked | null; checked: number };
 export type Status = "verified" | "unverified" | "revoked" | "blocked" | "tampered" | "needs-consent";
-export type Installed = { id: string; manifest: Manifest; version: string; sig: string | null; enabled: boolean; status: Status; active: boolean };
+export type Installed = { id: string; manifest: Manifest; version: string; sig: string | null; enabled: boolean; status: Status; active: boolean; src?: string };
 export type Listed = { id: string; owner: string; versions: { version: string; status: "pending" | "verified" | "revoked"; sig: string | null; name: string; description: string; perms: Perms; kinds: { themes: number; snippets: number; commands: number }; size: number; ts: number }[] };
 
 const empty = (): Store => ({ v: 1, items: {}, theme: null, rev: null, checked: 0 });
@@ -34,7 +35,7 @@ function persist() { kvSet(EXT_KEY, JSON.stringify(store)); }
 function rebuild() {
   snap = Object.entries(store.items).filter(([id]) => manifests[id]).map(([id, s]) => {
     const st = status[id] ?? "tampered";
-    return { id, manifest: manifests[id], version: s.version, sig: s.sig, enabled: s.enabled, status: st, active: s.enabled && (st === "verified" || st === "unverified") };
+    return { id, manifest: manifests[id], version: s.version, sig: s.sig, src: s.src, enabled: s.enabled, status: st, active: s.enabled && (st === "verified" || st === "unverified") };
   }).sort((a, b) => a.id.localeCompare(b.id));
   subs.forEach((f) => f());
 }
@@ -111,32 +112,68 @@ export async function fetchBundle(id: string, version: string, sig: string | nul
   return { raw, manifest: b.manifest };
 }
 
-/** 入れる(同意は呼び出し側で取ってから)。consent は、ユーザーが許可した権限 */
-export async function install(id: string, raw: string, sig: string | null, consent: Perms, keepEnabled = true): Promise<void> {
-  const b = readBundle(raw); if (!b) return;
+/** 署名のない版の入手元の区別: github:owner/repo@ref(GitHub)、site(サイトの未認証の版)、folder(フォルダ。印がないもの) */
+const srcOf = (x: { src?: string }) => x.src ?? "folder";
+const repoOf = (x: { src?: string }) => srcOf(x).replace(/@[^@]*$/, ""); // 同じリポジトリなら、ブランチ・タグが違っても同じ入手元
+/** いま入っているもの(old)を、新しいもの(next)で置き換えてよいか。署名のない版が、別の入手元(認証済みを含む)の同じ id を乗っ取れないようにする。
+ *  署名つきの版は、署名を確かめたうえなので置き換えてよい。サイトの未認証の版は、サイトのもの(認証済みを含む)と、印のない古いものを置き換えられる */
+export const canReplace = (old: { sig: string | null; src?: string } | undefined, next: { sig: string | null; src?: string }) =>
+  !old || !!next.sig || srcOf(next) === "site" && (!!old.sig || srcOf(old) === "site" || srcOf(old) === "folder") || !old.sig && repoOf(old) === repoOf(next);
+/** 同じ id で別の入手元のものが入っているか(入れる前の確認に使う) */
+export const originClash = (id: string, sig: string | null, src?: string) => !canReplace(store.items[id], { sig, src });
+
+/** 入れる(同意は呼び出し側で取ってから)。consent は、ユーザーが許可した権限。入手元が違う同じ id が入っているときは入れず "origin" を返す */
+export async function install(id: string, raw: string, sig: string | null, consent: Perms, keepEnabled = true, src?: string): Promise<"ok" | "origin" | "bad"> {
+  const b = readBundle(raw); if (!b) return "bad";
   const old = store.items[id];
-  store.items[id] = { version: b.manifest.version, raw, sig, consent, enabled: keepEnabled && (old ? old.enabled : true), at: Date.now() };
+  if (!canReplace(old, { sig, src })) return "origin";
+  store.items[id] = { version: b.manifest.version, raw, sig, consent, enabled: keepEnabled && (old ? old.enabled : true), at: Date.now(), ...(!sig && src ? { src } : {}) };
   persist();
   await refresh();
+  return "ok";
 }
-/** 自作のフォルダを読んで、入れる前の確認に渡す形にする。読むのは、選んだフォルダ直下の fixit-extension.json だけ */
-export async function readLocal(dir: string): Promise<{ id: string; version: string; sig: null; manifest: Manifest; raw: string } | "bad" | "id" | "missing"> {
-  let text: string;
-  try { text = await invoke<string>("ext_read_local", { dir }); } catch { return "missing"; }
-  // format 2: main のスクリプトも、選んだフォルダの中のものだけ読む(名前の形は readBundle と同じ規則で先に確かめる)
-  const files: Record<string, string> = {};
+type Read = { id: string; version: string; sig: null; manifest: Manifest; raw: string; src?: string };
+/** fixit-extension.json の main(スクリプト)の名前。形は readBundle と同じ規則で先に確かめる。無ければ null、不正なら "bad" */
+function mainOf(text: string): string | null | "bad" {
   try {
     const main = (JSON.parse(text) as { main?: unknown }).main;
-    if (typeof main === "string") {
-      if (!FILE_NAME.test(main) || main.includes("..") || main.startsWith("/") || !main.endsWith(".js")) return "bad";
+    if (main === undefined) return null;
+    return typeof main === "string" && FILE_NAME.test(main) && !main.includes("..") && !main.startsWith("/") && main.endsWith(".js") ? main : "bad";
+  } catch { return "bad"; }
+}
+const toRead = (r: ReturnType<typeof localBundle>, src?: string): Read | "bad" | "id" => (typeof r === "string" ? r : { id: r.manifest.id, version: r.manifest.version, sig: null, manifest: r.manifest, raw: r.raw, ...(src ? { src } : {}) });
+
+/** 自作のフォルダを読んで、入れる前の確認に渡す形にする。読むのは、選んだフォルダ直下の fixit-extension.json と、その main だけ */
+export async function readLocal(dir: string): Promise<Read | "bad" | "id" | "missing"> {
+  let text: string;
+  try { text = await invoke<string>("ext_read_local", { dir }); } catch { return "missing"; }
+  const files: Record<string, string> = {};
+  const main = mainOf(text);
+  if (main === "bad") return "bad";
+  if (main) {
+    try {
       const { RemoteFile } = await import("@/platform/remote");
       const f = await new RemoteFile({ kind: "pc", path: dir }, `${dir.replace(/[\\/]+$/, "")}/${main}`, main).getFile();
       if (f.size > MAX_FILE_CHARS * 4) return "bad";
       files[main] = await f.text();
-    }
-  } catch { return "bad"; }
-  const r = localBundle(text, files);
-  return typeof r === "string" ? r : { id: r.manifest.id, version: r.manifest.version, sig: null, manifest: r.manifest, raw: r.raw };
+    } catch { return "bad"; }
+  }
+  return toRead(localBundle(text, files, true));
+}
+
+/** GitHub の公開リポジトリから読む(ルートの fixit-extension.json と、その main)。署名はないので、入れる前の確認は未認証の扱い */
+export async function readGithub(g: GithubRef): Promise<Read | "bad" | "id" | "missing" | "net"> {
+  const get = (path: string) => invoke<string>("ext_github_get", { owner: g.owner, repo: g.repo, gitRef: g.ref, path });
+  let text: string;
+  try { text = await get("fixit-extension.json"); } catch (e) { return String(e) === "not-found" ? "missing" : "net"; }
+  const files: Record<string, string> = {};
+  const main = mainOf(text);
+  if (main === "bad") return "bad";
+  if (main) {
+    try { files[main] = await get(main); } catch (e) { return String(e) === "not-found" ? "bad" : "net"; }
+    if (files[main].length > MAX_FILE_CHARS) return "bad";
+  }
+  return toRead(localBundle(text, files, true), githubSrc(g));
 }
 export const isLocal = (id: string) => id.startsWith(LOCAL_PREFIX);
 export const pickFolder = () => invoke<string | null>("pick_folder", { title: null });

@@ -56,7 +56,7 @@ fn abs_args() -> Vec<std::ffi::OsString> {
     env::args_os().skip(1).map(|a| {
         let p = std::path::Path::new(&a);
         match &cwd {
-            Some(c) if !a.to_string_lossy().starts_with('-') && p.is_relative() && !a.is_empty() => c.join(p).components().collect::<PathBuf>().into_os_string(),
+            Some(c) if !a.to_string_lossy().starts_with('-') && !a.to_string_lossy().to_ascii_lowercase().starts_with("fixit:") && p.is_relative() && !a.is_empty() => c.join(p).components().collect::<PathBuf>().into_os_string(),
             _ => a,
         }
     }).collect()

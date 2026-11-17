@@ -8,7 +8,8 @@ import { SITE_URL } from "@/shared/config";
 import { ms } from "@/features/settings/settings";
 import { shieldExtCss } from "./host/css";
 import { notify } from "@/shared/notify";
-import { checkRevocations, extAvailable, fetchBundle, fetchList, hasNewer, install, isLocal, pickFolder, readLocal, setEnabled, setTheme, uninstall, useInstalled, activeTheme, type Installed, type Listed, type Status } from "./registry";
+import { checkRevocations, extAvailable, fetchBundle, fetchList, hasNewer, install, isLocal, originClash, pickFolder, readGithub, readLocal, setEnabled, setTheme, uninstall, useInstalled, activeTheme, type Installed, type Listed, type Status } from "./registry";
+import { parseGithubUrl, type GithubRef } from "./github";
 import { cmpVer, permLines, type Manifest, type PermKey, type Perms } from "./spec";
 
 const statusText = (s: Status) => ({ verified: i18next.t("認証済み"), unverified: i18next.t("未認証"), revoked: i18next.t("認証が取り消されました"), blocked: i18next.t("配布が停止されました"), tampered: i18next.t("内容が署名と合いません"), "needs-consent": i18next.t("権限の許可が必要です") })[s];
@@ -23,21 +24,23 @@ function Perms({ m }: { m: Manifest }) {
 }
 
 // 入れる前の確認。認証済みでも権限は 1 つずつ許可してもらう。未認証は、警告に同意してもらう
-type Pick = { id: string; version: string; sig: string | null; manifest: Manifest; raw: string };
-function Confirm({ id, version, sig, manifest, raw, onClose }: Pick & { onClose: () => void }) {
+type Pick = { id: string; version: string; sig: string | null; manifest: Manifest; raw: string; src?: string };
+const repoOf = (src?: string) => src?.startsWith("github:") ? src.slice(7) : "";
+const CLASH = () => i18next.t("同じ id の拡張機能が、別の入手元ですでに入っています。先に削除してから入れてください");
+function Confirm({ id, version, sig, manifest, raw, src, onClose }: Pick & { onClose: () => void }) {
   const rows = rowsOf(manifest);
   const [ok, setOk] = useState<Record<string, boolean>>({});
   const [risk, setRisk] = useState(false);
   const [busy, setBusy] = useState(false);
   const ready = rows.every((r) => ok[r.key]) && (!!sig || risk);
-  const go = async () => { setBusy(true); await install(id, raw, sig, manifest.perms); setBusy(false); notify(i18next.t("「{{n}}」を入れました", { n: manifest.name }), "success"); onClose(); };
+  const go = async () => { setBusy(true); const r = await install(id, raw, sig, manifest.perms, true, src); setBusy(false); if (r !== "ok") return notify(r === "origin" ? CLASH() : i18next.t("入れられませんでした。内容が正しくありません"), "error"); notify(i18next.t("「{{n}}」を入れました", { n: manifest.name }), "success"); onClose(); };
   return (
     <div className="ex-confirm" role="group" aria-label={i18next.t("インストールの確認")}>
       <p className="ex-title"><b>{manifest.name}</b> <span className="tnum">v{version}</span> <span className="ex-badge" data-s={sig ? "verified" : "unverified"}>{sig ? i18next.t("認証済み") : i18next.t("未認証")}</span></p>
       <p className="ex-desc">{manifest.description || i18next.t("説明はありません")}</p>
       <h3>{i18next.t("この拡張機能が使う権限")}</h3>
       <Perms m={manifest} />
-      {!sig && <p className="ex-warn" role="alert">{isLocal(id) ? i18next.t("このフォルダの拡張機能は、審査も署名もありません。内容は検査していますが、安全とは確かめられていません。自分で作った、または信頼できる作者のものだけ入れてください。") : i18next.t("この版は運営の審査を受けていません。内容は検査していますが、安全とは確かめられていません。信頼できる作者のものだけ入れてください。")}</p>}
+      {!sig && <p className="ex-warn" role="alert">{repoOf(src) ? i18next.t("GitHub のリポジトリ {{r}} から取得した内容で、審査も署名もありません。内容は検査していますが、安全とは確かめられていません。自分で作った、または信頼できる作者のものだけ入れてください。", { r: repoOf(src) }) : isLocal(id) ? i18next.t("このフォルダの拡張機能は、審査も署名もありません。内容は検査していますが、安全とは確かめられていません。自分で作った、または信頼できる作者のものだけ入れてください。") : i18next.t("この版は運営の審査を受けていません。内容は検査していますが、安全とは確かめられていません。信頼できる作者のものだけ入れてください。")}</p>}
       {rows.map((r) => <label key={r.key} className="ex-check"><input type="checkbox" checked={!!ok[r.key]} onChange={(e) => setOk({ ...ok, [r.key]: e.target.checked })} />{i18next.t("許可する: {{p}}", { p: permText(r.key, r.value) })}</label>)}
       {!sig && <label className="ex-check"><input type="checkbox" checked={risk} onChange={(e) => setRisk(e.target.checked)} />{i18next.t("未認証であることを理解したうえで入れる")}</label>}
       <div className="dlg-foot"><button className="btn" onClick={onClose} disabled={busy}>{i18next.t("やめる")}</button><button className="btn" data-primary="true" onClick={go} disabled={!ready || busy}>{i18next.t("入れる")}</button></div>
@@ -55,12 +58,12 @@ function Mine({ x }: { x: Installed }) {
       <div className="ex-top">
         <div className="ex-row">
           <span className="ex-name">{x.manifest.name}</span><span className="tnum ex-id">v{x.version}</span>
-          <span className="ex-badge" data-s={x.status}>{statusText(x.status)}</span>{isLocal(x.id) && <span className="ex-badge">{i18next.t("自作")}</span>}
+          <span className="ex-badge" data-s={x.status}>{statusText(x.status)}</span>{repoOf(x.src) ? <span className="ex-badge">GitHub</span> : isLocal(x.id) && <span className="ex-badge">{i18next.t("自作")}</span>}
         </div>
         {toggle && <button className="switch" role="switch" aria-checked={x.enabled} aria-label={x.enabled ? i18next.t("無効にする") : i18next.t("有効にする")} onClick={() => setEnabled(x.id, !x.enabled)} />}
       </div>
       <p className="ex-desc">{[x.manifest.description, kindsText(x.manifest)].filter(Boolean).join(" · ")}</p>
-      <p className="ex-id">{x.id}</p>
+      <p className="ex-id">{x.id}{repoOf(x.src) && ` · ${repoOf(x.src)}`}</p>
       {x.status === "needs-consent" && <p className="ex-warn">{i18next.t("権限が増えているため止めています。入れ直して、権限を許可してください。")}</p>}
       <div className="ex-acts">
         {x.manifest.themes.length > 0 && x.active && x.manifest.themes.map((th) => { const key = `${x.id}/${th.id}`; return <button key={key} className="btn" data-on={sel === key} onClick={() => setTheme(sel === key ? null : key)}>{th.name}</button>; })}
@@ -80,7 +83,7 @@ function Browse({ installed, q, onlyV, onPick }: { installed: Installed[]; q: st
     const r = await fetchBundle(id, version, sig).catch(() => "bad" as const);
     setBusy("");
     if (r === "bad") return notify(i18next.t("取得できませんでした。内容が正しくないか、ネットワークに接続できません"), "error");
-    onPick({ id, version, sig, ...r });
+    onPick({ id, version, sig, ...r, ...(sig ? {} : { src: "site" }) });
   };
   if (err) return <p className="ex-warn">{i18next.t("一覧を取得できませんでした。ネットワークを確かめてください")}</p>;
   if (!list) return <p className="ex-none">{i18next.t("読み込み中…")}</p>;
@@ -97,7 +100,7 @@ function Browse({ installed, q, onlyV, onPick }: { installed: Installed[]; q: st
   return (
     <ul className="ex-list">
       {rows.map(({ g, vs, main }) => {
-        const cur = installed.find((x) => x.id === g.id);
+        const cur = installed.find((x) => x.id === g.id && !x.src?.startsWith("github:"));
         const upd = !!cur && hasNewer(g, cur.version) && cmpVer(main.version, cur.version) > 0;
         const rest = vs.filter((v) => v !== main);
         return (
@@ -119,21 +122,52 @@ function Browse({ installed, q, onlyV, onPick }: { installed: Installed[]; q: st
   );
 }
 
-export function ExtensionsView({ out, onClose }: { out?: boolean; onClose: () => void }) {
+// 検索欄に GitHub のリポジトリの URL を貼ったときの、入れる口。取得は「取得」を押したときだけ(貼っただけでは通信しない)
+function GithubCard({ g, onPick }: { g: GithubRef; onPick: (p: Pick) => void }) {
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    setBusy(true);
+    const r = await readGithub(g);
+    setBusy(false);
+    if (r === "missing") return notify(i18next.t("公開リポジトリの直下に fixit-extension.json が見つかりません(非公開のリポジトリは使えません)"), "error");
+    if (r === "net") return notify(i18next.t("GitHub から取得できませんでした。ネットワークを確かめてください"), "error");
+    if (r === "id") return notify(i18next.t("fixit-extension.json の id は「作者.名前」の形にしてください"), "error");
+    if (r === "bad") return notify(i18next.t("fixit-extension.json の内容が正しくありません。書き方は fixit-editor.lapius7.com の「拡張機能」にあります"), "error");
+    if (originClash(r.id, null, r.src)) return notify(CLASH(), "error");
+    onPick(r);
+  };
+  return (
+    <ul className="ex-list">
+      <li className="ex-item">
+        <div className="ex-top">
+          <div className="ex-row"><span className="ex-name">{i18next.t("GitHub のリポジトリから入れる")}</span></div>
+          <button className="btn" data-primary="true" onClick={() => void go()} disabled={busy}>{busy ? i18next.t("取得中…") : i18next.t("取得")}</button>
+        </div>
+        <p className="ex-desc">{g.owner}/{g.repo}{g.ref !== "HEAD" && ` @ ${g.ref}`}</p>
+        <p className="ex-id">{i18next.t("公開リポジトリの直下の fixit-extension.json を読みます。入れる前に、内容と権限を確かめられます。")}</p>
+      </li>
+    </ul>
+  );
+}
+
+// find: fixit://extensions/<id> で開いたとき、「探す」を開いて id で絞り込む(入れる操作は、いつもの確認の画面を通る)
+export function ExtensionsView({ out, onClose, find }: { out?: boolean; onClose: () => void; find?: string }) {
   const installed = useInstalled();
   useEffect(() => { shieldExtCss(true); return () => shieldExtCss(false); }, []);
   const [closing, setClosing] = useState(false);
-  const [tab, setTab] = useState<"mine" | "browse">("mine");
+  const [tab, setTab] = useState<"mine" | "browse">(find ? "browse" : "mine");
   const [pick, setPick] = useState<Pick | null>(null);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(find ?? "");
   const [onlyV, setOnlyV] = useState(false);
+  const gh = parseGithubUrl(q);
   const fromFolder = async () => {
     const dir = await pickFolder().catch(() => null);
     if (!dir) return;
     const r = await readLocal(dir);
     if (r === "missing") return notify(i18next.t("選んだフォルダの直下に fixit-extension.json がありません"), "error");
-    if (r === "id") return notify(i18next.t("自作の拡張機能の id は「local.名前」にしてください"), "error");
+    if (r === "id") return notify(i18next.t("fixit-extension.json の id は「作者.名前」の形にしてください"), "error");
     if (r === "bad") return notify(i18next.t("fixit-extension.json の内容が正しくありません。書き方は fixit-editor.lapius7.com の「拡張機能」にあります"), "error");
+    if (originClash(r.id, null, r.src)) return notify(CLASH(), "error");
     setPick(r);
   };
   const close = () => { setClosing(true); setTimeout(onClose, ms(180)); };
@@ -156,14 +190,14 @@ export function ExtensionsView({ out, onClose }: { out?: boolean; onClose: () =>
             <div className="ex-bar">
               <div className="sp-box">
                 <SearchIcon size={14} />
-                <input autoFocus placeholder={i18next.t("拡張機能を探す")} value={q} onChange={(e) => setQ(e.target.value)} aria-label={i18next.t("拡張機能を探す")} />
+                <input autoFocus placeholder={i18next.t("拡張機能を探す、または GitHub の URL")} value={q} onChange={(e) => setQ(e.target.value)} aria-label={i18next.t("拡張機能を探す")} />
                 {q && <button className="icon-btn" aria-label={i18next.t("消す")} onClick={() => setQ("")}><X /></button>}
               </div>
               {tab === "browse" && <button className="chipbtn" aria-pressed={onlyV} onClick={() => setOnlyV(!onlyV)}>{i18next.t("認証済みのみ")}</button>}
               {tab === "mine" && <button className="chipbtn" onClick={() => void fromFolder()}>{i18next.t("フォルダから入れる(自作)")}</button>}
             </div>
             <div className="ex-body">
-              {tab === "mine" ? (() => {
+              {gh ? <GithubCard g={gh} onPick={setPick} /> : tab === "mine" ? (() => {
                 const rows = installed.filter((x) => hit(q, x.manifest.name, x.id, x.manifest.description));
                 if (!installed.length) return <p className="ex-none">{i18next.t("入れた拡張機能はありません")}</p>;
                 if (!rows.length) return <p className="ex-none">{i18next.t("「{{q}}」に合う拡張機能はありません", { q: q.trim() })}</p>;

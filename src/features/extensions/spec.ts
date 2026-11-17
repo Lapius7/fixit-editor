@@ -175,14 +175,14 @@ export const cmpVer = (a: string, b: string) => { const x = a.split(".").map(Num
 
 // ---- 自作(ローカル)の拡張機能 ----
 // フォルダの fixit-extension.json(作者向けの書き方)を、保存する形に直す。直したあとは、サイトのものと同じ readBundle で検査する。
-// id は「local.名前」に限る(サイトで公開された id と混ざらないように)。format 2 のときは、main のスクリプトを files に入れる。
+// id は既定では「local.名前」に限る(サイトで公開された id と混ざらないように)。anyId のとき(GitHub・フォルダから入れるとき)は「作者.名前」の形でもよいが、入れる側(registry の canReplace)が、別の入手元の同じ id を上書きしないよう断る。format 2 のときは、main のスクリプトを files に入れる。
 export const LOCAL_PREFIX = "local.";
 const sub = (o: Record<string, unknown>, keys: string[]) => Object.keys(o).every((k) => keys.includes(k));
-export function localBundle(text: string, files: Record<string, string> = {}): { raw: string; manifest: Manifest } | "bad" | "id" {
+export function localBundle(text: string, files: Record<string, string> = {}, anyId = false): { raw: string; manifest: Manifest } | "bad" | "id" {
   let j: unknown;
   try { j = JSON.parse(text); } catch { return "bad"; }
   if (!isObj(j) || !sub(j, ["id", "name", "version", "description", "permissions", "contributes", "main"])) return "bad";
-  if (typeof j.id !== "string" || !j.id.startsWith(LOCAL_PREFIX)) return "id";
+  if (typeof j.id !== "string" || !(anyId ? EXT_ID.test(j.id) : j.id.startsWith(LOCAL_PREFIX))) return "id";
   const p = j.permissions === undefined ? {} : j.permissions, c = j.contributes === undefined ? {} : j.contributes;
   if (!isObj(p) || !isObj(c) || !sub(p, ["fsRead", "fsWrite", "network", "exec", "ui", "editorRead", "editorWrite"]) || !sub(c, ["themes", "snippets", "commands", "settings", "keybindings", "menus"])) return "bad";
   const list = (v: unknown): unknown[] | null => (v === undefined ? [] : Array.isArray(v) ? v : null);

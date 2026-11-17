@@ -104,7 +104,8 @@ import { ShotPreview } from "@/editor/ShotPreview";
 import { drag, dragEnd, extFiles, paneDrag, rootKey, setDropTarget, useDropTarget } from "@/workbench/dnd";
 import { LEAF0, boxes, flipAround, fromPair, isLeaf, joints, leaves, nextId, onTop, removeLeaf, renumber, setRatio, splitLeaf, swapLeaves, topLeaves, topRight, valid as validLay, type Box, type Dir, type Edge, type Joint, type Lay } from "@/workbench/layout";
 import { addNode, dirOf, exists, moveNode, removeNode, renameNode } from "@/workbench/treeops";
-import { DEFS, isDark, ms, update, useSettings } from "@/features/settings/settings";
+import { CATS, DEFS, isDark, ms, update, useSettings } from "@/features/settings/settings";
+import { parseFixitUrl, type FixitRoute } from "@/features/protocol/route";
 import type { Tab } from "@/shared/types";
 import { ask, askChoice } from "@/shared/ask";
 import i18next from 'i18next'
@@ -227,7 +228,7 @@ export default function App() {
   const [lh, setLh] = useState<string | null>(null); // ローカル履歴を開いているファイルのパス
   const [statsOpen, setStatsOpen] = useState(false); const [ghOpen, setGhOpen] = useState(false);
   const [fbOpen, setFbOpen] = useState(false);
-  const [extOpen, setExtOpen] = useState(false);
+  const [extOpen, setExtOpen] = useState(false); const [extFind, setExtFind] = useState<string | undefined>(undefined);
   const extList = useInstalled();
   useExtensionEffects(extList);
   const { found: upd } = useUpdateState();
@@ -845,6 +846,54 @@ export default function App() {
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // fixit://… で開かれたとき、画面を直接開く。URL は外から渡せる文字列なので、許可リスト(protocol/route.ts)にあるものだけを開き、
+  // 設定の変更・拡張機能の導入・ファイルを開く操作はしない(拡張機能は「探す」を絞り込むだけで、入れる操作は通常の確認の画面を通る)
+  const openRoute = (r: FixitRoute) => {
+    if (r.k === "settings") setSetts(r.cat ?? "look");
+    else if (r.k === "extensions") { if (!extAvailable) return flash(i18next.t("この版では拡張機能を使えません"), "error"); setExtFind(r.id ?? undefined); setExtOpen(true); }
+    else switch (r.page) {
+      case "theme": setTp(true); break;
+      case "stats": setStatsOpen(true); break;
+      case "github": setGhOpen(true); break;
+      case "feedback": setFbOpen(true); break;
+      case "workspaces": setWsDlg("ws"); break;
+      case "update": void checkNow(); break;
+      case "ai": setAi(true); break;
+    }
+  };
+  const urlDone = useRef(false);
+  useEffect(() => {
+    if (urlDone.current) return;
+    urlDone.current = true;
+    (async () => {
+      // 画面の中の開発確認用: ?fixit=settings/look(開発サーバーだけ)
+      const url = IS_TAURI ? await import("@tauri-apps/api/core").then((m) => m.invoke<string | null>("launch_url")).catch(() => null)
+        : import.meta.env.DEV ? (() => { const q = new URLSearchParams(location.search).get("fixit"); return q ? `fixit://${q}` : null; })() : null;
+      if (!url) return;
+      const r = parseFixitUrl(url, CATS.map((c) => c.id));
+      if (r) openRoute(r); else flash(i18next.t("fixit:// のリンクを開けませんでした"), "error");
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // すでに動いているこのウィンドウへ、あとから fixit://… が渡されたとき(別のプロセスが受け渡す。Rust の next_url)。起動時の URL と同じ許可リストを通す
+  const openRouteRef = useRef(openRoute); openRouteRef.current = openRoute;
+  useEffect(() => {
+    if (!IS_TAURI) return;
+    let stop = false;
+    const tick = async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        for (;;) {
+          const url = await invoke<string | null>("next_url");
+          if (stop || !url) break;
+          const r = parseFixitUrl(url, CATS.map((c) => c.id));
+          if (r) openRouteRef.current(r); else flash(i18next.t("fixit:// のリンクを開けませんでした"), "error");
+        }
+      } catch { /* 取れなければ次の周期で */ }
+    };
+    const id = window.setInterval(tick, 700);
+    return () => { stop = true; clearInterval(id); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // フォルダを選ぶ(exe は OS のダイアログで選び、Rust 側の std::fs で読み書きする。ブラウザの保存確認は出ない)
   const pickAny = async (): Promise<{ name: string; handle: FileSystemDirectoryHandle; ref: RootRef; conn?: Conn } | null> => {
     if (IS_TAURI) {
@@ -2629,7 +2678,7 @@ export default function App() {
       {pWs.v && <Workspaces key={pWs.key} out={pWs.out} initial={pWs.v} curId={ws?.id ?? null} saveName={root.conn ? root.name : root.handle ? root.name : ""} max={st.wsMax} onOpen={(w) => switchWs(w)} onSaveNew={saveNew} onClose={() => setWsDlg(null)} flash={flash} />}
       {pSetup.v && <Setup key={pSetup.key} out={pSetup.out} onClose={() => setSetupOpen(false)} />}
       {pFb.v && <FeedbackView key={pFb.key} out={pFb.out} onClose={() => setFbOpen(false)} />}
-      {pExt.v && <ExtensionsView key={pExt.key} out={pExt.out} onClose={() => setExtOpen(false)} />}
+      {pExt.v && <ExtensionsView key={pExt.key} out={pExt.out} find={extFind} onClose={() => { setExtOpen(false); setExtFind(undefined); }} />}
       {pUp.v && upd && <UpdateView key={pUp.key} m={upd} out={pUp.out} onClose={() => setUpdOpen(false)} />}
       {pLog.v && <PortLog key={pLog.key} pub={pLog.v} conn={root?.conn} out={pLog.out} onClose={() => setLogId(null)} onCopy={(u) => copyText(u)} onOpen={(u) => void openExternal(u)} />}
       {pGh.v && gitView && <GithubView key={pGh.key} out={pGh.out} conn={gitView.conn} root={gitView.root ?? gitView.dir} onClose={() => setGhOpen(false)} />}

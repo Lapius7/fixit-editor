@@ -272,6 +272,8 @@ async fn pick_folder(window: tauri::WebviewWindow, title: Option<String>) -> Opt
 // 起動のときに渡されたフォルダ(「fixit ./」など)。ファイルなら、その親のフォルダを返す。launcher が相対パスを絶対パスにして渡してくる
 #[tauri::command]
 fn launch_target() -> Option<String> {
+    // fixit:// の URL が付いているときは、ほかの引数(フォルダなど)を信用しない
+    if fixit_core::proto::has_url(std::env::args_os().skip(1)) { return None; }
     for a in std::env::args_os().skip(1) {
         if a.to_string_lossy().starts_with('-') { continue; }
         let p = std::path::PathBuf::from(&a);
@@ -283,7 +285,22 @@ fn launch_target() -> Option<String> {
 
 // 起動のとき --new が付いていたら、前回のワークスペースを開かずに空の状態で始める(「新しいウィンドウ」で起動したとき)
 #[tauri::command]
-fn launch_blank() -> bool { std::env::args_os().skip(1).any(|a| a == "--new") }
+fn launch_blank() -> bool { !fixit_core::proto::has_url(std::env::args_os().skip(1)) && std::env::args_os().skip(1).any(|a| a == "--new") }
+
+// 動いているウィンドウへの fixit:// の受け渡し(fixit-core の proto.rs)。他のプロセスから渡された URL を、画面が取りに来る
+#[derive(Default)]
+struct Pending(Mutex<Vec<String>>);
+static LAST_FOCUS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn fixit_data_dir() -> Option<std::path::PathBuf> { std::env::var_os("APPDATA").map(|d| std::path::PathBuf::from(d).join("Fixit")) }
+
+// 画面が定期的に呼び、他のプロセスから渡された fixit:// の URL を 1 つずつ受け取る
+#[tauri::command]
+fn next_url(p: tauri::State<Pending>) -> Option<String> { let mut v = p.0.lock().unwrap(); if v.is_empty() { None } else { Some(v.remove(0)) } }
+
+// 起動のとき fixit://… が渡されていたら、その URL(長さ・制御文字を確かめたもの)を返す。意味づけは画面側の許可リストが行う
+#[tauri::command]
+fn launch_url() -> Option<String> { fixit_core::proto::pick_url(std::env::args_os().skip(1)) }
 
 // 新しいウィンドウ。同じ exe をもう 1 つ起動する(ウィンドウごとに別のプロセス)。dir があればそのフォルダを、なければ空の状態で開く
 #[tauri::command]
@@ -554,6 +571,11 @@ async fn ext_get(path: String) -> Result<String, String> {
         String::from_utf8(b).map_err(|_| "不正な応答です".to_string())
     }).await.map_err(|e| e.to_string())?
 }
+// GitHub の公開リポジトリのファイル(自作の拡張機能を試すため)。取得先は raw.githubusercontent.com の決まった形だけ
+#[tauri::command]
+async fn ext_github_get(owner: String, repo: String, git_ref: String, path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || { let b = ext::fetch_github(&owner, &repo, &git_ref, &path)?; String::from_utf8(b).map_err(|_| "不正な応答です".to_string()) }).await.map_err(|e| e.to_string())?
+}
 #[tauri::command]
 fn ext_verify(raw: String, sig: String) -> Result<(String, String), String> { ext::verify_bundle(raw.as_bytes(), &sig) }
 #[tauri::command]
@@ -615,24 +637,57 @@ fn pv_serve<R: tauri::Runtime>(ctx: tauri::UriSchemeContext<'_, R>, req: tauri::
 }
 
 fn main() {
-    if let Some(l) = std::env::var_os("FIXIT_LAUNCHER") { update::sweep_old(std::path::Path::new(&l)); }
+    // fixit:// で起動されたとき、動いている Fixit のウィンドウがあれば、そこへ URL を渡して自分は終わる(渡せなければ、このまま新しいウィンドウで開く)
+    if let (Some(u), Some(d)) = (fixit_core::proto::pick_url(std::env::args_os().skip(1)), fixit_data_dir()) {
+        if fixit_core::proto::hand_off(&d, &u, std::time::Duration::from_millis(1500)) { std::process::exit(0); }
+    }
+    if let Some(l) = std::env::var_os("FIXIT_LAUNCHER") {
+        update::sweep_old(std::path::Path::new(&l));
+        // fixit:// を、更新で置き換わらない起動ファイルへ向けて登録しておく(画面の表示を待たせないよう別スレッドで)
+        let l = std::path::PathBuf::from(l);
+        std::thread::spawn(move || fixit_core::proto::ensure_registered(&l));
+    }
     tauri::Builder::default()
         .manage(Ptys::default())
         .manage(Jobs::default())
         .manage(Lsps::default())
         .manage(Pv::default())
+        .manage(Pending::default())
+        .on_window_event(|_, ev| { if let tauri::WindowEvent::Focused(true) = ev { LAST_FOCUS.store(fixit_core::proto::now_ms(), std::sync::atomic::Ordering::Relaxed); } })
+        .setup(|app| {
+            // 動いていることを 1 秒ごとに知らせ(beat)、他のプロセスから渡された fixit:// の URL を拾ったら、ウィンドウを前に出して画面に渡す
+            if let Some(d) = fixit_data_dir() {
+                use tauri::Manager;
+                let h = app.handle().clone();
+                std::thread::spawn(move || {
+                    let pid = std::process::id();
+                    let mut n = 0u32;
+                    loop {
+                        if n % 4 == 0 { fixit_core::proto::beat(&d, pid, LAST_FOCUS.load(std::sync::atomic::Ordering::Relaxed)); }
+                        n = n.wrapping_add(1);
+                        if let Some(u) = fixit_core::proto::take_url(&d, pid) {
+                            h.state::<Pending>().0.lock().unwrap().push(u);
+                            if let Some(w) = h.get_webview_window("main") { let _ = w.show(); let _ = w.unminimize(); let _ = w.set_focus(); }
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(250));
+                    }
+                });
+            }
+            Ok(())
+        })
         .register_uri_scheme_protocol("fixitpv", pv_serve)
         // 念のため: 画面側から読み取りの許可を求められても、ブラウザの確認を出さずに許可する(アプリ自身の画面だけを表示するため)
         .on_permission_request(|_, kind| match kind {
             tauri::webview::PermissionKind::ClipboardRead => tauri::webview::PermissionResponse::Allow,
             _ => tauri::webview::PermissionResponse::Default,
         })
-        .invoke_handler(tauri::generate_handler![launch_blank, new_window, pv_put, pv_drop, clip_read, clip_write, clip_files, pty_open, pty_shells, pty_write, pty_resize, pty_close, lsp_start, copilot_chat, lsp_send, lsp_stats, lsp_stop, launch_target, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_usage, claude_login, claude_cancel, copilot_device, gh_device, gh_poll, copilot_poll, copilot_token, store_load, store_read, store_stamps, store_save, apply_update, ext_get, ext_read_local, ext_verify, ext_verify_revoked, list_fonts, open_url, os_open])
+        .invoke_handler(tauri::generate_handler![launch_blank, launch_url, next_url, new_window, pv_put, pv_drop, clip_read, clip_write, clip_files, pty_open, pty_shells, pty_write, pty_resize, pty_close, lsp_start, copilot_chat, lsp_send, lsp_stats, lsp_stop, launch_target, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_usage, claude_login, claude_cancel, copilot_device, gh_device, gh_poll, copilot_poll, copilot_token, store_load, store_read, store_stamps, store_save, apply_update, ext_get, ext_read_local, ext_github_get, ext_verify, ext_verify_revoked, list_fonts, open_url, os_open])
         .build(tauri::generate_context!())
         .expect("フィクシットエディタを起動できませんでした")
         .run(|app, ev| {
             // アプリを閉じるときは、言語サーバーの子プロセスも止める
             if let tauri::RunEvent::Exit = ev {
+            if let Some(d) = fixit_data_dir() { fixit_core::proto::leave(&d, std::process::id()); }
                 use tauri::Manager;
                 let all: Vec<_> = app.state::<Lsps>().0.lock().unwrap().drain().map(|x| x.1).collect();
                 for s in all { s.stop(); }

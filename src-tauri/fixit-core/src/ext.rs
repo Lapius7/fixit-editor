@@ -89,6 +89,28 @@ pub fn fetch(url: &str) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
+/// GitHub の公開リポジトリのファイルを取る URL を作る。部品ごとに形を確かめ、raw.githubusercontent.com の決まった形だけを作る
+pub fn github_raw_url(owner: &str, repo: &str, git_ref: &str, path: &str) -> Result<String, String> {
+    let ok = |s: &str, max: usize, extra: &str| !s.is_empty() && s.len() <= max && s.chars().all(|c| c.is_ascii_alphanumeric() || extra.contains(c));
+    if !ok(owner, 39, "-") || !ok(repo, 100, "._-") || repo == "." || repo == ".." { return Err("リポジトリの指定が不正です".into()); }
+    // ref は 1 つの区切りだけ(ブランチ名の「/」は使えない)。.. や先頭の . は断る
+    if !ok(git_ref, 100, "._-") || git_ref.starts_with('.') || git_ref.contains("..") { return Err("ブランチ・タグの指定が不正です".into()); }
+    if !ok(path, 100, "._-/") || path.starts_with('/') || path.contains("..") || path.contains("//") { return Err("ファイルの指定が不正です".into()); }
+    Ok(format!("https://raw.githubusercontent.com/{owner}/{repo}/{git_ref}/{path}"))
+}
+
+/// GitHub の公開リポジトリのファイルを読む。転送(リダイレクト)は追わず、200 以外は失敗にする
+pub fn fetch_github(owner: &str, repo: &str, git_ref: &str, path: &str) -> Result<Vec<u8>, String> {
+    let url = github_raw_url(owner, repo, git_ref, path)?;
+    let r = ureq::AgentBuilder::new().redirects(0).timeout_connect(std::time::Duration::from_secs(15)).timeout_read(std::time::Duration::from_secs(30)).build()
+        .get(&url).call().map_err(|e| match e { ureq::Error::Status(404, _) => "not-found".to_string(), ureq::Error::Status(c, _) => format!("status {c}"), e => e.to_string() })?;
+    if r.status() != 200 { return Err(format!("status {}", r.status())); }
+    let mut out = Vec::new();
+    r.into_reader().take(MAX_BYTES + 1).read_to_end(&mut out).map_err(|e| e.to_string())?;
+    if out.len() as u64 > MAX_BYTES { return Err("ファイルが大きすぎます".into()); }
+    Ok(out)
+}
+
 /// 自作の拡張機能(フォルダ)の fixit-extension.json を読む。読むのはこの 1 ファイルだけ(フォルダ内のほかのファイルや、上の階層は読まない)
 pub fn read_local_manifest(dir: &str) -> Result<String, String> {
     let p = std::path::Path::new(dir).join("fixit-extension.json");
@@ -110,6 +132,20 @@ mod tests {
         let b: Bundle = serde_json::from_str(body).unwrap();
         let p = signed_payload(b.format, &b.manifest.id, &b.manifest.version, &hex(body.as_bytes()), body.len() as u64, &perms_hash(&b.manifest.perms, b.format));
         STANDARD.encode(k.sign(p.as_bytes()).to_bytes())
+    }
+
+    #[test]
+    fn github_url_builder() {
+        assert_eq!(github_raw_url("Lapius7", "fixiteditor-bgimgchanger", "HEAD", "fixit-extension.json").unwrap(), "https://raw.githubusercontent.com/Lapius7/fixiteditor-bgimgchanger/HEAD/fixit-extension.json");
+        assert!(github_raw_url("a/b", "r", "HEAD", "x.js").is_err());
+        assert!(github_raw_url("a", "..", "HEAD", "x.js").is_err());
+        assert!(github_raw_url("a", "r", "../x", "x.js").is_err());
+        assert!(github_raw_url("a", "r", "feat/x", "x.js").is_err());
+        assert!(github_raw_url("a", "r", "HEAD", "../x.js").is_err());
+        assert!(github_raw_url("a", "r", "HEAD", "/x.js").is_err());
+        assert!(github_raw_url("a", "r", "HEAD", "a?b=1").is_err());
+        assert!(github_raw_url("a@evil.com", "r", "HEAD", "x.js").is_err());
+        assert!(github_raw_url(&"a".repeat(40), "r", "HEAD", "x.js").is_err());
     }
 
     #[test]
