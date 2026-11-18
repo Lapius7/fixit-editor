@@ -43,6 +43,7 @@ const base = EditorView.theme({
   "&.cm-focused": { outline: "none" },
   ".cm-selectionLayer": { display: "none" },
   ".cm-selTrim": { zIndex: "-1" },
+  "&[data-hmask] .cm-selTrim": { clipPath: "polygon(var(--cm-sl) -100000000px, var(--cm-sr) -100000000px, var(--cm-sr) 100000000px, var(--cm-sl) 100000000px)" },
   ".cm-cursor": { borderLeftWidth: "var(--cur-w, 1.5px)", borderLeftColor: "var(--accent)" },
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": { backgroundColor: "var(--sel) !important" },
   ".cm-matchingBracket": { backgroundColor: "var(--sel)", outline: "none" },

@@ -101,6 +101,15 @@ const hScrollMask = ViewPlugin.fromClass(class {
     dom.style.setProperty("--cm-lf", `${Math.min(F, Math.max(0, x))}px`);
     dom.style.setProperty("--cm-r", `${x + sc.clientWidth - gw - mw}px`);
     dom.style.setProperty("--cm-rf", `${Math.min(F, Math.max(0, max - x))}px`);
+    // 選択の背景の層(.cm-selTrim)は、スクロールする領域の左端が原点なので、行番号の幅ぶんずらして、行番号とミニマップの下へはみ出さないように切る
+    // 層自身の左端を基準に、行番号の右端とミニマップの左端の位置を測る(層の原点に依存しない)
+    const lay = dom.querySelector(".cm-selTrim") as HTMLElement | null;
+    if (lay) {
+      const lr = lay.getBoundingClientRect(), g = sc.querySelector(".cm-gutters") as HTMLElement | null, m = dom.querySelector(".cm-minimap-gutter") as HTMLElement | null;
+      const sr = sc.getBoundingClientRect();
+      dom.style.setProperty("--cm-sl", `${(g ? g.getBoundingClientRect().right : sr.left) - lr.left}px`);
+      dom.style.setProperty("--cm-sr", `${(m ? m.getBoundingClientRect().left : sr.right) - lr.left}px`);
+    }
   }
   destroy() { this.view.scrollDOM.removeEventListener("scroll", this.on); this.view.dom.removeAttribute("data-hmask"); this.ro.disconnect(); }
 });
