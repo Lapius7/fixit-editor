@@ -247,7 +247,7 @@ async function claudeCliTauri(r: Req): Promise<Stop> {
 }
 
 // この PC の claude コマンド(Claude のサブスクリプションのログイン)を、dev サーバー経由で呼ぶ。トークンには触れない
-async function claudeCli(r: Req): Promise<Stop> {
+async function claudeCliOnce(r: Req): Promise<Stop> {
   if (IS_TAURI) return claudeCliTauri(r);
   let res: Response;
   try {
@@ -290,6 +290,47 @@ async function claudeCli(r: Req): Promise<Stop> {
     throw new AiError("network");
   }
   return stop;
+}
+
+// claude コマンドは道具を無効にして呼ぶ(安全のため)ので、ファイル操作は文字の取り決めで行う。
+// AI が <fixit_tool>{"name":..,"args":{..}}</fixit_tool> と書いたら、ここで取り出して onTool を実行し、
+// 結果を <fixit_result> で次の往復に渡す。画面には、取り決めの部分を出さない
+const T_OPEN = "<fixit_tool>", T_CLOSE = "</fixit_tool>";
+const toolRules = (exec?: boolean) =>
+  `\n\nTOOL PROTOCOL. You have no built-in tools here; use the editor's file tools through this protocol only. To use a tool, end your message with exactly one call written as ${T_OPEN}{"name":"read_file","args":{"path":"/src/app.ts"}}${T_CLOSE} and then stop writing. The result arrives in the next user message inside <fixit_result> tags; then continue. Make at most one call per message, and never write a result yourself. Available tools (name, description, args JSON schema):\n` +
+  (exec ? [...TOOLS, EXEC_TOOL] : TOOLS).map((t) => `- ${t.name}: ${t.description} Schema: ${JSON.stringify(t.schema)}`).join("\n");
+const partial = (s: string) => { for (let k = Math.min(T_OPEN.length - 1, s.length); k > 0; k--) if (T_OPEN.startsWith(s.slice(-k))) return k; return 0; };
+
+async function claudeCli(r: Req): Promise<Stop> {
+  const onTool = r.onTool;
+  if (!onTool) return claudeCliOnce(r);
+  const system = r.system + toolRules(r.exec);
+  let messages = r.messages, stop: Stop = "end";
+  for (let round = 0; ; round++) {
+    let full = "", shown = 0, cut = false;
+    const flush = (final: boolean) => {
+      if (cut) return;
+      const at = full.indexOf(T_OPEN);
+      const end = at >= 0 ? at : final ? full.length : full.length - partial(full);
+      if (at >= 0) cut = true;
+      if (end > shown) { r.onText(full.slice(shown, end)); shown = end; }
+    };
+    stop = await claudeCliOnce({ ...r, system, messages, onTool: undefined, onText: (t) => { full += t; flush(false); } });
+    flush(true);
+    const at = full.indexOf(T_OPEN);
+    if (at < 0 || stop !== "end" || round >= AI_TOOL_ROUNDS) return stop;
+    const body = full.slice(at + T_OPEN.length), close = body.indexOf(T_CLOSE);
+    let result: string, name = "tool";
+    try {
+      const j = JSON.parse(close >= 0 ? body.slice(0, close) : body) as { name?: string; args?: unknown };
+      name = String(j.name ?? "tool");
+      result = await onTool({ id: `cli-${round}`, name, args: j.args ?? {} });
+    } catch (e) {
+      if (r.signal.aborted) throw e;
+      result = "Could not read the tool call. Write one valid JSON object between the tags.";
+    }
+    messages = [...messages, { role: "assistant", content: full.slice(0, at + T_OPEN.length + (close >= 0 ? close + T_CLOSE.length : body.length)) }, { role: "user", content: `<fixit_result name="${name}">\n${result}\n</fixit_result>` }];
+  }
 }
 
 // 回答を作っている間は、窓の縁を光らせる(設定の「アニメーション」で切れる)

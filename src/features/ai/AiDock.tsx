@@ -179,15 +179,21 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
   const hasFiles = (e: React.DragEvent) => !!(drag.node || drag.tab) || e.dataTransfer.types.includes("Files");
   const onDrop = async (e: React.DragEvent) => {
     e.preventDefault(); setOver(false);
-    const n = drag.node, t = drag.tab, files = Array.from(e.dataTransfer.files);
+    const n = drag.node, t = drag.tab, dropped = Array.from(e.dataTransfer.files);
     dragEnd();
     if (n || t) {
-      if (n && n.kind === "dir") { notify(i18next.t("フォルダは添えられません。ファイルをドロップしてください"), "error"); return; }
+      if (n && n.kind === "dir") {
+        // フォルダは、中の一覧(3 階層まで)を文字として添える。中身が要るファイルは、AI が読む(道具が使えるとき)か、個別に添える
+        const tree = files ? await listTree(files.list, n.path.startsWith("/") ? n.path : `/${n.path}`, 3) : "";
+        if (!tree || tree.startsWith("[folder not found]")) { notify(i18next.t("このフォルダは添えられません"), "error"); return; }
+        addClip({ name: `${n.name}/`, text: `${n.path}\n${tree}`, scope: "file" });
+        return;
+      }
       const c = await resolve(n ?? t!);
       if (c && "blob" in c) void addImage(c.blob, c.name); else if (c) addClip(c); else notify(i18next.t("このファイルは文字として読めないため、添えられません"), "error");
       return;
     }
-    for (const f of files) {
+    for (const f of dropped) {
       if (isImageFile(f, f.name)) { await addImage(f, f.name); continue; }
       if (f.size > MAX_OPEN_BYTES) { notify(i18next.t("{{name}} は大きすぎて添えられません", { name: f.name }), "error"); continue; }
       const head = new Uint8Array(await f.slice(0, 8192).arrayBuffer());
@@ -276,7 +282,7 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
     if (pics.length) void Promise.all(pics.map(({ type, data, name }) => shrinkForHistory({ type, data, name }))).then((small) => pat(uid, (m) => (m.imgs && small.some((x, k) => x.data !== m.imgs![k]?.data) ? { ...m, imgs: small } : m)));
     const ac = new AbortController(); abort.current = ac; setBusy(true);
     let acc = "", raf = 0;
-    const host = p === "claude-cli" ? null : filesRef.current;
+    const host = filesRef.current;
     // AI のファイル操作。読む・一覧は結果を返すだけ。変更は、差分を見せて許可を待ち(自動適用がオンなら待たない)、結果を AI に返す
     const onTool = host ? async (call: ToolCall): Promise<string> => {
       const pr = parseCall(call, host.root);
@@ -504,7 +510,7 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
             : pending.p === "custom"
             ? i18next.t("選んだコード・画像・入力した文章は、あなたが設定した接続先({{host}})に送られます。送った内容の扱いは、その接続先の運営者に従います。このエディタの開発元には送られません", { host: baseHost(getAi().base) })
             : i18next.t("選んだコード・画像・入力した文章は、{{name}} のサーバーに送られます。送った内容の扱いは、各社の規約に従います。このエディタの開発元には送られません", { name: i18next.t(PROVIDER_NAME[pending.p]) })}
-            {files && pending.p !== "claude-cli" && <> {i18next.t("AI が求めたときは、開いているフォルダの中のファイルの中身も送られます(.git や .env など、秘密になりうるものは除きます)")}</>}</p>
+            {files && <> {i18next.t("AI が求めたときは、開いているフォルダの中のファイルの中身も送られます(.git や .env など、秘密になりうるものは除きます)")}</>}</p>
           <div>
             <button className="btn" onClick={() => setPending(null)}>{i18next.t("やめる")}</button>
             <button className="btn" data-primary="true" onClick={() => { const g = pending.go; setConsent(pending.p, true); setPending(null); g(); }}>{i18next.t("同意して送る")}</button>
@@ -542,7 +548,7 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
           <div className="ai-row">
             <button className="chipbtn" onClick={() => picker.current?.click()} title={i18next.t("画像を選んで、質問と一緒に送ります。貼り付けやドロップでも添えられます")}><ImagePlus size={14} />{i18next.t("画像")}</button>
             <input ref={picker} type="file" accept="image/*" multiple hidden onChange={(e) => { const fs = Array.from(e.target.files ?? []); e.target.value = ""; void (async () => { for (const f of fs) await addImage(f, f.name); })(); }} />
-            {cfg.provider !== "claude-cli" && <button className="chipbtn" data-mode={cfg.mode} aria-label={i18next.t("AI の操作モード: {{m}}", { m: i18next.t(MODE_NAME[cfg.mode]) })} title={`${i18next.t(MODE_HINT[cfg.mode])} ${i18next.t("(クリックで切り替え)")}`} onClick={() => setMode(AGENT_MODES[(AGENT_MODES.indexOf(cfg.mode) + 1) % AGENT_MODES.length])}>{(() => { const I = MODE_ICON[cfg.mode]; return <I size={14} />; })()}{i18next.t(MODE_NAME[cfg.mode])}</button>}
+            {files && <button className="chipbtn" data-mode={cfg.mode} aria-label={i18next.t("AI の操作モード: {{m}}", { m: i18next.t(MODE_NAME[cfg.mode]) })} title={`${i18next.t(MODE_HINT[cfg.mode])} ${i18next.t("(クリックで切り替え)")}`} onClick={() => setMode(AGENT_MODES[(AGENT_MODES.indexOf(cfg.mode) + 1) % AGENT_MODES.length])}>{(() => { const I = MODE_ICON[cfg.mode]; return <I size={14} />; })()}{i18next.t(MODE_NAME[cfg.mode])}</button>}
             <span className="ai-to" />
             {busy
               ? <button className="icon-btn ai-send" aria-label={i18next.t("止める")} title={i18next.t("止める")} onClick={() => abort.current?.abort()}><Square /></button>

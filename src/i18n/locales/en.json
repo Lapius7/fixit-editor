@@ -885,7 +885,7 @@
   "このファイルは文字として読めないため、添えられません": "This file can't be read as text, so it can't be attached",
   "{{name}} は大きすぎて添えられません": "{{name}} is too large to attach",
   "ここにドロップして添える": "Drop here to attach",
-  "フォルダは添えられません。ファイルをドロップしてください": "Folders can't be attached. Drop a file instead",
+  "このフォルダは添えられません": "This folder can't be attached",
   "外す": "Remove",
   "添えた資料": "Attached items",
   "添えられるのは {{n}} 件までです": "You can attach up to {{n}} items",
