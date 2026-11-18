@@ -1586,7 +1586,7 @@
   "英数字・_・- だけで、ほかと重ならない名前にしてください": "Use only letters, digits, _ and -, and a name that doesn't collide with others",
   "表示名": "Display name",
   "見つかりません。リポジトリがないか、トークンにこの操作の権限がありません": "Not found. The repository doesn't exist, or the token lacks permission for this action",
-  "見つかりませんでした": "Not found",
+  "見つかりませんでした": "None found",
   "解除しました": "Cleared",
   "解除する": "Clear",
   "言語の割合": "Languages",
@@ -1887,5 +1887,9 @@
   "取得": "Fetch",
   "取得中…": "Fetching…",
   "公開リポジトリの直下の fixit-extension.json を読みます。入れる前に、内容と権限を確かめられます。": "Reads fixit-extension.json at the top of the public repository. You can check the content and permissions before installing.",
-  "拡張機能を探す、または GitHub の URL": "Search extensions, or paste a GitHub URL"
+  "拡張機能を探す、または GitHub の URL": "Search extensions, or paste a GitHub URL",
+  "現在のフォルダ": "Current folder",
+  "新しく Git 化するフォルダを選ぶ": "Choose a folder to turn into a Git repository",
+  "{{name}}(このフォルダ)": "{{name}} (this folder)",
+  "git init を実行し、選んだフォルダに .git を作ります。": "Runs git init and creates .git in the folder you pick."
 }

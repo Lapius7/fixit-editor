@@ -78,16 +78,20 @@ export const power: Extension = [
 // 折り返しオフで横にスクロールすると、字が行番号とミニマップの下を通る。字の側をマスクで隠す(位置は CSS 変数で渡す)
 const hScrollMask = ViewPlugin.fromClass(class {
   constructor(readonly view: EditorView) {
-    this.on = () => this.sync();
-    view.scrollDOM.addEventListener("scroll", this.on, { passive: true });
-    // 画面の大きさやミニマップの幅が変わっても、マスクの位置を合わせ直す(古い値のままだと、字がミニマップの下に突き抜ける)
+    // スクロール位置(--cm-x)は、CSS のスクロール連動アニメーションが毎フレーム描画と同時に決める(JS のイベントでは1フレーム遅れて、素早く動かすと字が行番号やミニマップの上にちらつく)。非対応の環境だけ JS で入れる
+    if (!CSS.supports("animation-timeline: scroll()")) {
+      this.on = () => view.dom.style.setProperty("--cm-x", `${view.scrollDOM.scrollLeft}px`);
+      view.scrollDOM.addEventListener("scroll", this.on, { passive: true });
+    }
+    // 画面の大きさやミニマップの幅が変わっても、寸法を合わせ直す(古い値のままだと、字がミニマップの下に突き抜ける)
     this.ro = new ResizeObserver(() => this.sync());
     this.ro.observe(view.scrollDOM);
     this.sync();
   }
-  ro: ResizeObserver; seen = new Set<Element>();
-  on: () => void;
-  update(u: ViewUpdate) { if (u.geometryChanged || u.viewportChanged) this.sync(); }
+  ro: ResizeObserver;
+  on?: () => void;
+  update(u: ViewUpdate) { if (u.geometryChanged || u.viewportChanged || u.docChanged) this.sync(); }
+  // 寸法だけを渡す。スクロールのたびには呼ばない(位置は CSS が決める)
   sync() {
     const sc = this.view.scrollDOM, dom = this.view.dom, over = sc.scrollWidth > sc.clientWidth + 1;
     // class ではなく data 属性で持つ(選択やフォーカスが変わると、CodeMirror が view.dom の class を書き直し、手で付けた class は消える。消えた間、字が行番号とミニマップの上に突き抜けていた)
@@ -95,23 +99,14 @@ const hScrollMask = ViewPlugin.fromClass(class {
     if (!over) return;
     const gw = (sc.querySelector(".cm-gutters") as HTMLElement | null)?.offsetWidth ?? 0;
     const mw = (dom.querySelector(".cm-minimap-gutter") as HTMLElement | null)?.offsetWidth ?? 0;
-    // 端は、その先に字があるときだけ薄くぼかす(左端なら左は切らない。右端なら右は切らない)。切れ目の向きで、動かせる方向が分かる
-    const x = sc.scrollLeft, max = sc.scrollWidth - sc.clientWidth, F = 14;
-    dom.style.setProperty("--cm-l", `${x}px`);
-    dom.style.setProperty("--cm-lf", `${Math.min(F, Math.max(0, x))}px`);
-    dom.style.setProperty("--cm-r", `${x + sc.clientWidth - gw - mw}px`);
-    dom.style.setProperty("--cm-rf", `${Math.min(F, Math.max(0, max - x))}px`);
-    // 選択の背景の層(.cm-selTrim)は、スクロールする領域の左端が原点なので、行番号の幅ぶんずらして、行番号とミニマップの下へはみ出さないように切る
-    // 層自身の左端を基準に、行番号の右端とミニマップの左端の位置を測る(層の原点に依存しない)
-    const lay = dom.querySelector(".cm-selTrim") as HTMLElement | null;
-    if (lay) {
-      const lr = lay.getBoundingClientRect(), g = sc.querySelector(".cm-gutters") as HTMLElement | null, m = dom.querySelector(".cm-minimap-gutter") as HTMLElement | null;
-      const sr = sc.getBoundingClientRect();
-      dom.style.setProperty("--cm-sl", `${(g ? g.getBoundingClientRect().right : sr.left) - lr.left}px`);
-      dom.style.setProperty("--cm-sr", `${(m ? m.getBoundingClientRect().left : sr.right) - lr.left}px`);
-    }
+    const st = dom.style;
+    st.setProperty("--cm-max", `${sc.scrollWidth - sc.clientWidth}px`);
+    st.setProperty("--cm-gw", `${gw}px`);
+    st.setProperty("--cm-cw", `${sc.clientWidth}px`);
+    st.setProperty("--cm-mw", `${mw}px`);
+    if (this.on) this.on();
   }
-  destroy() { this.view.scrollDOM.removeEventListener("scroll", this.on); this.view.dom.removeAttribute("data-hmask"); this.ro.disconnect(); }
+  destroy() { if (this.on) this.view.scrollDOM.removeEventListener("scroll", this.on); this.view.dom.removeAttribute("data-hmask"); this.ro.disconnect(); }
 });
 const hasSelClass = EditorView.editorAttributes.compute(["selection"], (st) => ({ class: st.selection.ranges.some((r) => !r.empty) ? "cm-hasSel" : "" }));
 const trimmedSelection = layer({

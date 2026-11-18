@@ -303,3 +303,10 @@ html.theme-fade, html.theme-fade * { transition: background-color calc(.45s * va
 .ex-check { display: flex; align-items: flex-start; gap: 8px; margin-top: 8px; font-size: 12.5px; line-height: 20px; }
 .ex-check input { margin: 3px 0 0; accent-color: var(--accent); flex: none; }
 .dlg.ex .ex-foot { margin: 14px 0 0; font-size: 11px; line-height: 16px; color: var(--ink-3); }
+
+/* 横スクロールの位置(--cm-x)を、スクロール連動アニメーションで毎フレーム描画と同時に決める。字のマスクと選択の切り取りがこの値に従う */
+@property --cm-x { syntax: "<length>"; inherits: true; initial-value: 0px; }
+@keyframes cm-hx { from { --cm-x: 0px; } to { --cm-x: var(--cm-max, 0px); } }
+@supports (animation-timeline: scroll()) {
+  .cm-editor[data-hmask] .cm-scroller { animation: cm-hx linear both; animation-timeline: scroll(self inline); }
+}

@@ -48,54 +48,55 @@ export function GitSetup({ conn, dir, onRepo }: Props) {
   const here = dir.replace(/\/+$/, "").split("/").pop() || "/";
   const clone = () => { if (url.trim() && name) void go("clone", { cmd: "clone", url: url.trim(), name }, join(dir, name)); };
 
+  const plain = found ? found.plain.slice(0, GIT_SCAN_DIRS) : [];
   return (
     <div className="git-setup scroll">
-      {/* どのフォルダの話かを先に出す(「ここ」がどこか分かるように) */}
-      <div className="git-setup-where">
+      {/* 1. 現在のフォルダ(「ここ」がどこかを先に出す) */}
+      <section className="git-setup-where" aria-label={i18next.t("現在のフォルダ")}>
         <FolderOpen />
         <div>
           <b className="truncate">{here}</b>
           <span className="git-setup-path" title={dir}><bdi>{dir}</bdi></span>
           <p className="git-setup-note">{i18next.t("Git のリポジトリではありません")}</p>
         </div>
-      </div>
-      {err && <p className="git-setup-err" role="alert">{err}</p>}
-      {found === null ? <p className="git-setup-hint">{i18next.t("中のリポジトリを探しています…")}</p> : (
-        <>
-          {found.repos.length > 0 && (
-            <section className="git-setup-list" aria-label={i18next.t("このフォルダの中のリポジトリ")}>
-              <h3>{i18next.t("このフォルダの中のリポジトリ")}</h3>
-              {found.repos.map((r) => (
-                <button key={r.dir} className="git-setup-repo" disabled={!!busy} title={r.dir} onClick={() => onRepo(r.dir)}>
-                  <FolderGit2 /><span className="truncate">{r.rel.split("/").pop()}</span>{r.rel.includes("/") && <small className="git-setup-rel truncate"><bdi>{r.rel}</bdi></small>}
-                </button>
-              ))}
-            </section>
-          )}
-          {found.plain.length > 0 && (
-            <section className="git-setup-list" aria-label={i18next.t("Git ではないフォルダ")}>
-              <h3>{i18next.t("Git ではないフォルダ")}</h3>
-              {found.plain.slice(0, GIT_SCAN_DIRS).map((r) => (
-                <div key={r.dir} className="git-setup-repo git-setup-plain" title={r.dir}>
-                  <Folder /><span className="truncate">{r.rel}</span>
-                  <button className="git-setup-mini" disabled={!!busy} onClick={() => void initSub(r.rel)}>{busy === `init:${r.rel}` ? i18next.t("作成しています…") : i18next.t("Git 化")}</button>
-                </div>
-              ))}
-            </section>
-          )}
-        </>
-      )}
-      <div className="git-setup-or" role="separator"><span>{i18next.t("新しく作る")}</span></div>
-      <section className="git-setup-sec">
-        <h3>{i18next.t("このフォルダを Git で管理する")}</h3>
-        <button className="git-setup-btn" disabled={!!busy} onClick={() => void go("init", { cmd: "init" }, dir)}>
-          <GitBranchPlus /><span className="truncate">{busy === "init" ? i18next.t("作成しています…") : i18next.t("{{name}} をリポジトリにする", { name: here })}</span>
-        </button>
-        <p className="git-setup-hint">{i18next.t("git init を実行し、このフォルダに .git を作ります。")}</p>
       </section>
-      <div className="git-setup-or" role="separator"><span>{i18next.t("または")}</span></div>
+      {err && <p className="git-setup-err" role="alert">{err}</p>}
+
+      {/* 2. このフォルダの中にあるリポジトリ */}
+      <section className="git-setup-sec" aria-label={i18next.t("このフォルダの中のリポジトリ")}>
+        <h3 className="git-setup-head"><FolderGit2 /><span>{i18next.t("このフォルダの中のリポジトリ")}</span>{found && <em>{found.repos.length}</em>}</h3>
+        <div className="git-setup-card">
+          {found === null ? <p className="git-setup-hint">{i18next.t("中のリポジトリを探しています…")}</p>
+            : found.repos.length === 0 ? <p className="git-setup-hint">{i18next.t("見つかりませんでした")}</p>
+            : found.repos.map((r) => (
+              <button key={r.dir} className="git-setup-repo" disabled={!!busy} title={r.dir} onClick={() => onRepo(r.dir)}>
+                <FolderGit2 /><span className="truncate">{r.rel.split("/").pop()}</span>{r.rel.includes("/") && <small className="git-setup-rel truncate"><bdi>{r.rel}</bdi></small>}
+              </button>
+            ))}
+        </div>
+      </section>
+
+      {/* 3. 新しく Git 化するフォルダを選ぶ */}
+      <section className="git-setup-sec" aria-label={i18next.t("新しく Git 化するフォルダを選ぶ")}>
+        <h3 className="git-setup-head"><GitBranchPlus /><span>{i18next.t("新しく Git 化するフォルダを選ぶ")}</span></h3>
+        <div className="git-setup-card">
+          <button className="git-setup-repo git-setup-here" disabled={!!busy} title={dir} onClick={() => void go("init", { cmd: "init" }, dir)}>
+            <FolderOpen /><span className="truncate">{busy === "init" ? i18next.t("作成しています…") : i18next.t("{{name}}(このフォルダ)", { name: here })}</span>
+            <span className="git-setup-mini git-setup-pri">{i18next.t("Git 化")}</span>
+          </button>
+          {plain.map((r) => (
+            <div key={r.dir} className="git-setup-repo git-setup-plain" title={r.dir}>
+              <Folder /><span className="truncate">{r.rel}</span>
+              <button className="git-setup-mini" disabled={!!busy} onClick={() => void initSub(r.rel)}>{busy === `init:${r.rel}` ? i18next.t("作成しています…") : i18next.t("Git 化")}</button>
+            </div>
+          ))}
+        </div>
+        <p className="git-setup-hint">{i18next.t("git init を実行し、選んだフォルダに .git を作ります。")}</p>
+      </section>
+
+      {/* 4. 既存のリポジトリを複製 */}
       <form className="git-setup-sec" onSubmit={(e) => { e.preventDefault(); clone(); }}>
-        <h3><label htmlFor="git-clone-url">{i18next.t("リポジトリを複製")}</label></h3>
+        <h3 className="git-setup-head"><Download /><label htmlFor="git-clone-url">{i18next.t("リポジトリを複製")}</label></h3>
         <div className="git-setup-row">
           <input id="git-clone-url" spellCheck={false} autoComplete="off" placeholder="https://github.com/owner/repo.git"
             value={url} disabled={!!busy} onChange={(e) => setUrl(e.target.value)} />

@@ -626,6 +626,18 @@ body:has(.git-vgrip[data-drag="true"]) { cursor: row-resize; user-select: none; 
 .git-setup-note { margin: 4px 0 0; color: var(--ink-2); font: 12px/18px var(--font-sans); }
 .git-setup-sec { display: flex; flex-direction: column; gap: 6px; }
 .git-setup-sec h3, .git-setup-list h3 { margin: 0; color: var(--ink-2); font: 500 12px/18px var(--font-sans); }
+/* 4つの区画(現在のフォルダ / 中のリポジトリ / 新しく Git 化 / 複製)。区画のあいだは罫線で分ける */
+.git-setup { gap: 0; padding: 12px; }
+.git-setup > .git-setup-sec { padding: 14px 0; border-top: 1px solid var(--hair); gap: 8px; }
+.git-setup > .git-setup-where { margin-bottom: 14px; }
+.git-setup-head { display: flex; align-items: center; gap: 6px; }
+.git-setup-head svg { flex: none; width: 14px; height: 14px; color: var(--ink-3); }
+.git-setup-head > span, .git-setup-head > label { flex: 1; min-width: 0; }
+.git-setup-head em { flex: none; min-width: 20px; height: 18px; padding: 0 6px; border-radius: 9px; background: var(--s2); color: var(--ink-2); font: 500 11px/18px var(--font-sans); font-style: normal; text-align: center; font-variant-numeric: tabular-nums; }
+.git-setup-card { display: flex; flex-direction: column; gap: 2px; padding: 4px; border-radius: 10px; background: var(--s1); max-height: 220px; overflow-y: auto; overscroll-behavior: contain; }
+.git-setup-card > .git-setup-hint { padding: 6px 8px; }
+.git-setup-here > .truncate { flex: 1; min-width: 0; font-weight: 500; }
+.git-setup-mini.git-setup-pri { background: var(--accent); color: #fff; }
 .git-setup-or { display: flex; align-items: center; gap: 8px; color: var(--ink-3); font: 11px/16px var(--font-sans); }
 .git-setup-or::before, .git-setup-or::after { content: ""; flex: 1; height: 1px; background: var(--hair); }
 .git-setup-err { margin: 0; padding: 6px 10px; border-radius: 8px; background: color-mix(in srgb, #d9534f 12%, transparent); color: var(--ink); font: 12px/18px var(--font-sans); white-space: pre-wrap; word-break: break-word; }

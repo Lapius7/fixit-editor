@@ -27,7 +27,7 @@ const base = EditorView.theme({
   ".cm-line": { padding: "0 24px 0 var(--pad-x, 2px)" },
   ".cm-gutters": { backgroundColor: "transparent", border: "none", color: "var(--gutter)" },
   // 横にスクロールしたとき、行番号とミニマップの下を通る字は、字のほうを隠す(背景と同じ色のまま、固定に見せる)
-  "&[data-hmask] .cm-content": { maskImage: "linear-gradient(to right, #0000 var(--cm-l), #000 calc(var(--cm-l) + var(--cm-lf, 0px)), #000 calc(var(--cm-r) - var(--cm-rf, 0px)), #0000 var(--cm-r))", WebkitMaskImage: "linear-gradient(to right, #0000 var(--cm-l), #000 calc(var(--cm-l) + var(--cm-lf, 0px)), #000 calc(var(--cm-r) - var(--cm-rf, 0px)), #0000 var(--cm-r))" },
+  "&[data-hmask] .cm-content": { maskImage: "linear-gradient(to right, #0000 var(--cm-x), #000 calc(var(--cm-x) + min(14px, var(--cm-x))), #000 calc(var(--cm-x) + var(--cm-cw) - var(--cm-gw) - var(--cm-mw) - min(14px, max(0px, calc(var(--cm-max) - var(--cm-x))))), #0000 calc(var(--cm-x) + var(--cm-cw) - var(--cm-gw) - var(--cm-mw)))", WebkitMaskImage: "linear-gradient(to right, #0000 var(--cm-x), #000 calc(var(--cm-x) + min(14px, var(--cm-x))), #000 calc(var(--cm-x) + var(--cm-cw) - var(--cm-gw) - var(--cm-mw) - min(14px, max(0px, calc(var(--cm-max) - var(--cm-x))))), #0000 calc(var(--cm-x) + var(--cm-cw) - var(--cm-gw) - var(--cm-mw)))" },
   ".cm-lineNumbers .cm-gutterElement": { padding: "0 14px 0 22px", minWidth: "50px" },
   ".cm-git-gutter": { width: "6px" },
   ".cm-git-gutter .cm-gutterElement": { padding: "0" },
@@ -43,7 +43,7 @@ const base = EditorView.theme({
   "&.cm-focused": { outline: "none" },
   ".cm-selectionLayer": { display: "none" },
   ".cm-selTrim": { zIndex: "-1" },
-  "&[data-hmask] .cm-selTrim": { clipPath: "polygon(var(--cm-sl) -100000000px, var(--cm-sr) -100000000px, var(--cm-sr) 100000000px, var(--cm-sl) 100000000px)" },
+  "&[data-hmask] .cm-selTrim": { clipPath: "polygon(calc(var(--cm-x) + var(--cm-gw)) -100000000px, calc(var(--cm-x) + var(--cm-cw) - var(--cm-mw)) -100000000px, calc(var(--cm-x) + var(--cm-cw) - var(--cm-mw)) 100000000px, calc(var(--cm-x) + var(--cm-gw)) 100000000px)" },
   ".cm-cursor": { borderLeftWidth: "var(--cur-w, 1.5px)", borderLeftColor: "var(--accent)" },
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": { backgroundColor: "var(--sel) !important" },
   ".cm-matchingBracket": { backgroundColor: "var(--sel)", outline: "none" },
