@@ -76,7 +76,7 @@ import { displayPath, setRootNames, splitRoot } from "@/workbench/rootpath";
 import { getProfiles, switchProfile, useProfiles } from "@/features/settings/profiles";
 import { copyWithNotice, writeClip } from "@/platform/clipboard";
 import { prefetchOpen, setAllOpen, setOpenPath, setRefreshScope, shownOpen } from "@/workbench/treeOpen";
-import { revealPaths, startCreating } from "@/workbench/creating";
+import { revealPaths, startCreating, startRenaming } from "@/workbench/creating";
 import { beginPending } from "@/workbench/pending";
 import { clearSel, isMulti, isSelectedPath, selectedNodes } from "@/workbench/selection";
 import { clearTreeClip, getTreeClip, hasTreeClip, setTreeClip, treeClipFor } from "@/workbench/treeclip";
@@ -1274,10 +1274,13 @@ export default function App() {
   const rename = (n: Node) => {
     const rr = rootOf(n);
     if (n.kind === "dir" && rr.handle && !rr.conn && !canMove()) return flash(i18next.t("フォルダの名前の変更は、まだできません"));
-    setDlg({
-      title: i18next.t("名前の変更"), input: n.name, ok: i18next.t("変更"), icon: (v) => (n.kind === "dir" ? <Folder className="ico folder" /> : iconFor(v.trim() || n.name)),
+    // タブから呼ばれたときなど、行が閉じたフォルダの中にあるときは、親を開いて見せる
+    const segs = n.path.split("/").filter(Boolean);
+    revealPaths(segs.slice(0, -1).map((_, i) => "/" + segs.slice(0, i + 1).join("/")));
+    startRenaming({
+      path: n.path, name: n.name, kind: n.kind === "dir" ? "dir" : "file",
       validate: (v) => (/[\\/]/.test(v) ? i18next.t("「/」は使えません") : v.trim() !== n.name && exists(rr.nodes, `${dirOf(n.path)}/${v.trim()}`) ? i18next.t("同じ名前があります") : null),
-      onSubmit: async (name) => {
+      submit: async (name) => {
         if (name === n.name) return;
         try {
           const np = `${dirOf(n.path)}/${name}`; if (n.kind === "file") moveFile(n.path, np);

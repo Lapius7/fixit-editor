@@ -34,3 +34,10 @@ export const revealPaths = (paths: string[]) => {
 
 /** このフォルダは、いま開いて見せたいか(名前を打つ行の置き場、または作ったものの通り道) */
 export const useWanted = (path: string) => useSyncExternalStore(sub, () => cur?.at === path || reveal.includes(path));
+
+// エクスプローラーの中で、名前を変えている途中の状態(新規作成と同じく、行の中に入力欄を出す)
+export type Renaming = { path: string; name: string; kind: "file" | "dir"; validate: (v: string) => string | null; submit: (v: string) => Promise<void> };
+let ren: Renaming | null = null;
+export const startRenaming = (r: Renaming) => { ren = r; emit(); };
+export const stopRenaming = () => { if (ren) { ren = null; emit(); } };
+export const useRenaming = () => useSyncExternalStore(sub, () => ren);

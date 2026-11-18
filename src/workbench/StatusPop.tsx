@@ -87,7 +87,7 @@ function RunningList() {
         return (
           <div key={r.key} className="sbp-run" title={r.path}>
             <div className="sbp-run-h">
-              <b>{baseOf(r.path)}<i>{r.kind === "wsl" ? "WSL" : "PC"}</i></b>
+              <b>{LSP_SERVERS.find((x) => x.id === r.server)?.name ?? r.server}<i>{baseOf(r.path)} · {r.kind === "wsl" ? "WSL" : "PC"}</i></b>
               <small data-bad={r.status.phase === "error"}>{phaseText(r.status.phase)}</small>
             </div>
             <div className="sbp-run-m">

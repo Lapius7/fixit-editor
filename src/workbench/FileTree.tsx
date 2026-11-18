@@ -4,7 +4,7 @@ import { ChevronRight, FileText, FileCode2, FileJson, FileType, Folder, FolderOp
 import { type Node, nodeOrder } from "@/platform/fs";
 import { useSettings } from "@/features/settings/settings";
 import { drag, dragEnd, extFiles, setDragSrc, setDropTarget, useDnd } from "@/workbench/dnd";
-import { creatingNow, stopCreating, useCreating, useWanted } from "@/workbench/creating";
+import { creatingNow, stopCreating, stopRenaming, useCreating, useRenaming, useWanted, type Renaming } from "@/workbench/creating";
 import { enterRow } from "@/workbench/treeAnim";
 import { usePending, type PendingItem } from "@/workbench/pending";
 import { useCut } from "@/workbench/treeclip";
@@ -89,6 +89,40 @@ function CreateRow({ depth }: { depth: number }) {
   );
 }
 
+// 名前の変更。その行の名前を入力欄に置き換える(拡張子の前までを選んで始める)
+function RenameRow({ r, depth, open }: { r: Renaming; depth: number; open: boolean }) {
+  const indent = useSettings().treeIndent;
+  const [v, setV] = useState(r.name), [busy, setBusy] = useState(false);
+  const done = useRef(false), ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    el.focus({ preventScroll: true });
+    const dot = r.kind === "file" ? r.name.lastIndexOf(".") : -1;
+    el.setSelectionRange(0, dot > 0 ? dot : r.name.length);
+  }, []);
+  const err = v.trim() && v.trim() !== r.name ? r.validate(v) : null;
+  const finish = () => { done.current = true; stopRenaming(); };
+  const submit = async () => {
+    const t = v.trim();
+    if (done.current) return;
+    if (!t || t === r.name) return finish();
+    if (err) return;
+    done.current = true; setBusy(true);
+    try { await r.submit(t); } finally { stopRenaming(); }
+  };
+  return (
+    <div className="tree-row create-row" data-err={!!err || undefined} style={{ paddingLeft: 10 + depth * indent }}>
+      <ChevronRight className="chev" data-open={open} data-hidden={r.kind !== "dir"} />
+      {r.kind === "dir" ? (open ? <FolderOpen className="ico folder" /> : <Folder className="ico folder" />) : iconFor(v.trim() || r.name)}
+      <input ref={ref} className="create-input" value={v} disabled={busy} spellCheck={false} autoComplete="off" aria-invalid={!!err} aria-label={i18next.t("名前の変更")}
+        onChange={(e) => setV(e.target.value)} onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Escape") finish(); else if (e.key === "Enter") { e.preventDefault(); void submit(); } }}
+        onBlur={() => { if (done.current) return; if (v.trim() && !err) void submit(); else finish(); }} />
+      {err && <div className="create-err" role="alert" style={{ paddingLeft: 40 }}>{err}</div>}
+    </div>
+  );
+}
+
 // 貼り付け中のものの行(名前は出し、中身が入り終わるまで薄くまたたく)
 function PendingRow({ name, depth, i }: { name: string; depth: number; i: number }) {
   const indent = useSettings().treeIndent;
@@ -146,6 +180,7 @@ function FileTree({ nodes: all, activePath, ctxPath, rev, onOpen, onContext, onM
 
 function Item({ enter, n, activePath, ctxPath, rev, onOpen, onContext, onMove, onDropFiles, onPasteFiles, depth, idx }: Omit<Props, "nodes"> & { n: Node; depth: number; idx: number; enter?: "grow" | "soft" }) {
   const git = useContext(GitMarks)(n);
+  const renaming = useRenaming();
   const indent = useSettings().treeIndent;
   const restored = useRef(n.kind === "dir" && isOpen(n.path)).current; // 前に開いていたフォルダは、アニメーションなしで開いた状態に戻す
   const [open, setOpenRaw] = useState(restored);
@@ -242,6 +277,7 @@ function Item({ enter, n, activePath, ctxPath, rev, onOpen, onContext, onMove, o
   return (
     <li ref={liRef} role="treeitem" aria-expanded={isDir ? open : undefined} data-drop={over || undefined} {...dropProps}
       onPaste={onPasteFiles ? (e) => onPasteFiles(e, isDir ? n : { name: dirOf(n.path).split("/").pop() ?? "", path: dirOf(n.path), kind: "dir", handle: n.parent }) : undefined}>
+      {renaming && renaming.path === n.path ? <RenameRow key={n.path} r={renaming} depth={depth} open={open} /> : (
       <button className="tree-row" data-path={n.path} data-sel={selected || undefined} data-git={git} data-active={!isDir && activePath === n.path} data-ctx={ctxPath === n.path} data-src={!!(dnd & 2) || cut || undefined} draggable
         onDragStart={(e) => { drag.node = n; e.dataTransfer.effectAllowed = "copyMove"; e.dataTransfer.setData("text/plain", n.name); dragChip(e, e.currentTarget, isMulti() && isSelectedPath(n.path) ? i18next.t("{{name}} ほか {{n}} 件", { name: n.name, n: selectedNodes().length - 1 }) : n.name); setTimeout(() => setDragSrc(n.path), 0); }}
         onDragEnd={() => dragEnd()} onClick={(e) => { if (e.ctrlKey || e.metaKey) return toggleSel(n); if (e.shiftKey) { window.getSelection()?.removeAllRanges(); return selectRange(n); } selectOnly(n); void click(); }} onPointerEnter={isDir && !open && !kids ? () => void warmDir(n) : undefined} onDoubleClick={() => { if (!isDir) onOpen(n, true); }}
@@ -252,6 +288,7 @@ function Item({ enter, n, activePath, ctxPath, rev, onOpen, onContext, onMove, o
         <span className="truncate">{n.name}</span>
         {(git || lastGit.current) && <span className="git-badge" data-on={!!git} data-g={shownGit}>{shownGit === "dir" ? "" : shownGit}</span>}
       </button>
+      )}
       {isDir && open && !kids && n.handle && (
         <div className="tree-skel" role="status" aria-label={i18next.t("読み込み中…")}>
           {SKEL.map((w, i) => <div key={i} className="tree-skel-row" style={{ paddingLeft: 10 + (depth + 1) * indent, ["--i" as string]: i, ["--w" as string]: `${w}%` }}><i /><i /><b /></div>)}

@@ -1,7 +1,7 @@
 // Markdown / HTML のプレビュー。どちらも sandbox の iframe に入れ、親ページには触れさせない
 import { useEffect, useRef, useState } from "react";
 import { RotateCw } from "lucide-react";
-import { inline, type Source } from "./resolve";
+import { assetOf, inline, type Source } from "./resolve";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import i18next from "i18next";
@@ -47,8 +47,10 @@ export default function Preview({ kind, text, name, source }: { kind: PreviewKin
   // 打鍵のたびに作り直さないよう、少し待ってから反映する
   const [shown, setShown] = useState(text);
   const [nonce, setNonce] = useState(0); // 読み直しの番号
+  const nonceRef = useRef(nonce); nonceRef.current = nonce;
   const [doc, setDoc] = useState("");
   const frame = useRef<HTMLIFrameElement>(null);
+  const sourceRef = useRef(source); sourceRef.current = source;
   // アプリ版は srcdoc ではなく fixitpv:// から読む。srcdoc は親画面の CSP を受け継ぎ、利用者の HTML のスクリプトが止まるため
   const pvId = useRef(Math.random().toString(36).slice(2)), ver = useRef(0);
   const [src, setSrc] = useState<string>();
@@ -90,7 +92,15 @@ export default function Preview({ kind, text, name, source }: { kind: PreviewKin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, shown, openKey, nonce, source?.root, source?.path]);
   useEffect(() => {
-    const on = (e: MessageEvent) => { if (e.source === frame.current?.contentWindow && typeof e.data?.fixitScroll === "number") y.current = e.data.fixitScroll; };
+    const on = (e: MessageEvent) => {
+      if (e.source !== frame.current?.contentWindow) return;
+      if (typeof e.data?.fixitScroll === "number") y.current = e.data.fixitScroll;
+      // 実行中の JS が相対パスで差し替えた画像などを、埋め込みの値にして返す
+      if (typeof e.data?.fixitAsset === "number" && typeof e.data.ref === "string" && sourceRef.current) {
+        const id = e.data.fixitAsset, win = e.source as Window;
+        void assetOf({ ...sourceRef.current, nonce: nonceRef.current }, e.data.ref).then((url) => { if (url) win.postMessage({ fixitAsset: id, url }, "*"); }).catch(() => {});
+      }
+    };
     addEventListener("message", on);
     return () => removeEventListener("message", on);
   }, []);

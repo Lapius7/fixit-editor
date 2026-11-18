@@ -144,5 +144,20 @@ export async function inline(html: string, src: Source): Promise<string> {
     jobs.push((async () => { el.setAttribute("style", await cssUrls(src, el.getAttribute("style")!, src.path)); })());
   });
   await Promise.all(jobs);
+  if (src.root) { const sh = doc.createElement("script"); sh.textContent = scriptSafe(SHIM); doc.head.prepend(sh); }
   return "<!doctype html>" + doc.documentElement.outerHTML;
 }
+
+// 実行中の JS が画像などの src を相対パスで差し替えたとき(ボタンで画像を切り替えるなど)に、親へ頼んで埋め込みの値に直す
+export async function assetOf(src: Source, ref: string): Promise<string | null> {
+  if (!src.root || isExternal(ref)) return null;
+  const p = resolvePath(src.path, ref);
+  return p ? dataOf(src, p) : null;
+}
+const SHIM = `(function(){var seq=0,wait={};var ext=/^(?:[a-z][a-z0-9+.-]*:|\\/\\/|#)/i;
+addEventListener("message",function(e){var d=e.data;if(!d||typeof d.fixitAsset!=="number")return;var w=wait[d.fixitAsset];delete wait[d.fixitAsset];if(w&&d.url)w(d.url)});
+function ask(v,done){var id=++seq;wait[id]=done;parent.postMessage({fixitAsset:id,ref:v},"*")}
+function patch(proto,tags){var dsc=Object.getOwnPropertyDescriptor(proto,"src");if(!dsc||!dsc.set)return;
+Object.defineProperty(proto,"src",{configurable:true,enumerable:dsc.enumerable,get:dsc.get,set:function(v){var el=this;v=String(v);if(!v||ext.test(v)){dsc.set.call(el,v);return}ask(v,function(u){dsc.set.call(el,u)})}})}
+patch(HTMLImageElement.prototype);patch(HTMLSourceElement.prototype);patch(HTMLMediaElement.prototype);
+var sa=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,v){if(String(n).toLowerCase()==="src"&&/^(IMG|SOURCE|VIDEO|AUDIO)$/.test(this.tagName)){this.src=v;return}return sa.call(this,n,v)}})();`;
