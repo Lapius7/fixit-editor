@@ -1,7 +1,7 @@
 // ショートカットの定義。key は "Mod+Shift+P" の形(Mod は Ctrl または Cmd)。空文字は未割り当て
 export type KeyDef = { id: string; label: string; group: string; key: string; scope?: "editor" | "tree"; inTerm?: boolean };
 
-const G = { app: "全般", view: "表示", tab: "タブ", find: "検索", edit: "編集", line: "行", fold: "折りたたみ", sel: "選択", term: "ターミナル", tree: "ファイル一覧", lsp: "言語機能", ai: "AI" };
+const G = { emmet: "Emmet", app: "全般", view: "表示", tab: "タブ", find: "検索", edit: "編集", line: "行", fold: "折りたたみ", sel: "選択", term: "ターミナル", tree: "ファイル一覧", lsp: "言語機能", ai: "AI" };
 const d = (group: string, id: string, label: string, key: string, o: Partial<KeyDef> = {}): KeyDef => ({ id, label, group, key, ...o });
 const e = { scope: "editor" as const };
 const t = { scope: "tree" as const };
@@ -63,6 +63,25 @@ export const KEYS: KeyDef[] = [
   d(G.tab, "pinTab", "タブのピン留めを切り替える", "Alt+P"),
   ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => d(G.tab, `goTab${n}`, `${n} 番目のタブへ移る`, `Alt+${n}`)),
   d(G.edit, "shot", "コードを画像にする(選択範囲、なければ全体)", "Mod+Alt+P"),
+  d(G.emmet, "emWrap", "Emmet: 記法で囲む", "", e),
+  d(G.emmet, "emExpand", "Emmet: 記法を展開", "", e),
+  d(G.emmet, "emBalanceOut", "Emmet: タグの外側を選択", "", e),
+  d(G.emmet, "emBalanceIn", "Emmet: タグの内側を選択", "", e),
+  d(G.emmet, "emNextPoint", "Emmet: 次の編集位置へ", "", e),
+  d(G.emmet, "emPrevPoint", "Emmet: 前の編集位置へ", "", e),
+  d(G.emmet, "emTagPair", "Emmet: 対のタグへ移動", "", e),
+  d(G.emmet, "emRemoveTag", "Emmet: タグを外す", "", e),
+  d(G.emmet, "emSplitJoin", "Emmet: タグの開閉を切り替え", "", e),
+  d(G.emmet, "emMath", "Emmet: 式を計算", "", e),
+  d(G.emmet, "emInc1", "Emmet: 数を +1", "", e),
+  d(G.emmet, "emDec1", "Emmet: 数を -1", "", e),
+  d(G.emmet, "emInc01", "Emmet: 数を +0.1", "", e),
+  d(G.emmet, "emDec01", "Emmet: 数を -0.1", "", e),
+  d(G.emmet, "emInc10", "Emmet: 数を +10", "", e),
+  d(G.emmet, "emDec10", "Emmet: 数を -10", "", e),
+  d(G.emmet, "emNextItem", "Emmet: 次の項目を選択", "", e),
+  d(G.emmet, "emPrevItem", "Emmet: 前の項目を選択", "", e),
+  d(G.emmet, "emAbbrMode", "Emmet: 記法の入力を始める", "", e),
   d(G.find, "searchAll", "全文検索", "Mod+Shift+F", { inTerm: true }),
   d(G.find, "find", "検索", "Mod+F", e),
   d(G.find, "replace", "置換", "Mod+H", e),

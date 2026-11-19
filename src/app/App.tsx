@@ -64,15 +64,16 @@ import Workspaces from "@/features/workspaces/Workspaces";
 import { Globe, GitBranch, GitPullRequest, Pin, History, MessageSquareText, RefreshCw, ArrowUpCircle } from "lucide-react";
 import { X as XIcon, Play, FolderSearch, AppWindow, FolderGit2, ChevronsUpDown } from "lucide-react";
 import { runnerFor, buildCommand, shq } from "@/features/run/runners";
-import { DELA_CHECK, DELA_INSTALL, findUrl, installAndPublish, publishCmd, stripAnsi, type Pub } from "@/features/dela/dela";
+import { DELA_CHECK, DELA_INSTALL, DELA_MIN, DELA_UPDATE, findUrl, installAndPublish, publishCmd, stripAnsi, updateAndPublish, versionAtLeast, type Pub, type PubOpt } from "@/features/dela/dela";
 import { startBg, type Bg } from "@/features/dela/bg";
 import { logAppend, logDrop } from "@/features/dela/logs";
 import PortLog from "@/features/dela/PortLog";
 import { PortsPanel } from "@/features/dela/PortsPanel";
-import { rememberPublish } from "@/features/dela/history";
+import { saveSlot, scopeOf } from "@/features/dela/slots";
+import { delaVersion } from "@/features/dela/projects";
 import { Sparkles, Server, FolderKanban, Eye, Maximize2, Minimize2, ImageIcon, ClipboardCopy, ChevronUp, Camera } from "lucide-react";
 import { createTemp, createWs, emptyWs, canUse, connOf, findWs, getHandle, getWorkspaces, handleKey, matchRoot, nodeAt, putHandle, patchWs, removeWs, rootLabel, rootRefOf, saveState, setCurrent, setWsRoots, useWorkspaces, wsRoots, type RootEntry, type RootRef, type Workspace, type WsState } from "@/features/workspaces/workspaces";
-import { displayPath, setRootNames, splitRoot } from "@/workbench/rootpath";
+import { aiPath, displayPath, setRootNames, splitRoot } from "@/workbench/rootpath";
 import { getProfiles, switchProfile, useProfiles } from "@/features/settings/profiles";
 import { copyWithNotice, writeClip } from "@/platform/clipboard";
 import { prefetchOpen, setAllOpen, setOpenPath, setRefreshScope, shownOpen } from "@/workbench/treeOpen";
@@ -1614,7 +1615,7 @@ export default function App() {
   const [logId, setLogId] = useState<number | null>(null); // ログを見ているポート(delas の id)
   const pLog = usePresence(delas.find((d) => d.id === logId));
   const patchDela = (id: number, f: (d: Pub) => Pub) => setDelas((p) => p.map((d) => (d.id === id ? f(d) : d)));
-  const startDela = (port: string, o: { dir?: string; rel?: string; temp?: boolean; name?: string } = {}) => {
+  const startDela = (port: string, o: PubOpt = {}) => {
     if (delas.some((d) => d.port === port && d.state !== "fail")) return flash(i18next.t("ポート {{port}} はすでに公開しています", { port }));
     void (async () => {
       const c = root.conn;
@@ -1622,16 +1623,25 @@ export default function App() {
       let have = true;
       if (IS_TAURI && c) { try { have = (await execCmd(c, c.path, DELA_CHECK, 15)).code === 0; } catch { have = true; } }
       if (!have && !(await ask({ message: i18next.t("dela が見つかりません。{{cmd}} で入れてから公開します。続けますか?", { cmd: DELA_INSTALL }), ok: i18next.t("入れて公開する") }))) return;
+      // 名前ごとの設定(--config)は dela 0.6.0 から。古いと無視されて、フォルダに .delaconfig が作られてしまうので、先に更新する
+      let upgrade = false;
+      if (IS_TAURI && c && have && !o.temp) {
+        const v = await delaVersion(c, c.path);
+        if (!v || !versionAtLeast(v)) {
+          if (!(await ask({ message: i18next.t("dela が古いため(必要: {{min}} 以上)、{{cmd}} で更新してから公開します。続けますか?", { min: DELA_MIN, cmd: DELA_UPDATE }), ok: i18next.t("更新して公開する") }))) return;
+          upgrade = true;
+        }
+      }
       const id = ++bgSeq.current + 100000; // 画面のターミナルの番号とぶつからないように離す
       let tail = "", up = false;
-      setDelas((p) => [...p.filter((d) => d.port !== port), { id, port, state: "start", dir: o.dir, rel: o.rel, temp: o.temp, name: o.name }]);
+      setDelas((p) => [...p.filter((d) => d.port !== port), { id, port, state: "start", temp: o.temp, name: o.name }]);
       bgs.current.set(id, startBg({
-        id, command: have ? publishCmd(port, o) : installAndPublish(port, o), host: c?.kind === "ssh" ? c.host : undefined, cwd: o.dir ?? c?.path,
+        id, command: !have ? installAndPublish(port, o) : upgrade ? updateAndPublish(port, o) : publishCmd(port, o), host: c?.kind === "ssh" ? c.host : undefined, cwd: c?.path,
         onOut: (chunk) => {
           logAppend(id, chunk);
           tail = (tail + stripAnsi(chunk)).slice(-400);
           const url = findUrl(chunk);
-          if (url) { up = true; patchDela(id, (d) => (d.url ? d : { ...d, url, state: "up" })); if (!o.temp && o.dir && c) rememberPublish(`${c.kind}:${c.host ?? ""}`, o.dir, o.name, port); } // URL が出たら履歴に残し、ポート管理から同じ設定でもう一度公開できるようにする
+          if (url) { up = true; patchDela(id, (d) => (d.url ? d : { ...d, url, state: "up" })); if (!o.temp) saveSlot(scopeOf(c), o.name || "app", port); } // URL が出たら、名前とポートを覚える(ポート管理から同じ名前で再公開できる)
           else { const last = tail.split(/\r?\n/).map((x) => x.trim()).filter(Boolean).pop(); if (last) patchDela(id, (d) => (d.url || d.state === "fail" ? d : { ...d, note: last.slice(0, 160) })); } // 待っている間の途中経過(ホバーで見える)
         },
         onEnd: () => {
@@ -1870,9 +1880,9 @@ export default function App() {
   const clipOf = async (x: Node | string): Promise<Ctx | null> => {
     const n = typeof x === "string" ? tabOf(x)?.node : x;
     if (!n || n.kind === "dir") return null;
-    const t = tabOf(n.path);
-    if (t) return t.view.kind === "text" ? { name: n.name, text: t.text, scope: "file" } : null;
-    try { const r = await load(n); return r.view.kind === "text" ? { name: n.name, text: r.view.text, scope: "file" } : null; } catch { return null; }
+    const t = tabOf(n.path), path = aiPath(n.path);
+    if (t) return t.view.kind === "text" ? { name: n.name, text: t.text, scope: "file", path } : null;
+    try { const r = await load(n); return r.view.kind === "text" ? { name: n.name, text: r.view.text, scope: "file", path } : null; } catch { return null; }
   };
   // AI に添える中身。画像のファイルは画像として、それ以外は文字として読む
   const aiSource = async (x: Node | string): Promise<Ctx | AiPic | null> => {
@@ -2368,7 +2378,7 @@ export default function App() {
           const path = t.node.path;
           return (
             <div key={path} className="tab" role="tab" data-path={path} data-pinned={pinned.has(path) || undefined} data-tip={t.node.name} data-tip-sub={displayPath(path)} ref={measureTab} data-fresh={fresh.has(path)} data-drop={tabDrop?.pane === i && tabDrop.path === path ? (tabDrop.after ? "after" : "before") : undefined} draggable
-              onDragStart={(e) => { drag.tab = path; drag.from = i; setPreview((v) => (v === path ? null : v)); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", displayPath(path)); }}
+              onDragStart={(e) => { drag.tab = path; drag.from = i; setPreview((v) => (v === path ? null : v)); e.dataTransfer.effectAllowed = "copyMove"; e.dataTransfer.setData("text/plain", displayPath(path)); }}
               onDragEnd={() => { dragEnd(); setDz(null); setTabDrop(null); }}
               onDragOver={(e) => { if (!drag.tab) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; const r = e.currentTarget.getBoundingClientRect(), after = e.clientX > r.left + r.width / 2; setTabDrop((d) => (d?.pane === i && d.path === path && d.after === after ? d : { path, after, pane: i })); }}
               onDrop={(e) => { if (!drag.tab) return; e.preventDefault(); dropTab(i, path, !!tabDrop?.after); }}

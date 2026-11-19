@@ -22,7 +22,7 @@ export default function PortLog({ pub, conn, out, onClose, onCopy, onOpen }: { p
   useSyncExternalStore((f) => logSubscribe(pub.id, f), () => logVersion(pub.id)); // 出力が増えたら描き直す
   const lines = logLines(pub.id);
   const base = inspectBase(logInspect(pub.id));
-  const dir = pub.dir ?? conn?.path ?? "";
+  const dir = conn?.path ?? "";
 
   // 受けたリクエスト
   const [reqs, setReqs] = useState<Req[]>([]);
@@ -48,7 +48,7 @@ export default function PortLog({ pub, conn, out, onClose, onCopy, onOpen }: { p
   useLayoutEffect(() => { const b = box.current; if (b && stuck.current) b.scrollTop = b.scrollHeight; }, [lines.length, lines[lines.length - 1], tab]); // eslint-disable-line react-hooks/exhaustive-deps
   const clear = () => { if (tab === "req") setHide(reqs.reduce((m, r) => Math.max(m, r.id), hide)); else logClear(pub.id); };
 
-  const tag = pub.temp ? i18next.t("一時") : [pub.rel, pub.name].filter(Boolean).join(" · ");
+  const tag = pub.temp ? i18next.t("一時") : pub.name || "app";
   const empty = tab === "req"
     ? (!base ? (pub.state === "fail" ? i18next.t("公開できなかったので、リクエストはありません") : pub.state === "start" ? i18next.t("公開の準備をしています…") : i18next.t("リクエストの記録が見つかりません。dela を 0.5.0 以上にして、公開し直してください"))
       : bad ? i18next.t("リクエストを読み取れません(アプリ版で、curl が使えるか確かめてください)")
@@ -64,7 +64,7 @@ export default function PortLog({ pub, conn, out, onClose, onCopy, onOpen }: { p
         </header>
         <div className="pl-info">
           <span className="pl-port">:{pub.port}</span>
-          {tag && <span className="ports-tag truncate" title={pub.dir}>{tag}</span>}
+          {tag && <span className="ports-tag truncate" >{tag}</span>}
           <span className="pl-url truncate" title={pub.url ?? pub.note}>{pub.url ? shortUrl(pub.url) : pub.state === "fail" ? pub.note || i18next.t("公開できませんでした") : i18next.t("公開しています…")}</span>
           {pub.url && <button className="icon-btn" aria-label={i18next.t("URL をコピー")} title={i18next.t("URL をコピー")} onClick={() => onCopy(pub.url!)}><Copy /></button>}
           {pub.url && <button className="icon-btn" aria-label={i18next.t("ブラウザで開く")} title={i18next.t("ブラウザで開く")} onClick={() => onOpen(pub.url!)}><ExternalLink /></button>}

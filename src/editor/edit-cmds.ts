@@ -7,6 +7,7 @@ import { foldAll, foldCode, unfoldAll, unfoldCode } from "@codemirror/language";
 
 import { lspRun } from "@/editor/lsp/ext";
 import { svcRun } from "@/editor/langsvc";
+import { EMMET_CMDS, emmetRun } from "@/editor/emmetExt";
 export type Run = (v: EditorView) => unknown;
 
 const text = (v: EditorView) => {
@@ -38,6 +39,7 @@ const lines = (f: (l: string[]) => string[]): Run => (v) => {
 const clip = (s: string) => writeClip(s);
 
 export const EDIT: Record<string, Run> = {
+  ...Object.fromEntries(EMMET_CMDS.map((id) => [id, (v: EditorView) => !!emmetRun[id]?.(v)])),
   ...Object.fromEntries(["lspDef", "lspRefs", "lspRename", "lspAction", "lspSig"].map((id) => [id, (v: EditorView) => !!(lspRun[id]?.(v) || svcRun[id]?.(v))])),
   selectAll, undo, redo, redoAlt: redo, comment: toggleComment, blockComment: toggleBlockComment, indentMore, indentLess,
   dupDown: copyLineDown, dupUp: copyLineUp, moveDown: moveLineDown, moveUp: moveLineUp, deleteLine, blankBelow: insertBlankLine, blankAbove, selectLine,

@@ -22,7 +22,7 @@ export const CATS: { id: Cat | "keys"; label: string }[] = [
    css  : 値を CSS 変数に書き出す(fmt で文字列に変える)
    attr : 値を <html data-◯◯> に書き出す
    どちらも無いものは、コード側が useSettings() で読む。 */
-type Opt = { sec?: string; hint?: string; css?: string; attr?: string };
+type Opt = { sec?: string; hint?: string; css?: string; attr?: string; area?: "emmet" };
 const n = <K extends string>(id: K, cat: Cat, label: string, def: number, o: Opt & { min: number; max: number; step?: number; unit?: string; fmt?: (v: number) => string }) =>
   ({ id, cat, label, def, kind: "num" as const, step: 1, unit: "", ...o });
 const b = <K extends string>(id: K, cat: Cat, label: string, def: boolean, o: Opt & { fmt?: (v: boolean) => string } = {}) => ({ id, cat, label, def, kind: "bool" as const, ...o });
@@ -138,7 +138,8 @@ const RAW = [
   n("completeMax", "assist", "補完の候補の数", 12, { min: 4, max: 24, step: 1 }),
   b("completeIcons", "assist", "候補に種類の印を付ける", false),
   b("wordComplete", "assist", "文書内の単語も候補にする", true),
-  b("emmet", "assist", "Emmet 記法を Tab で展開する(HTML・CSS など)", true),
+  b("emmet", "assist", "Emmet 記法を Tab・Enter で展開する(HTML・CSS など)", true),
+  s_("emmetJson", "assist", "Emmet の詳細設定(JSON)", "", { area: "emmet", max: 20000, hint: "「!」のテンプレートなどのスニペット・変数・出力の書き方を JSON で変えられます。空なら初期設定です" }),
   b("closeBrackets", "assist", "括弧や引用符を自動で閉じる", true, { sec: "入力の補助" }),
   b("indentOnInput", "assist", "入力に合わせてインデントを直す", true),
 
@@ -241,7 +242,7 @@ const RAW = [
 
 /* ---------- 型 ---------- */
 export type AnyDef = {
-  id: string; cat: Cat; label: string; hint?: string; sec?: string; kind: "num" | "bool" | "enum" | "font" | "text"; mono?: boolean; ph?: string; def: number | boolean | string;
+  id: string; cat: Cat; label: string; hint?: string; sec?: string; kind: "num" | "bool" | "enum" | "font" | "text"; area?: "emmet"; mono?: boolean; ph?: string; def: number | boolean | string;
   min?: number; max?: number; step?: number; unit?: string; opts?: [string, string][]; css?: string; attr?: string; fmt?: (v: never) => string;
 };
 export const DEFS: AnyDef[] = RAW;

@@ -44,6 +44,7 @@ export const cursorsNow = (): Record<string, number> => {
 export const seedCursors = (m: Record<string, number> | undefined) => { seeds.clear(); for (const [p, h] of Object.entries(m ?? {})) if (Number.isFinite(h)) seeds.set(p, h); };
 
 // 状態を使い回すので、Compartment は全体で共通にする
+import { emmetExtensions } from "./emmetExt";
 const LANG = new Compartment(), DYN = new Compartment(), EMMET = new Compartment();
 type EmmetSyntax = string;
 const EMMET_SYNTAX: Record<string, EmmetSyntax> = { html: "html", htm: "html", xhtml: "html", vue: "html", php: "html", svelte: "html", xml: "xml", svg: "xml", jsx: "jsx", tsx: "jsx", css: "css", scss: "scss", sass: "sass", less: "css", styl: "stylus", pug: "pug", jade: "pug", haml: "haml", slim: "slim" };
@@ -149,9 +150,9 @@ export default function Editor({ path, docKey, name, value, onChange, onCursor, 
     const syntax = emmetSyntax(name);
     let live = true;
     if (!syntax || !st.emmet) { view.current?.dispatch({ effects: EMMET.reconfigure([]) }); return; }
-    void import("@emmetio/codemirror6-plugin").then((m) => { if (live) view.current?.dispatch({ effects: EMMET.reconfigure([m.emmetConfig.of({ syntax: syntax as never }), m.abbreviationTracker({ syntax: syntax as never }), ...(syntax === "html" ? [Prec.high(keymap.of([{ key: "Enter", run: (v) => { const r = v.state.selection.main; const ln = v.state.doc.lineAt(r.head); return r.empty && /^\s*!$/.test(ln.text.slice(0, r.head - ln.from)) ? m.expandAbbreviation(v) : false; } }]))] : [])]) }); });
+    void import("@emmetio/codemirror6-plugin").then((m) => { if (live) view.current?.dispatch({ effects: EMMET.reconfigure(emmetExtensions(m, syntax, st.emmetJson ?? "")) }); });
     return () => { live = false; };
-  }, [docKey, name, st.emmet]);
+  }, [docKey, name, st.emmet, st.emmetJson]);
   useEffect(() => {
     const d = LanguageDescription.matchFilename(languages, name);
     d?.load().then((s) => view.current?.dispatch({ effects: LANG.reconfigure(s) }));

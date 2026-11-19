@@ -7,7 +7,8 @@ export type AiAction = "summarize" | "explain" | "translate" | "review" | "comme
 export type AiScope = "selection" | "file";
 // エディタ側から AI パネルへ渡す依頼(右クリックのメニューから作られる)
 export type AiJob = { id: number; action: AiAction; lang?: string; name: string; text: string; scope: AiScope; from: number; to: number; view: EditorView };
-export type Ctx = { name: string; text: string; scope: AiScope };
+// path: 開いているフォルダの中の絶対パス(/src/a.ts)。AI がファイル道具で同じファイルを探せるように添える(先頭のフォルダの外では付けない)
+export type Ctx = { name: string; text: string; scope: AiScope; path?: string };
 // 質問に添える資料(エディタで選んだ文・ドロップしたファイル)。from/to は、ファイルの中の行番号(引用のときだけ)
 export type Clip = Ctx & { id: number; lines?: [number, number] };
 
@@ -27,11 +28,11 @@ export const systemPrompt = (tools = false, exec = false, root = "") =>
 
 const clip = (text: string) => (text.length > AI_MAX_CONTEXT_CHARS ? { text: text.slice(0, AI_MAX_CONTEXT_CHARS), cut: true } : { text, cut: false });
 
-const block = (name: string, text: string) => `<file name="${name.replace(/"/g, "'")}">\n${text.replace(/<\/file>/g, "<\\/file>")}\n</file>`;
+const block = (name: string, text: string, path?: string) => `<file name="${name.replace(/"/g, "'")}"${path ? ` path="${path.replace(/"/g, "'")}"` : ""}>\n${text.replace(/<\/file>/g, "<\\/file>")}\n</file>`;
 
 export function withCode(question: string, c: Ctx): { content: string; cut: boolean } {
   const k = clip(c.text);
-  return { content: `${question}\n\n${block(c.name, k.text)}`, cut: k.cut };
+  return { content: `${question}\n\n${block(c.name, k.text, c.path)}`, cut: k.cut };
 }
 
 export const actionPrompt = (a: AiAction, lang?: string) =>
@@ -53,7 +54,7 @@ export function withClips(question: string, cs: Ctx[]): { content: string; cut: 
   if (!cs.length) return { content: question, cut: false };
   const per = Math.floor(AI_MAX_CONTEXT_CHARS / cs.length);
   let cut = false;
-  const parts = cs.map((c) => { const t = c.text.length > per ? (cut = true, c.text.slice(0, per)) : c.text; return block(c.name, t); });
+  const parts = cs.map((c) => { const t = c.text.length > per ? (cut = true, c.text.slice(0, per)) : c.text; return block(c.name, t, c.path); });
   return { content: `${question}\n\n${parts.join("\n\n")}`, cut };
 }
 

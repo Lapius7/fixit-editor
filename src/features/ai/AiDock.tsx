@@ -6,6 +6,7 @@ import i18next from "i18next";
 import { AI_MAX_HISTORY_CHARS, AI_TOOL_SEARCH_MAX, AI_MAX_HISTORY_IMAGES, AI_MAX_IMAGES } from "@/shared/config";
 import { AiError, isAbort, streamChat, type AiErrorKind, type Img, type Msg, type Stop } from "@/features/ai/providers";
 import { isImageFile, shrinkForHistory, toAiImage, type AiImage, type ImgFail } from "@/features/ai/images";
+import { aiPath, displayPath } from "@/workbench/rootpath";
 import { actionLabel, actionPrompt, replaceable, clipLabel, ctxLabel, systemPrompt, withClips, withCode, type AiJob, type Clip, type Ctx } from "@/features/ai/prompts";
 import { drag, dragEnd } from "@/workbench/dnd";
 import { notify } from "@/shared/notify";
@@ -186,7 +187,7 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
         // フォルダは、中の一覧(3 階層まで)を文字として添える。中身が要るファイルは、AI が読む(道具が使えるとき)か、個別に添える
         const tree = files ? await listTree(files.list, n.path.startsWith("/") ? n.path : `/${n.path}`, 3) : "";
         if (!tree || tree.startsWith("[folder not found]")) { notify(i18next.t("このフォルダは添えられません"), "error"); return; }
-        addClip({ name: `${n.name}/`, text: `${n.path}\n${tree}`, scope: "file" });
+        addClip({ name: `${n.name}/`, text: `${aiPath(n.path) ?? displayPath(n.path)}\n${tree}`, path: aiPath(n.path), scope: "file" });
         return;
       }
       const c = await resolve(n ?? t!);

@@ -5,6 +5,7 @@ import { localFonts, type LocalFont } from "@/features/settings/fonts";
 import { ACCENTS, CATS, LOCAL, MAX_DOTS, SWATCHES, isChanged, isDark, resetOne, update, useSettings, type AnyDef, type Dot, type Mode } from "@/features/settings/settings";
 import i18next from 'i18next'
 import { Select } from "@/shared/Select";
+import { EMMET_TEMPLATE, parseEmmetJson } from "@/editor/emmetJson";
 import { Trans } from 'react-i18next'
 
 const MODES: { id: Mode; label: string; icon: React.ReactNode }[] = [
@@ -57,6 +58,21 @@ function Row({ d }: { d: AnyDef }) {
       <div className="range">
         <input type="range" min={min} max={max} step={step} value={n} aria-label={i18next.t(d.label)} style={{ ["--fill" as string]: `${fill}%` }} onChange={(e) => set(+e.target.value)} />
         <output>{d.def !== undefined && step < 1 ? n.toFixed(1) : n}{d.unit ? i18next.t(d.unit) : ""}</output>
+      </div>
+    );
+  }
+  if (d.area) {
+    // 長い JSON を書く欄。書き間違いは、直るまで適用しない(いまの設定のまま)
+    const text = v as string, r = parseEmmetJson(text);
+    return (
+      <div className="set-row set-area" data-changed={isChanged(d)}>
+        {label}
+        <textarea className="field set-json" value={text} spellCheck={false} rows={12} placeholder={EMMET_TEMPLATE} aria-label={i18next.t(d.label)} aria-invalid={!r.ok || undefined} onChange={(e) => set(e.target.value.slice(0, d.max))} />
+        <div className="set-json-bar">
+          <span className="set-json-msg" data-bad={!r.ok || undefined} role={r.ok ? undefined : "alert"}>{r.ok ? (text.trim() ? i18next.t("この設定を使っています") : i18next.t("初期設定を使っています")) : i18next.t("書き方に誤りがあるため、まだ使われていません: {{error}}", { error: r.error })}</span>
+          <button className="btn" onClick={() => set(EMMET_TEMPLATE)}>{i18next.t("例を入れる")}</button>
+          <button className="btn" disabled={!text} onClick={() => resetOne(d.id)}>{i18next.t("初期設定に戻す")}</button>
+        </div>
       </div>
     );
   }

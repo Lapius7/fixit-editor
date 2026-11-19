@@ -24,3 +24,8 @@ export function displayPath(path: string): string {
 }
 // 同じ、ファイルのあるフォルダだけ
 export const displayDir = (path: string) => displayPath(path).replace(/\/?[^/]*$/, "");
+// AI のファイル道具が使うパス(開いているフォルダの中の /src/a.ts)。先頭以外のフォルダの中は道具が届かないので undefined
+export function aiPath(path: string): string | undefined {
+  const { prefix, rel } = splitRoot(path);
+  return prefix ? undefined : `/${rel.replace(/^\/+/, "")}`;
+}

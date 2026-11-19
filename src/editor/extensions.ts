@@ -15,7 +15,7 @@ import { indentLess, indentMore } from "@codemirror/commands";
 import { MANAGED } from "@/editor/edit-cmds";
 import { snippetSource } from "@/editor/snippets";
 import { explodeBrackets } from "@/editor/explode";
-import { autoCloseExtra } from "@/editor/autoclose";
+import { autoCloseExtra, closeBeforeMore, templateAssist } from "@/editor/autoclose";
 
 // Tab: 候補が開いていれば確定、範囲選択があれば行ごとにインデント、
 // カーソルだけなら次のタブ位置まで空白(またはタブ文字)を入れる。Shift+Tab は逆
@@ -190,7 +190,7 @@ export const dynamic = (o: EditorOpts): Extension => [
   o.matchHighlight ? highlightSelectionMatches() : [],
   o.rainbowBrackets ? rainbowBrackets : [], o.tagSync ? tagSync : [], o.diagnostics ? diagnostics : [], o.langService ? langService() : [], LSP_SERVERS.some((x) => o[x.on]) ? lspExtension(o) : [], o.minimap ? minimap : [],
   o.whitespace === "all" ? highlightWhitespace() : o.whitespace === "trailing" ? highlightTrailingWhitespace() : [],
-  o.closeBrackets ? closeBrackets() : [],
+  o.closeBrackets ? [closeBrackets(), closeBeforeMore, templateAssist] : [],
   explodeBrackets,
   autoCloseExtra,
   o.indentOnInput ? indentOnInput() : [],

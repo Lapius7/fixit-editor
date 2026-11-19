@@ -1,0 +1,2 @@
+patchedDependencies:
+  '@emmetio/codemirror6-plugin': patches/@emmetio__codemirror6-plugin.patch

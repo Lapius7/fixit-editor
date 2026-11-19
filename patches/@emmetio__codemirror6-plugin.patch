@@ -1,0 +1,41 @@
+diff --git a/dist/plugin.js b/dist/plugin.js
+index 9a682948daba828ca9790ff5e27dfcd5e569fcb7..26132d4f6d2979faaf9d3c58ef7cc8ef1321c02d 100644
+--- a/dist/plugin.js
++++ b/dist/plugin.js
+@@ -5744,6 +5744,18 @@ function tracker(options) {
+     keymap.of([{
+       key: "Tab",
+       run: tabKeyHandler
++    }, {
++      key: "Enter",
++      run: (view) => {
++        const { state } = view;
++        const tracker2 = state.field(trackerField, false);
++        if (completionStatus(state) === "active") return false;
++        if (tracker2 && tracker2.type === "abbreviation" && !tracker2.inactive && tracker2.abbreviation && /[A-Za-z0-9]/.test(tracker2.abbreviation) && contains(tracker2.range, getCaret(state))) {
++          expandTracker(view, tracker2);
++          return true;
++        }
++        return false;
++      }
+     }, {
+       key: "Escape",
+       run: escKeyHandler
+@@ -5945,7 +5957,7 @@ function handleUpdate(state, tracker2, update) {
+       if (to <= range.from || hasInvalidChars(text2.toString())) {
+         tracker2 = null;
+       } else {
+-        const abbrRange = tracker2.inactive ? range : { from: range.from, to };
++        const abbrRange = { from: range.from, to };
+         const nextTracker = createTracker(state, abbrRange, {
+           config: tracker2.config,
+           forced: tracker2.forced,
+@@ -7388,6 +7400,7 @@ export {
+   selectPreviousItem,
+   splitJoinTag,
+   toggleComment,
+-  wrapWithAbbreviation
++  wrapWithAbbreviation,
++  enterWrapWithAbbreviation
+ };
+ //# sourceMappingURL=plugin.js.map
