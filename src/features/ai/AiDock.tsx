@@ -27,7 +27,7 @@ import { ActCard, type Decide } from "@/features/ai/ActCards";
 import { ANCHOR_ERR, actsText, around, execResult, findAnchor, listTree, parseCall, readRange, searchRe, searchText, type Act, type FileHost, type ToolCall } from "@/features/ai/tools";
 import { deleteChat, getChats, newChatId, saveChat, setCurChat, useChats, type Chat } from "@/features/ai/chats";
 
-type M = { id: number; role: "user" | "assistant"; content: string; label?: string; ctx?: string; at?: number; imgs?: (Img & { name: string })[]; busy?: boolean; err?: AiErrorKind; note?: Stop; job?: AiJob; applied?: "ok" | "stale"; tok?: Tok; acts?: Act[]; noTools?: boolean };
+type M = { id: number; role: "user" | "assistant"; content: string; label?: string; ctx?: string; at?: number; imgs?: (Img & { name: string })[]; busy?: boolean; err?: AiErrorKind; note?: Stop; job?: AiJob; applied?: "ok" | "stale"; tok?: Tok; acts?: Act[]; op?: string; noTools?: boolean };
 
 
 // 発言の日時。今日なら時刻だけ、別の日なら月日つき、別の年なら年も付ける。title には日付と時刻をすべて入れる
@@ -57,13 +57,13 @@ function Body({ m, onDecide }: { m: M; onDecide: Decide }) {
 }
 
 // 待っている間の表示。ドットが順に弾み、文字に光が流れ、10 秒を超えたら経過秒数も出す。押すと、いま何をしているか(動かしているコマンド・直前の操作)が開く
-function Wait({ acts }: { acts?: Act[] }) {
+function Wait({ acts, op }: { acts?: Act[]; op?: string }) {
   const [sec, setSec] = useState(0), [open, setOpen] = useState(false);
   useEffect(() => { const t0 = Date.now(), id = setInterval(() => setSec(Math.floor((Date.now() - t0) / 1000)), 1000); return () => clearInterval(id); }, []);
   const run = acts?.find((a): a is Extract<Act, { k: "run" }> => a.k === "run" && a.st === "pending" && !!a.running);
   const waiting = !run && !!acts?.some((a) => "st" in a && a.st === "pending");
   const last = acts?.length ? acts[acts.length - 1] : undefined;
-  const label = run ? "コマンドを実行中…" : waiting ? "許可を待っています…" : "考え中…";
+  const label = run ? "コマンドを実行中…" : waiting ? "許可を待っています…" : op ? "ファイルを確認中…" : "考え中…";
   const now = last ? ("query" in last ? last.query : "path" in last ? last.path : "") : "";
   return (
     <div className="ai-wait-box" data-open={open || undefined}>
@@ -76,8 +76,9 @@ function Wait({ acts }: { acts?: Act[] }) {
       {open && (
         <div className="ai-wait-detail">
           {run && <pre className="ai-run-c scroll" aria-label={i18next.t("実行するコマンド")}>{run.cmd}</pre>}
-          {!run && last && <p>{i18next.t("直前の操作")}: <code>{last.k}</code>{now ? <> <code>{now}</code></> : null}</p>}
-          {!run && !last && <p>{i18next.t("モデルが返答を組み立てています。ファイルの検索や読み込みなどの操作を始めると、ここに表示されます")}</p>}
+          {op && <p>{i18next.t("確認中")}: <code>{op}</code></p>}
+          {!run && last && !op && <p>{i18next.t("直前の操作")}: <code>{last.k}</code>{now ? <> <code>{now}</code></> : null}</p>}
+          {!run && !last && !op && <p>{i18next.t("モデルが返答を組み立てています。ファイルの検索や読み込みなどの操作を始めると、ここに表示されます")}</p>}
           <p className="ai-wait-note">{i18next.t("経過 {{n}} 秒。{{m}} 秒なにも届かないと、自動で打ち切ります", { n: sec, m: AI_IDLE_MS / 1000 })}</p>
         </div>
       )}
@@ -91,7 +92,7 @@ const Reply = memo(function Reply({ m, retry, onReplace, onRetry, onDecide }: { 
   return (
     <div className="ai-a" aria-busy={m.busy || undefined}>
       <Body m={m} onDecide={onDecide} />
-      {m.busy && <Wait acts={m.acts} />}
+      {m.busy && <Wait acts={m.acts} op={m.op} />}
       {stopped && <p className="ai-warn">{i18next.t("止めました")}</p>}
       {m.noTools && <p className="ai-warn">{i18next.t("このモデルはファイルの操作に対応していないため、会話だけで答えました")}</p>}
       {m.note === "refusal" && <p className="ai-warn">{i18next.t("モデルが応答を断りました")}</p>}
@@ -316,7 +317,7 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
     let acc = "", raf = 0;
     const host = filesRef.current;
     // AI のファイル操作。読む・一覧は結果を返すだけ。変更は、差分を見せて許可を待ち(自動適用がオンなら待たない)、結果を AI に返す
-    const onTool = host ? async (call: ToolCall): Promise<string> => {
+    const onOne = host ? async (call: ToolCall): Promise<string> => {
       const pr = parseCall(call, host.root);
       if (pr.k === "bad") return pr.err;
       const id = `${aid}-${++actSeq.current}`, pos = acc.length;
@@ -328,22 +329,31 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
         ac.signal.addEventListener("abort", () => res("reject"), { once: true });
       })).then((c) => { waits.current.delete(id); return c; });
       const mode = getAi().mode;
+      // 読む・一覧・検索は、遅いと画面に何も出ない。いま何を待っているかを見せ、60 秒で打ち切る(止めるボタンでも抜ける)
+      const guard = async <T,>(label: string, p: Promise<T>): Promise<T> => {
+        pat(aid, (m) => ({ ...m, op: label }));
+        let t = 0;
+        try {
+          return await Promise.race([p, new Promise<never>((_, no) => { t = window.setTimeout(() => no(new Error("timeout")), 60_000); ac.signal.addEventListener("abort", () => no(new Error("stopped")), { once: true }); })]);
+        } finally { window.clearTimeout(t); pat(aid, (m) => ({ ...m, op: undefined })); }
+      };
+      const slow = (e: unknown) => (e instanceof Error && e.message === "timeout" ? "Timed out: this folder is too slow to read. Try a narrower path." : "Stopped by the user.");
       if (pr.k === "list") {
-        const t = await listTree(host.list, pr.path, pr.depth);
+        let t: string; try { t = await guard(`list ${pr.path}`, listTree(host.list, pr.path, pr.depth)); } catch (e) { return slow(e); }
         add({ id, pos, k: "list", path: pr.path, err: t.startsWith("[folder not found]") ? "none" : undefined });
         return t;
       }
       if (pr.k === "search") {
         const re = searchRe(pr.query, pr.regex, pr.icase);
         const hits: string[] = [];
-        try { await host.walk(pr.path, (p, text) => { hits.push(...searchText(p, text, re, AI_TOOL_SEARCH_MAX - hits.length)); return hits.length < AI_TOOL_SEARCH_MAX; }); } catch { /* 読めなかった分は飛ばす */ }
+        try { await guard(`search ${pr.path}`, host.walk(pr.path, (p, text) => { hits.push(...searchText(p, text, re, AI_TOOL_SEARCH_MAX - hits.length)); return hits.length < AI_TOOL_SEARCH_MAX; })); } catch (e) { if (e instanceof Error && (e.message === "timeout" || e.message === "stopped") && !hits.length) return slow(e); /* 読めなかった分は飛ばす */ }
         add({ id, pos, k: "search", query: pr.query, path: pr.path, n: hits.length });
         return hits.length ? `${hits.join("\n")}${hits.length >= AI_TOOL_SEARCH_MAX ? `\n[stopped at ${AI_TOOL_SEARCH_MAX} matches; narrow the query or path]` : ""}` : "No matches.";
       }
       // コマンドの実行。ask / auto のモードでは必ず許可を待つ(full だけ待たない)
       if (pr.k === "run") {
         if (!host.exec) return "Commands cannot be run in this environment.";
-        add({ id, pos, k: "run", cmd: pr.cmd, st: "pending" });
+        add({ id, pos, k: "run", cmd: pr.cmd, st: "pending", ...(mode === "full" ? { running: true } : {}) });
         const choice = await ask(mode === "full");
         if (ac.signal.aborted) { set("rejected"); return "Stopped by the user."; }
         if (choice === "reject") { set("rejected"); return "The user rejected this command. Do not retry it; ask what they want instead."; }
@@ -357,15 +367,16 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
       }
       // 作る・移す・消す
       if (pr.k === "create" || pr.k === "mkdir" || pr.k === "move" || pr.k === "delete") {
-        add({ id, pos, k: pr.k, path: pr.path, ...(pr.k === "move" ? { to: pr.to } : {}), ...(pr.k === "create" ? { size: pr.content.length } : {}), st: "pending" });
-        const choice = await ask(mode === "full" || (mode === "auto" && (pr.k === "create" || pr.k === "mkdir")));
+        const autoOp = mode === "full" || (mode === "auto" && (pr.k === "create" || pr.k === "mkdir"));
+        add({ id, pos, k: pr.k, path: pr.path, ...(pr.k === "move" ? { to: pr.to } : {}), ...(pr.k === "create" ? { size: pr.content.length } : {}), st: autoOp ? "applied" : "pending" });
+        const choice = await ask(autoOp);
         if (ac.signal.aborted) { set("rejected"); return "Stopped by the user."; }
         if (choice === "reject") { set("rejected"); return "The user rejected this. Do not retry it; ask what they want instead."; }
         const res = pr.k === "create" ? await host.create(pr.path, pr.content) : pr.k === "mkdir" ? await host.mkdir(pr.path) : pr.k === "move" ? await host.move(pr.path, pr.to) : await host.remove(pr.path);
         if (res === "ok") { set("applied"); return pr.k === "create" ? "File created." : pr.k === "mkdir" ? "Folder created." : pr.k === "move" ? "Moved." : "Deleted."; }
         set("err", res); return `Failed: ${res}`;
       }
-      const r = await host.read(pr.path);
+      let r: Awaited<ReturnType<typeof host.read>>; try { r = await guard(`read ${pr.path}`, host.read(pr.path)); } catch (e) { return slow(e); }
       const why = "err" in r ? { none: "File not found.", binary: "Not a text file.", big: "File is too large to open.", dir: "That is a folder. Use list_files.", denied: "That path is not allowed." }[r.err] : "";
       if (pr.k === "read") {
         if ("err" in r) { add({ id, pos, k: "read", path: pr.path, err: r.err }); return why; }
@@ -379,13 +390,26 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
       const a = findAnchor(r.text, pr.old);
       if (!a.ok) return fail(ANCHOR_ERR[a.why]);
       const d = around(r.text, a.at, pr.old, pr.neu);
-      add({ id, pos, k: "edit", path: pr.path, line: d.line, old: d.old, neu: d.neu, pre: d.pre, post: d.post, st: "pending" });
+      add({ id, pos, k: "edit", path: pr.path, line: d.line, old: d.old, neu: d.neu, pre: d.pre, post: d.post, st: mode !== "ask" ? "applied" : "pending" });
       const choice = await ask(mode !== "ask");
       if (ac.signal.aborted) { set("rejected"); return "Stopped by the user."; }
       if (choice === "reject") { set("rejected"); return "The user rejected this change. Do not retry the same change; ask what they want instead."; }
       const res = await host.apply(pr.path, pr.old, pr.neu);
       if (res === "ok") { const saved = mode !== "ask" && (await host.save?.(pr.path)) === true; set("applied"); if (saved) return "Applied and saved to disk. Line numbers after this change may have shifted; read the file again before the next edit."; return "Applied in the editor (the user saves it). Line numbers after this change may have shifted; read the file again before the next edit."; }
       set("stale"); return "Could not apply: the file changed meanwhile. Read the file again and propose the change again.";
+    } : undefined;
+    // 1 ファイルの変更は 1 回の呼び出しでまとめて受ける(edits)。中では 1 か所ずつ順に適用し、断られたら残りはやめる
+    const onTool = onOne ? async (call: ToolCall): Promise<string> => {
+      const ca = (call.args ?? {}) as { path?: unknown; edits?: unknown };
+      const list = call.name === "edit_file" && Array.isArray(ca.edits) ? (ca.edits as { old_text?: unknown; new_text?: unknown }[]).slice(0, 30) : null;
+      if (!list) return onOne(call);
+      const out: string[] = [];
+      for (const [i, e] of list.entries()) {
+        const r = await onOne({ ...call, args: { path: ca.path, old_text: e?.old_text, new_text: e?.new_text } });
+        out.push(list.length > 1 ? `[${i + 1}/${list.length}] ${r}` : r);
+        if (ac.signal.aborted || /^(The user rejected|Stopped)/.test(r)) break;
+      }
+      return out.join("\n");
     } : undefined;
     const flush = () => { raf = 0; pat(aid, (m) => ({ ...m, content: acc })); };
     try {

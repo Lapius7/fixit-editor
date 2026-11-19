@@ -21,7 +21,7 @@ fn run(m: &[Msg], resume: usize, tools: &[ToolSpec]) -> String {
         Event::Err { kind } => println!("ERR {kind}"),
         _ => {}
     });
-    turn("s1", "Be brief.", "haiku", "", "", m, resume, tools, emit);
+    turn("s1", "Be brief.", "haiku", "", &std::env::var("FIXIT_WH").unwrap_or_default(), m, resume, tools, emit);
     let r = text.lock().unwrap().clone();
     r
 }

@@ -18,8 +18,8 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "edit_file",
-    description: "Propose a change to an existing file by replacing old_text with new_text. old_text must match the file exactly (including indentation) and must appear exactly once, so include enough surrounding lines. The user sees the change as a diff and may reject it. Read the file first. One call = one contiguous change; call again for another place.",
-    schema: { type: "object", properties: { path: { type: "string" }, old_text: { type: "string", description: "Exact text to replace. Must be unique in the file." }, new_text: { type: "string", description: "Replacement text. Empty string deletes old_text." } }, required: ["path", "old_text", "new_text"] },
+    description: "Propose a change to an existing file by replacing old_text with new_text. old_text must match the file exactly (including indentation) and must appear exactly once, so include enough surrounding lines. The user sees the change as a diff and may reject it. Read the file first. To change several places in the same file, pass them all at once in edits (applied in order, each old_text must match the file as it is after the previous ones). Make ALL changes to one file in a single call.",
+    schema: { type: "object", properties: { path: { type: "string" }, old_text: { type: "string", description: "Exact text to replace. Must be unique in the file." }, new_text: { type: "string", description: "Replacement text. Empty string deletes old_text." }, edits: { type: "array", description: "Several changes to this file, instead of old_text/new_text.", items: { type: "object", properties: { old_text: { type: "string" }, new_text: { type: "string" } }, required: ["old_text", "new_text"] } } }, required: ["path"] },
   },
   {
     name: "create_file",
