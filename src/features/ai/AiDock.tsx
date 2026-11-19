@@ -5,7 +5,7 @@ import { AI_IDLE_MS } from "@/shared/config";
 import { ChevronRight, ArrowDown, ArrowUp, Check, Copy, MousePointerClick, Replace, RotateCcw, Settings as Cog, Square, Trash2, X, History, SquarePen, ChevronLeft, FileText, Quote as QuoteIcon, FileDown, ImagePlus, Hand, Zap, ShieldOff, FolderOpen } from "lucide-react";
 import i18next from "i18next";
 import { AI_MAX_HISTORY_CHARS, AI_TOOL_SEARCH_MAX, AI_MAX_HISTORY_IMAGES, AI_MAX_IMAGES } from "@/shared/config";
-import { AiError, isAbort, streamChat, type AiErrorKind, type Img, type Msg, type Stop } from "@/features/ai/providers";
+import { AiError, closeClaudeSession, isAbort, streamChat, type AiErrorKind, type Img, type Msg, type Stop } from "@/features/ai/providers";
 import { isImageFile, shrinkForHistory, toAiImage, type AiImage, type ImgFail } from "@/features/ai/images";
 import { aiPath, displayPath } from "@/workbench/rootpath";
 import { actionLabel, actionPrompt, replaceable, clipLabel, ctxLabel, systemPrompt, withClips, withCode, type AiJob, type Clip, type Ctx } from "@/features/ai/prompts";
@@ -278,7 +278,8 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
     ro.observe(el);
     return () => ro.disconnect();
   }, [open, ready_]);
-  useEffect(() => () => abort.current?.abort(), []);
+  const chatRef = useRef(chatId); chatRef.current = chatId;
+  useEffect(() => () => { abort.current?.abort(); closeClaudeSession(chatRef.current); }, []);
 
   const patch = (id: number, f: (m: M) => M) => setMsgs((a) => a.map((x) => (x.id === id ? f(x) : x)));
 
@@ -388,7 +389,7 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
     } : undefined;
     const flush = () => { raf = 0; pat(aid, (m) => ({ ...m, content: acc })); };
     try {
-      const stop = await streamChat({ provider: p, model: c.models[p], effort: hasEffort(p) ? c.effort : "", key: c.keys[p], system: systemPrompt(!!host, !!host?.exec, host?.root), messages, signal: ac.signal, onTool, exec: !!host?.exec, onNoTools: () => pat(aid, (m) => ({ ...m, noTools: true })), onText: (s) => { acc += s; if (!raf) raf = requestAnimationFrame(flush); }, onUsage: (t) => pat(aid, (m) => ({ ...m, tok: addTok(m.tok, t) })) });
+      const stop = await streamChat({ provider: p, model: c.models[p], effort: hasEffort(p) ? c.effort : "", key: c.keys[p], system: systemPrompt(!!host, !!host?.exec, host?.root), messages, signal: ac.signal, sid: chatId, onTool, exec: !!host?.exec, onNoTools: () => pat(aid, (m) => ({ ...m, noTools: true })), onText: (s) => { acc += s; if (!raf) raf = requestAnimationFrame(flush); }, onUsage: (t) => pat(aid, (m) => ({ ...m, tok: addTok(m.tok, t) })) });
       if (raf) cancelAnimationFrame(raf);
       pat(aid, (m) => ({ ...m, content: acc, busy: false, at: Date.now(), note: stop === "end" ? undefined : stop }));
     } catch (e) {
@@ -453,7 +454,7 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
 
   // 会話を切り替える(送信中なら止める)
   const stopAll = () => { gen.current++; abort.current?.abort(); abort.current = null; setBusy(false); setPending(null); };
-  const startNew = () => { stopAll(); const c = newChatId(); loaded.current = []; setMsgs([]); setChatId(c); setCurChat(null); setHist(false); };
+  const startNew = () => { stopAll(); closeClaudeSession(chatId); const c = newChatId(); loaded.current = []; setMsgs([]); setChatId(c); setCurChat(null); setHist(false); };
   const openChat = (c: Chat) => {
     if (c.id === chatId) { setHist(false); return; }
     stopAll(); const m = c.msgs as M[]; loaded.current = m; seq.current = m.reduce((n, x) => Math.max(n, x.id), 0);

@@ -25,6 +25,8 @@ export type Req = { provider: Provider; model: string; effort: Effort; key: stri
   exec?: boolean;
   // 接続先が道具に対応していなかったとき(道具なしで送り直す前に)知らせる
   onNoTools?: () => void;
+  // 会話の識別子。同じ会話の続きでは、動かし続けている claude を使い回す(claude-cli だけ)
+  sid?: string;
 };
 
 type Ev = { type: string; delta?: unknown };
@@ -310,58 +312,114 @@ async function claudeCliRun(r: Req): Promise<Stop> {
   return stop;
 }
 
-// claude コマンドは道具を無効にして呼ぶ(安全のため)ので、ファイル操作は文字の取り決めで行う。
-// AI が <fixit_tool>{"name":..,"args":{..}}</fixit_tool> と書いたら、ここで取り出して onTool を実行し、
-// 結果を <fixit_result> で次の往復に渡す。画面には、取り決めの部分を出さない
-const T_OPEN = "<fixit_tool>", T_CLOSE = "</fixit_tool>", MAX_BATCH = 5, READ_ONLY = new Set(["list_files", "read_file", "search_files"]);
-const toolRules = (exec?: boolean) =>
-  `\n\nTOOL PROTOCOL. You have no built-in tools here; use the editor's file tools through this protocol only. To use a tool, end your message with exactly one call written as ${T_OPEN}{"name":"read_file","args":{"path":"/src/app.ts"}}${T_CLOSE} and then stop writing. The result arrives in the next user message inside <fixit_result> tags; then continue. To save time, you may put up to ${MAX_BATCH} independent read-only calls (list_files, read_file, search_files) one after another at the end of one message, each in its own tags; their results arrive together. Any call that changes something (edit, create, move, delete, run_command) must be the only call in its message. Never write a result yourself. Be efficient: each round trip is slow, so read what you need in as few rounds as possible and do not explore files that are not needed for the request. Available tools (name, description, args JSON schema):\n` +
-  (exec ? [...TOOLS, EXEC_TOOL] : TOOLS).map((t) => `- ${t.name}: ${t.description} Schema: ${JSON.stringify(t.schema)}`).join("\n");
-const partial = (s: string) => { for (let k = Math.min(T_OPEN.length - 1, s.length); k > 0; k--) if (T_OPEN.startsWith(s.slice(-k))) return k; return 0; };
+// 道具つきの会話は、会話ごとに動かし続ける claude と話す(VS Code の拡張と同じ方式)。
+// 道具(ファイル操作・検索・コマンド)は claude に MCP として見せ、呼ばれるたびに {t:"tool"} が届く。
+// onTool(許可待ちも含む)を動かして結果を返すと、claude が続きを書く。1 回の質問の間は、claude を作り直さない
+type CliEv = { t: "text"; s: string } | { t: "done"; stop: Stop } | { t: "err"; kind: AiErrorKind } | { t: "usage"; i: number; o: number; cr: number; cw: number } | { t: "limit"; id: string; u: number; r: number } | { t: "tool"; cid: string; name: string; args: unknown };
+// 会話(sid)ごとに、claude が覚えている発言の数と、これまでの自分の発言。続きの質問かどうかの判定に使う
+const cliSess = new Map<string, { known: number; users: string[] }>();
+
+const postClaude = (path: string, body: unknown, signal?: AbortSignal) => fetch(`/__claude/${path}`, { method: "POST", signal, headers: { "content-type": "application/json", "X-Fixit": "1" }, body: JSON.stringify(body) });
+
+// 会話を閉じる(新しい会話・会話の切り替え・画面を閉じるとき)。動かし続けている claude も止める
+export function closeClaudeSession(sid: string) {
+  cliSess.delete(sid);
+  if (IS_TAURI) void import("@tauri-apps/api/core").then(({ invoke }) => invoke("claude_close", { sid })).catch(() => {});
+  else void postClaude("close", { sid }).catch(() => {});
+}
+
+// 1 回の発言を送り、届く出来事を handle に渡す。終わる(または止められる)まで戻らない
+async function cliTurn(sid: string, r: Req, resume: number, tools: unknown[], handle: (e: CliEv) => void, signal: AbortSignal) {
+  const msg = { sid, system: r.system, model: r.model, effort: r.effort, messages: r.messages, resume, tools };
+  if (IS_TAURI) {
+    const { Channel, invoke } = await import("@tauri-apps/api/core");
+    const ch = new Channel<CliEv>();
+    ch.onmessage = handle;
+    if (signal.aborted) throw new DOMException("aborted", "AbortError");
+    const cancel = () => { void invoke("claude_close", { sid }); };
+    signal.addEventListener("abort", cancel, { once: true });
+    try { await invoke("claude_turn", { ...msg, wh: claudeWhere(), onEvent: ch }); }
+    catch { if (signal.aborted) throw new DOMException("aborted", "AbortError"); throw new AiError("other"); }
+    finally { signal.removeEventListener("abort", cancel); }
+    return;
+  }
+  let res: Response;
+  try { res = await postClaude("turn", msg, signal); }
+  catch (e) { if (signal.aborted) throw e; throw new AiError("network"); }
+  if (!res.ok || !res.body) throw new AiError(res.status === 404 ? "nocli" : res.status === 429 ? "rate" : res.status === 403 ? "denied" : "other", res.status);
+  const reader = res.body.getReader(), dec = new TextDecoder();
+  let buf = "";
+  const one = (l: string) => { if (!l.trim()) return; let j: CliEv; try { j = JSON.parse(l); } catch { return; } handle(j); };
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split("\n"); buf = lines.pop() ?? "";
+      lines.forEach(one);
+    }
+    one(buf);
+  } catch (e) {
+    if (e instanceof AiError || signal.aborted) throw e;
+    throw new AiError("network");
+  }
+}
+
+const sendTool = async (sid: string, cid: string, text: string, error: boolean) => {
+  if (IS_TAURI) { const { invoke } = await import("@tauri-apps/api/core"); await invoke("claude_tool", { sid, cid, text, error }); }
+  else await postClaude("tool", { sid, cid, text, error });
+};
 
 async function claudeCli(r: Req): Promise<Stop> {
   const onTool = r.onTool;
   if (!onTool) return claudeCliOnce(r);
-  const system = r.system + toolRules(r.exec);
-  let messages = r.messages, stop: Stop = "end";
-  for (let round = 0; ; round++) {
-    if (r.signal.aborted) throw aborted();
-    let full = "", shown = 0, cut = false;
-    const flush = (final: boolean) => {
-      if (cut) return;
-      const at = full.indexOf(T_OPEN);
-      const end = at >= 0 ? at : final ? full.length : full.length - partial(full);
-      if (at >= 0) cut = true;
-      if (end > shown) { r.onText(full.slice(shown, end)); shown = end; }
-    };
-    stop = await claudeCliOnce({ ...r, system, messages, onTool: undefined, onText: (t) => { full += t; flush(false); } });
-    flush(true);
-    const at = full.indexOf(T_OPEN);
-    if (at < 0 || stop !== "end" || round >= AI_TOOL_ROUNDS) return stop;
-    // 1 つのメッセージに並んだ呼び出しを順に取り出す(読むだけの操作は最大 MAX_BATCH 件まとめて、変更する操作は単独で動かす)
-    const calls: { name: string; args: unknown; text: string }[] = [];
-    let end = at, pos = at;
-    while (pos >= 0 && calls.length < MAX_BATCH) {
-      const body = full.slice(pos + T_OPEN.length), close = body.indexOf(T_CLOSE);
-      const raw = close >= 0 ? body.slice(0, close) : body;
-      let name = "tool", args: unknown = {};
-      try { const j = JSON.parse(raw) as { name?: string; args?: unknown }; name = String(j.name ?? "tool"); args = j.args ?? {}; } catch { name = "?"; }
-      calls.push({ name, args, text: raw });
-      end = pos + T_OPEN.length + (close >= 0 ? close + T_CLOSE.length : body.length);
-      pos = close >= 0 ? full.indexOf(T_OPEN, end) : -1;
+  const sid = r.sid ?? crypto.randomUUID();
+  const tools = (r.exec ? [...TOOLS, EXEC_TOOL] : TOOLS).map((t) => ({ name: t.name, description: t.description, schema: t.schema }));
+  // 続きの質問なら、動かし続けている claude に新しい発言だけを渡す。そうでなければ(やり直し・編集・別の会話)全部を渡して作り直す
+  const users = r.messages.filter((m) => m.role === "user").map((m) => m.content);
+  const prev = cliSess.get(sid);
+  const resume = prev && prev.known + 1 === r.messages.length && prev.users.length === users.length - 1 && prev.users.every((u, i) => u === users[i]) ? prev.known : 0;
+  cliSess.delete(sid);
+  const ac = new AbortController();
+  const link = () => ac.abort();
+  r.signal.addEventListener("abort", link, { once: true });
+  // 何も届かないまま長く止まったら打ち切る。道具の結果(許可待ちを含む)を待っている間は計らない
+  let stop: Stop = "end", fail: AiError | null = null, waiting = 0, idle = false, timer = 0, chain: Promise<void> = Promise.resolve();
+  const poke = () => { clearTimeout(timer); if (!waiting) timer = window.setTimeout(() => { idle = true; ac.abort(); }, AI_IDLE_MS); };
+  const handle = (e: CliEv) => {
+    poke();
+    if (e.t === "text") r.onText(e.s);
+    else if (e.t === "done") stop = e.stop;
+    else if (e.t === "usage") used(r, e);
+    else if (e.t === "limit") recordLimit("claude-cli", e.id, e.u, e.r);
+    else if (e.t === "err") fail = new AiError(e.kind === "nocli" || e.kind === "login" || e.kind === "rate" || e.kind === "model" ? e.kind : "other");
+    else if (e.t === "tool") {
+      // 変更を伴う操作が同時に走らないよう、届いた順に 1 つずつ動かす
+      waiting++; clearTimeout(timer);
+      chain = chain.then(async () => {
+        let text: string, error = false;
+        try { text = await onTool({ id: e.cid, name: e.name, args: e.args }); }
+        catch { if (ac.signal.aborted) return; text = "The tool failed."; error = true; }
+        if (ac.signal.aborted) return;
+        try { await sendTool(sid, e.cid, text, error); } catch { /* 止められたあと */ }
+      }).finally(() => { waiting--; poke(); });
     }
-    const outs: string[] = [];
-    for (const [k, c] of calls.entries()) {
-      if (r.signal.aborted) throw aborted();
-      if (c.name === "?") { outs.push(`<fixit_result name="tool">\nCould not read the tool call. Write one valid JSON object between the tags.\n</fixit_result>`); continue; }
-      if ((!READ_ONLY.has(c.name) && k > 0) || (k > 0 && !READ_ONLY.has(calls[0].name))) { outs.push(`<fixit_result name="${c.name}">\nNot run: a call that changes something must be the only call in its message. Send it again on its own.\n</fixit_result>`); continue; }
-      let result: string;
-      try { result = await onTool({ id: `cli-${round}-${k}`, name: c.name, args: c.args }); }
-      catch (e) { if (r.signal.aborted) throw e; result = "The tool failed."; }
-      outs.push(`<fixit_result name="${c.name}">\n${result}\n</fixit_result>`);
-    }
-    messages = [...messages, { role: "assistant", content: full.slice(0, end) }, { role: "user", content: outs.join("\n") }];
+  };
+  poke();
+  try {
+    await cliTurn(sid, r, resume, tools, handle, ac.signal);
+  } catch (e) {
+    cliSess.delete(sid);
+    if (idle && !r.signal.aborted) throw new AiError("timeout");
+    throw e;
+  } finally {
+    clearTimeout(timer);
+    r.signal.removeEventListener("abort", link);
   }
+  if (r.signal.aborted) throw aborted();
+  if (fail) { closeClaudeSession(sid); throw fail; }
+  cliSess.set(sid, { known: r.messages.length + 1, users });
+  return stop;
 }
 
 // 回答を作っている間は、窓の縁を光らせる(設定の「アニメーション」で切れる)

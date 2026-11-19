@@ -33,7 +33,7 @@ pub struct Img {
 
 // 画像 1 枚の上限(base64 の文字数)。画面側で 3.5MB 以下に縮めてから送る
 const MAX_IMG_B64: usize = 5_000_000;
-fn img_ok(i: &Img) -> bool {
+pub(crate) fn img_ok(i: &Img) -> bool {
     matches!(i.kind.as_str(), "image/png" | "image/jpeg" | "image/gif" | "image/webp")
         && (1..=MAX_IMG_B64).contains(&i.data.len())
         && i.data.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'/' || b == b'=')
@@ -52,6 +52,8 @@ pub enum Event {
     Usage { i: u64, o: u64, cr: u64, cw: u64 },
     // 上限の使用率。id は five_hour / seven_day など、u は 0〜1、r は戻る時刻(UNIX 秒)
     Limit { id: String, u: f64, r: u64 },
+    // claude が道具を呼んだ。画面が動かして claude_tool で結果を返す
+    Tool { cid: String, name: String, args: serde_json::Value },
 }
 
 // 動いている 1 回分。中断(キャンセル)のために子プロセスを持つ
@@ -76,7 +78,7 @@ pub fn effort_ok(e: &str) -> bool {
     matches!(e, "" | "low" | "medium" | "high" | "xhigh" | "max")
 }
 
-fn model_ok(m: &str) -> bool {
+pub(crate) fn model_ok(m: &str) -> bool {
     (1..=64).contains(&m.len()) && m.chars().all(|c| c.is_ascii_alphanumeric() || "._-[]".contains(c))
 }
 
@@ -139,11 +141,11 @@ pub fn find_native() -> Option<PathBuf> {
 pub fn where_ok(w: &str) -> bool {
     matches!(w, "" | "auto" | "windows" | "wsl")
 }
-enum Target {
+pub(crate) enum Target {
     Native(PathBuf),
     Wsl,
 }
-fn pick(wh: &str) -> Option<Target> {
+pub(crate) fn pick(wh: &str) -> Option<Target> {
     if wh != "wsl" {
         if let Some(b) = find_native() {
             return Some(Target::Native(b));
@@ -175,7 +177,7 @@ fn claude_args(system: &str, model: &str, effort: &str, json_in: bool) -> Vec<St
     a
 }
 
-fn temp_dir() -> Option<PathBuf> {
+pub(crate) fn temp_dir() -> Option<PathBuf> {
     let base = std::env::temp_dir();
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     let d = base.join(format!("fixit-claude-{}-{stamp}", std::process::id()));
@@ -198,7 +200,7 @@ fn wsl_script(model: &str, effort: &str, json_in: bool) -> String {
 }
 
 // rate_limit_event の中身から、窓(five_hour / seven_day など)ごとの使用率を取り出す。unifiedWindows がなければ、最上位の 1 つだけ見る
-fn limit_events(e: &serde_json::Value) -> Vec<Event> {
+pub(crate) fn limit_events(e: &serde_json::Value) -> Vec<Event> {
     let info = &e["rate_limit_info"];
     if let Some(w) = info["unifiedWindows"].as_object() {
         return w
@@ -212,7 +214,7 @@ fn limit_events(e: &serde_json::Value) -> Vec<Event> {
     }
 }
 // result の usage から、1 回の呼び出しで使ったトークン数を取り出す
-fn usage_event(e: &serde_json::Value) -> Option<Event> {
+pub(crate) fn usage_event(e: &serde_json::Value) -> Option<Event> {
     let u = &e["usage"];
     if !u.is_object() {
         return None;
@@ -221,7 +223,7 @@ fn usage_event(e: &serde_json::Value) -> Option<Event> {
     Some(Event::Usage { i: n("input_tokens"), o: n("output_tokens"), cr: n("cache_read_input_tokens"), cw: n("cache_creation_input_tokens") })
 }
 
-fn classify(err: &str) -> &'static str {
+pub(crate) fn classify(err: &str) -> &'static str {
     let e = err.to_lowercase();
     let any = |l: &[&str]| l.iter().any(|k| e.contains(k));
     if any(&["not logged in", "/login", "log in", "authenticat", "credential", "401", "oauth"]) {

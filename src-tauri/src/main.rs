@@ -407,6 +407,18 @@ async fn claude_login(state: State<'_, Jobs>, id: String, wh: Option<String>, on
     r.map_err(|e| e.to_string())
 }
 
+// 会話ごとに動かし続ける claude(道具つき)。ブラウザ版の /__claude/turn・/tool・/close と同じ
+#[tauri::command]
+async fn claude_turn(sid: String, system: String, model: String, effort: String, wh: Option<String>, messages: Vec<claude::Msg>, resume: usize, tools: Vec<fixit_core::claude_session::ToolSpec>, on_event: Channel<claude::Event>) -> Result<(), String> {
+    let wh = wh.unwrap_or_default();
+    let emit: fixit_core::claude_session::Emit = Arc::new(move |e| { let _ = on_event.send(e); });
+    tauri::async_runtime::spawn_blocking(move || fixit_core::claude_session::turn(&sid, &system, &model, &effort, &wh, &messages, resume, &tools, emit)).await.map_err(|e| e.to_string())
+}
+#[tauri::command]
+fn claude_tool(sid: String, cid: String, text: String, error: bool) -> bool { fixit_core::claude_session::tool_result(&sid, &cid, &text, error) }
+#[tauri::command]
+fn claude_close(sid: String) { fixit_core::claude_session::close(&sid); }
+
 #[tauri::command]
 fn claude_cancel(state: State<Jobs>, id: String) {
     if let Some(j) = state.0.lock().unwrap().get(&id) { j.cancel(); }
@@ -693,12 +705,13 @@ fn main() {
             tauri::webview::PermissionKind::ClipboardRead => tauri::webview::PermissionResponse::Allow,
             _ => tauri::webview::PermissionResponse::Default,
         })
-        .invoke_handler(tauri::generate_handler![lp_start, lp_status, lp_set, lp_remove, lp_list, launch_blank, launch_url, next_url, new_window, pv_put, pv_drop, clip_read, clip_write, clip_files, pty_open, pty_shells, pty_write, pty_resize, pty_close, lsp_start, copilot_chat, lsp_send, lsp_stats, lsp_stop, launch_target, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_usage, claude_login, claude_cancel, copilot_device, gh_device, gh_poll, copilot_poll, copilot_token, store_load, store_read, store_stamps, store_save, apply_update, ext_get, ext_read_local, ext_github_get, ext_verify, ext_verify_revoked, list_fonts, open_url, os_open])
+        .invoke_handler(tauri::generate_handler![lp_start, lp_status, lp_set, lp_remove, lp_list, launch_blank, launch_url, next_url, new_window, pv_put, pv_drop, clip_read, clip_write, clip_files, pty_open, pty_shells, pty_write, pty_resize, pty_close, lsp_start, copilot_chat, lsp_send, lsp_stats, lsp_stop, launch_target, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_usage, claude_login, claude_cancel, claude_turn, claude_tool, claude_close, claude_turn, claude_tool, claude_close, copilot_device, gh_device, gh_poll, copilot_poll, copilot_token, store_load, store_read, store_stamps, store_save, apply_update, ext_get, ext_read_local, ext_github_get, ext_verify, ext_verify_revoked, list_fonts, open_url, os_open])
         .build(tauri::generate_context!())
         .expect("フィクシットエディタを起動できませんでした")
         .run(|app, ev| {
             // アプリを閉じるときは、言語サーバーの子プロセスも止める
             if let tauri::RunEvent::Exit = ev {
+                fixit_core::claude_session::close_all();
             if let Some(d) = fixit_data_dir() { fixit_core::proto::leave(&d, std::process::id()); }
                 use tauri::Manager;
                 let all: Vec<_> = app.state::<Lsps>().0.lock().unwrap().drain().map(|x| x.1).collect();

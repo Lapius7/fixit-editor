@@ -6,6 +6,7 @@ import path from "node:path";
 import type { ServerResponse } from "node:http";
 import type { Plugin } from "vite";
 import { body, check } from "./fsapi";
+import { closeAll, closeSession, runTurn, toolResult, type ToolSpec } from "./claudeSession";
 import { AI_CLI_MAX_BODY, AI_IMAGE_TYPES } from "../src/shared/config";
 
 // Claude のサブスクリプション(claude.ai のログイン)で AI を使うための橋渡し(開発サーバー専用)。
@@ -90,6 +91,7 @@ export function claudeBridge(): Plugin {
     name: "fixit-claude",
     apply: "serve",
     configureServer(server) {
+      server.httpServer?.on("close", closeAll);
       server.middlewares.use("/__claude", async (req, res) => {
         try {
           check(req);
@@ -125,6 +127,28 @@ export function claudeBridge(): Plugin {
             });
             p.on("error", (e: NodeJS.ErrnoException) => { if (fin()) { line(res, { t: "err", kind: e.code === "ENOENT" ? "nocli" : "other" }); res.end(); } });
             p.on("close", (code, sig) => { if (fin()) { line(res, code === 0 ? { t: "done", stop: "end" } : { t: "err", kind: sig ? "other" : "login" }); res.end(); } });
+            return;
+          }
+          // 会話ごとに動かし続ける claude(道具つき): /turn で発言を送り、/tool で道具の結果を返し、/close で閉じる
+          const route = (req.url ?? "").split("?")[0];
+          if (route === "/turn" || route === "/tool" || route === "/close") {
+            if (req.method !== "POST") { res.statusCode = 405; res.end(); return; }
+            const k = JSON.parse((await body(req, AI_CLI_MAX_BODY)).toString("utf8")) as Record<string, unknown>;
+            const sid = typeof k.sid === "string" && /^[\w-]{1,64}$/.test(k.sid) ? k.sid : "";
+            if (!sid) { res.statusCode = 400; res.end(); return; }
+            if (route === "/close") { closeSession(sid); res.statusCode = 204; res.end(); return; }
+            if (route === "/tool") {
+              const ok = typeof k.cid === "string" && typeof k.text === "string" && toolResult(sid, k.cid, k.text.slice(0, 2_000_000), k.error === true);
+              res.statusCode = ok ? 204 : 404; res.end(); return;
+            }
+            const ms = Array.isArray(k.messages) ? k.messages : [];
+            if (!ms.length || ms.some((m) => !m || (m.role !== "user" && m.role !== "assistant") || typeof m.content !== "string" || (m.images !== undefined && (!Array.isArray(m.images) || !m.images.every(imgOk))))) { res.statusCode = 400; res.end(); return; }
+            const model = typeof k.model === "string" ? k.model : "", effort = typeof k.effort === "string" ? k.effort : "";
+            if ((model && !MODEL.test(model)) || !EFFORT.test(effort)) { res.statusCode = 400; res.end(); return; }
+            const tools = Array.isArray(k.tools) ? (k.tools as ToolSpec[]).filter((t) => t && /^[\w-]{1,64}$/.test(String(t.name)) && typeof t.description === "string") : [];
+            res.statusCode = 200;
+            res.setHeader("content-type", "application/x-ndjson; charset=utf-8"); res.setHeader("cache-control", "no-store");
+            runTurn({ sid, system: typeof k.system === "string" ? k.system : "", model, effort, messages: ms as Msg[], resume: typeof k.resume === "number" ? k.resume : 0, tools }, res);
             return;
           }
           if (req.method !== "POST") { res.statusCode = 405; res.end(); return; }
