@@ -8,6 +8,8 @@ import { ask } from "@/shared/ask";
 import type { Conn } from "@/platform/remote";
 import { DEFAULT_NAME, shortUrl, validName, validPort, type Pub } from "./dela";
 import { forgetSlot, loadSlots, scopeOf, type Slot } from "./slots";
+import { LocalPorts } from "./LocalPorts";
+import { localAvailable } from "./localport";
 import { delaRunning, delaSlotInfo, delaSlotRenew, type SlotInfo } from "./projects";
 
 type Opt = { name?: string; temp?: boolean };
@@ -197,6 +199,7 @@ export function PortsPanel({ open, items, conn, rootPath, onClose, onPublish, on
             <button className="icon-btn" aria-label={d.state === "fail" ? i18next.t("閉じる") : i18next.t("公開を止める")} title={d.state === "fail" ? i18next.t("閉じる") : i18next.t("公開を止める")} onClick={() => void stop(d)}>{d.state === "fail" ? <X /> : <Square />}</button>
           </div>
         ))}
+        {localAvailable && <LocalPorts open={open} defaultPort={port} onCopy={onCopy} onOpen={onOpen} />}
       </div>
       <section className="ports-bottom" aria-label={i18next.t("保存した URL")}>
         <h3 className="ports-sec ports-sec-bar">

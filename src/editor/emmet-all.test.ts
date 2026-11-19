@@ -96,3 +96,4 @@ describe("ショートカット設定から呼べる", () => {
     for (const id of EMMET_CMDS) expect(KEYS.some((k) => k.id === id)).toBe(true);
   });
 });
+

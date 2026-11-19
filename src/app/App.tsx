@@ -69,6 +69,7 @@ import { startBg, type Bg } from "@/features/dela/bg";
 import { logAppend, logDrop } from "@/features/dela/logs";
 import PortLog from "@/features/dela/PortLog";
 import { PortsPanel } from "@/features/dela/PortsPanel";
+import { ensureLocal, loadLocals } from "@/features/dela/localport";
 import { saveSlot, scopeOf } from "@/features/dela/slots";
 import { delaVersion } from "@/features/dela/projects";
 import { Sparkles, Server, FolderKanban, Eye, Maximize2, Minimize2, ImageIcon, ClipboardCopy, ChevronUp, Camera } from "lucide-react";
@@ -1612,6 +1613,7 @@ export default function App() {
   const bgs = useRef(new Map<number, Bg>());
   const bgSeq = useRef(0);
   const [portsOpen, setPortsOpen] = useState(false);
+  useEffect(() => { if (loadLocals().length) void ensureLocal(); }, []); // 登録済みの 名前.localhost を、起動したらすぐ使えるようにする
   const [logId, setLogId] = useState<number | null>(null); // ログを見ているポート(delas の id)
   const pLog = usePresence(delas.find((d) => d.id === logId));
   const patchDela = (id: number, f: (d: Pub) => Pub) => setDelas((p) => p.map((d) => (d.id === id ? f(d) : d)));

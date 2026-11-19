@@ -4,6 +4,7 @@
 import { EditorState, Prec, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
+import { htmlLanguage } from "@codemirror/lang-html";
 import { fileName } from "@/editor/intel";
 
 const HTML = /\.(html?|vue|php|svelte)$/i, TPL = /\.(html?|jinja2?|j2|njk|twig|jinja-html)$/i, JSX = /\.(jsx|tsx)$/i;
@@ -69,3 +70,28 @@ function tplHandler(view: EditorView, from: number, to: number, text: string): b
   return false;
 }
 export const templateAssist: Extension = Prec.high(EditorView.inputHandler.of(tplHandler));
+
+// HTML 以外のファイル(Python・Go・Ruby など)の文字列の中で「</」を打つと、直前の閉じていないタグの名前で閉じる
+const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
+const STR = /string|template|heredoc/i;
+export const inStr = (state: EditorState, pos: number): boolean => { const n = syntaxTree(state).resolveInner(pos, -1); return STR.test(n.name) || STR.test(n.parent?.name ?? ""); };
+// pos より前の文章から、閉じていないタグの名前を返す(無ければ null)。入れ子は数える
+export function openTagBefore(text: string): string | null {
+  const stack: string[] = [];
+  const re = /<(\/)?([A-Za-z][\w:-]*)((?:"[^"]*"|'[^']*'|[^<>"'])*?)(\/)?>/g;
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    const name = m[2], low = name.toLowerCase();
+    if (m[1]) { const i = stack.lastIndexOf(name); if (i >= 0) stack.length = i; }
+    else if (!m[4] && !VOID.has(low)) stack.push(name);
+  }
+  return stack.length ? stack[stack.length - 1] : null;
+}
+export const closeTagInString = EditorView.inputHandler.of((view, from, to, text) => {
+  if (text !== "/" || from !== to || from < 1 || view.state.sliceDoc(from - 1, from) !== "<") return false;
+  if (htmlLanguage.isActiveAt(view.state, from) || !inStr(view.state, from)) return false;
+  const name = openTagBefore(view.state.sliceDoc(Math.max(0, from - 20000), from - 1));
+  if (!name) return false;
+  const ins = `/${name}>`;
+  view.dispatch({ changes: { from, insert: ins }, selection: { anchor: from + ins.length }, userEvent: "input.type" });
+  return true;
+});

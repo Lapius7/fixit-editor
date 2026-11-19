@@ -791,7 +791,7 @@ body.opening, body.opening .tree-row { cursor: progress; }
 .ports-url[data-wait] { color: var(--ink-2); font-family: var(--font-sans); }
 .ports-row .icon-btn { flex: none; }
 .ports-url[data-fail] { color: var(--danger, #d9534f); font-family: var(--font-sans); }
-.ports-proj { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 12px; }
+.ports-proj { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px 0; }
 .ports-browse { flex: 0 0 100%; min-width: 0; }
 .ports-browse .gh-br { margin-top: 0; }
 .ports-mode { flex: 0 0 100%; }

@@ -1937,5 +1937,12 @@
   "Emmet: 前の項目を選択": "Emmet: Select previous item",
   "Emmet: 記法の入力を始める": "Emmet: Start abbreviation input",
   "Emmet": "Emmet",
-  "別の URL・一時公開": "Another URL / temporary"
+  "別の URL・一時公開": "Another URL / temporary",
+  "ローカルで公開": "Local only",
+  "名前.localhost で開けるようにします(英小文字・数字・ハイフン)": "Opens as name.localhost (lowercase letters, digits, hyphens)",
+  "名前(例: myapp)": "Name (e.g. myapp)",
+  "ポート": "Port",
+  "登録": "Add",
+  "この PC の中だけで、ポート番号の代わりに名前で開けます。": "Open by name instead of port number, on this PC only.",
+  "登録を外す": "Remove"
 }

@@ -15,7 +15,7 @@ import { indentLess, indentMore } from "@codemirror/commands";
 import { MANAGED } from "@/editor/edit-cmds";
 import { snippetSource } from "@/editor/snippets";
 import { explodeBrackets } from "@/editor/explode";
-import { autoCloseExtra, closeBeforeMore, templateAssist } from "@/editor/autoclose";
+import { autoCloseExtra, closeBeforeMore, closeTagInString, templateAssist } from "@/editor/autoclose";
 
 // Tab: 候補が開いていれば確定、範囲選択があれば行ごとにインデント、
 // カーソルだけなら次のタブ位置まで空白(またはタブ文字)を入れる。Shift+Tab は逆
@@ -193,6 +193,7 @@ export const dynamic = (o: EditorOpts): Extension => [
   o.closeBrackets ? [closeBrackets(), closeBeforeMore, templateAssist] : [],
   explodeBrackets,
   autoCloseExtra,
+  closeTagInString,
   o.indentOnInput ? indentOnInput() : [],
   o.autocomplete ? [
     autocompletion({ defaultKeymap: true, icons: o.completeIcons, maxRenderedOptions: o.completeMax, activateOnTypingDelay: o.autocompleteDelay }),

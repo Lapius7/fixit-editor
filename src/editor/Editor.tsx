@@ -47,7 +47,7 @@ export const seedCursors = (m: Record<string, number> | undefined) => { seeds.cl
 import { emmetExtensions } from "./emmetExt";
 const LANG = new Compartment(), DYN = new Compartment(), EMMET = new Compartment();
 type EmmetSyntax = string;
-const EMMET_SYNTAX: Record<string, EmmetSyntax> = { html: "html", htm: "html", xhtml: "html", vue: "html", php: "html", svelte: "html", xml: "xml", svg: "xml", jsx: "jsx", tsx: "jsx", css: "css", scss: "scss", sass: "sass", less: "css", styl: "stylus", pug: "pug", jade: "pug", haml: "haml", slim: "slim" };
+const EMMET_SYNTAX: Record<string, EmmetSyntax> = { html: "html", htm: "html", xhtml: "html", vue: "html", php: "html", svelte: "html", xml: "xml", svg: "xml", jsx: "jsx", tsx: "jsx", css: "css", scss: "scss", sass: "sass", less: "css", styl: "stylus", pug: "pug", jade: "pug", haml: "haml", slim: "slim", py: "html", pyw: "html", js: "html", mjs: "html", cjs: "html", ts: "html", mts: "html", cts: "html", go: "html", rb: "html", rs: "html", java: "html", kt: "html", kts: "html", cs: "html", swift: "html", dart: "html", lua: "html", pl: "html", scala: "html", ex: "html", exs: "html", groovy: "html" };
 const emmetSyntax = (name: string): EmmetSyntax | null => EMMET_SYNTAX[name.split(".").pop()?.toLowerCase() ?? ""] ?? null;
 const keys = [indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap].filter((b) => !MANAGED.has(b.run));
 

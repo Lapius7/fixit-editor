@@ -1,5 +1,5 @@
 diff --git a/dist/plugin.js b/dist/plugin.js
-index 9a682948daba828ca9790ff5e27dfcd5e569fcb7..26132d4f6d2979faaf9d3c58ef7cc8ef1321c02d 100644
+index 9a682948daba828ca9790ff5e27dfcd5e569fcb7..0feb63ff9dbd915f0d9013357ab9d1042610d493 100644
 --- a/dist/plugin.js
 +++ b/dist/plugin.js
 @@ -5744,6 +5744,18 @@ function tracker(options) {
@@ -21,7 +21,22 @@ index 9a682948daba828ca9790ff5e27dfcd5e569fcb7..26132d4f6d2979faaf9d3c58ef7cc8ef
      }, {
        key: "Escape",
        run: escKeyHandler
-@@ -5945,7 +5957,7 @@ function handleUpdate(state, tracker2, update) {
+@@ -5787,6 +5799,14 @@ function getActivationContext(state, pos) {
+   if (cssLanguage.isActiveAt(state, pos)) {
+     return getCSSActivationContext(state, pos, EmmetKnownSyntax.css, getCSSContext(state, pos));
+   }
++  const cfgSyntax = getEmmetConfig(state).syntax;
++  if (cfgSyntax === EmmetKnownSyntax.html && !htmlLanguage.isActiveAt(state, pos)) {
++    const node = syntaxTree(state).resolveInner(pos, -1);
++    if (!/string|template|heredoc/i.test(node.name) && !/string|template|heredoc/i.test(node.parent ? node.parent.name : "")) {
++      return void 0;
++    }
++    return { syntax: cfgSyntax, type: "markup", options: getOutputOptions(state) };
++  }
+   const syntax = javascriptLanguage.isActiveAt(state, pos) ? EmmetKnownSyntax.jsx : docSyntax(state);
+   if (isHTML(syntax)) {
+     const ctx = getHTMLContext(state, pos);
+@@ -5945,7 +5965,7 @@ function handleUpdate(state, tracker2, update) {
        if (to <= range.from || hasInvalidChars(text2.toString())) {
          tracker2 = null;
        } else {
@@ -30,7 +45,16 @@ index 9a682948daba828ca9790ff5e27dfcd5e569fcb7..26132d4f6d2979faaf9d3c58ef7cc8ef
          const nextTracker = createTracker(state, abbrRange, {
            config: tracker2.config,
            forced: tracker2.forced,
-@@ -7388,6 +7400,7 @@ export {
+@@ -5968,7 +5988,7 @@ function getSyntaxFromPos(state, pos) {
+   if (htmlLanguage.isActiveAt(state, pos)) {
+     return EmmetKnownSyntax.html;
+   }
+-  if (javascriptLanguage.isActiveAt(state, pos)) {
++  if (javascriptLanguage.isActiveAt(state, pos) && getEmmetConfig(state).syntax !== EmmetKnownSyntax.html) {
+     return EmmetKnownSyntax.jsx;
+   }
+   return "";
+@@ -7388,6 +7408,7 @@ export {
    selectPreviousItem,
    splitJoinTag,
    toggleComment,

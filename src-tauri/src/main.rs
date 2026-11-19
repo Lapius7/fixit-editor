@@ -256,6 +256,18 @@ async fn fs_write(request: Request<'_>) -> Result<Response, FsErr> {
         .map_err(Into::into)
 }
 
+// 名前.localhost → 127.0.0.1:ポート の中継(fixit-core の localport)
+#[tauri::command]
+fn lp_start(port: Option<u16>) -> Result<u16, String> { fixit_core::localport::start(port.unwrap_or(fixit_core::localport::DEFAULT_PORT)) }
+#[tauri::command]
+fn lp_status() -> Option<u16> { fixit_core::localport::running() }
+#[tauri::command]
+fn lp_set(name: String, port: u16) -> Result<(), String> { fixit_core::localport::set(&name, port) }
+#[tauri::command]
+fn lp_remove(name: String) { fixit_core::localport::remove(&name) }
+#[tauri::command]
+fn lp_list() -> Vec<(String, u16)> { fixit_core::localport::list() }
+
 // フォルダを選ぶ(OS の標準ダイアログ)。ブラウザの showDirectoryPicker のような「変更を保存しますか」の確認は出ない
 #[tauri::command]
 async fn pick_folder(window: tauri::WebviewWindow, title: Option<String>) -> Option<String> {
@@ -681,7 +693,7 @@ fn main() {
             tauri::webview::PermissionKind::ClipboardRead => tauri::webview::PermissionResponse::Allow,
             _ => tauri::webview::PermissionResponse::Default,
         })
-        .invoke_handler(tauri::generate_handler![launch_blank, launch_url, next_url, new_window, pv_put, pv_drop, clip_read, clip_write, clip_files, pty_open, pty_shells, pty_write, pty_resize, pty_close, lsp_start, copilot_chat, lsp_send, lsp_stats, lsp_stop, launch_target, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_usage, claude_login, claude_cancel, copilot_device, gh_device, gh_poll, copilot_poll, copilot_token, store_load, store_read, store_stamps, store_save, apply_update, ext_get, ext_read_local, ext_github_get, ext_verify, ext_verify_revoked, list_fonts, open_url, os_open])
+        .invoke_handler(tauri::generate_handler![lp_start, lp_status, lp_set, lp_remove, lp_list, launch_blank, launch_url, next_url, new_window, pv_put, pv_drop, clip_read, clip_write, clip_files, pty_open, pty_shells, pty_write, pty_resize, pty_close, lsp_start, copilot_chat, lsp_send, lsp_stats, lsp_stop, launch_target, fs_op, fs_write, pick_folder, claude_chat, claude_status, claude_usage, claude_login, claude_cancel, copilot_device, gh_device, gh_poll, copilot_poll, copilot_token, store_load, store_read, store_stamps, store_save, apply_update, ext_get, ext_read_local, ext_github_get, ext_verify, ext_verify_revoked, list_fonts, open_url, os_open])
         .build(tauri::generate_context!())
         .expect("フィクシットエディタを起動できませんでした")
         .run(|app, ev| {
