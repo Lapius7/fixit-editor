@@ -1,6 +1,6 @@
 // 返答の途中に出す、AI のファイル操作のカード。読む・一覧は 1 行、変更は Git の差分のように見せて、許可か却下を選ぶ。
-import { memo } from "react";
-import { ArrowRight, Check, FilePen, FilePlus, FileText, FolderPlus, FolderTree, MoveRight, Search, SquareTerminal, Trash2, X } from "lucide-react";
+import { memo, useState } from "react";
+import { ArrowRight, Check, ChevronRight, FilePen, FilePlus, FileText, FolderPlus, FolderTree, MoveRight, Search, SquareTerminal, Trash2, X } from "lucide-react";
 import i18next from "i18next";
 import type { Act } from "@/features/ai/tools";
 
@@ -94,3 +94,22 @@ export const ActCard = memo(function ActCard({ a, onDecide }: { a: Act; onDecide
     </div>
   );
 }, (x, y) => x.a === y.a);
+
+type EditAct = Extract<Act, { k: "edit" }>;
+/* 同じファイルへの続けての変更は 1 枚にまとめる。許可待ちがあるときは 1 か所ずつ出し、全部決まったらたたむ(開くと差分が見える) */
+export const EditGroup = memo(function EditGroup({ list, onDecide }: { list: EditAct[]; onDecide: Decide }) {
+  const [open, setOpen] = useState(false);
+  if (list.some((a) => a.st === "pending")) return <>{list.map((a) => <ActCard key={a.id} a={a} onDecide={onDecide} />)}</>;
+  const ok = list.filter((a) => a.st === "applied").length, bad = list.length - ok;
+  return (
+    <div className="ai-edit" data-open={open || undefined}>
+      <button type="button" className="ai-edit-h" style={{ width: "100%" }} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <FilePen aria-hidden /><span className="ai-edit-ht truncate" title={list[0].path}>{list[0].path}</span>
+        <small>{i18next.t("{{n}} か所", { n: list.length })}</small>
+        <span className="ai-edit-s" data-st={bad ? "err" : "applied"}>{bad ? i18next.t("{{ok}} か所を適用、{{bad}} か所は適用できませんでした", { ok, bad }) : <><Check aria-hidden />{i18next.t("適用しました")}</>}</span>
+        <ChevronRight aria-hidden style={{ transform: open ? "rotate(90deg)" : undefined }} />
+      </button>
+      {open && list.filter((a) => a.st === "applied").map((a) => <Diff key={a.id} a={a} />)}
+    </div>
+  );
+});

@@ -23,7 +23,7 @@ import { addTok, type Tok } from "@/features/ai/usage";
 import { ImgPeek, type Peek } from "@/features/ai/ImgPeek";
 import { refreshLink } from "@/features/ai/link";
 import { AI_ERR as ERR } from "@/features/ai/oneshot";
-import { ActCard, type Decide } from "@/features/ai/ActCards";
+import { ActCard, EditGroup, type Decide } from "@/features/ai/ActCards";
 import { ANCHOR_ERR, actsText, around, execResult, findAnchor, listTree, parseCall, readRange, searchRe, searchText, type Act, type FileHost, type ToolCall } from "@/features/ai/tools";
 import { deleteChat, getChats, newChatId, saveChat, setCurChat, useChats, type Chat } from "@/features/ai/chats";
 
@@ -46,9 +46,20 @@ function Body({ m, onDecide }: { m: M; onDecide: Decide }) {
   if (!acts?.length) return m.content ? <Response text={m.content} streaming={!!m.busy} /> : null;
   const parts: ReactNode[] = [];
   let at = 0;
-  for (const a of acts) {
+  for (let i = 0; i < acts.length; i++) {
+    const a = acts[i];
     const to = Math.min(a.pos ?? m.content.length, m.content.length);
     if (to > at) { const t = m.content.slice(at, to).trim(); if (t) parts.push(<Response key={`t${at}`} text={t} streaming={false} />); at = to; }
+    // 間に本文を挟まない、同じファイルへの続けての変更は 1 枚にまとめる
+    if (a.k === "edit") {
+      const list: Extract<Act, { k: "edit" }>[] = [a];
+      while (i + 1 < acts.length) {
+        const n = acts[i + 1];
+        if (n.k !== "edit" || n.path !== a.path || Math.min(n.pos ?? m.content.length, m.content.length) > at) break;
+        list.push(n); i++;
+      }
+      if (list.length > 1) { parts.push(<EditGroup key={a.id} list={list} onDecide={onDecide} />); continue; }
+    }
     parts.push(<ActCard key={a.id} a={a} onDecide={onDecide} />);
   }
   const rest = m.content.slice(at).trim();

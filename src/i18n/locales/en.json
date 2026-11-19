@@ -663,6 +663,8 @@
   "韓国語に翻訳": "Translate to Korean",
   "AI パネルを開く": "Open AI panel",
   "ファイルを確認中…": "Checking files…",
+  "{{n}} か所": "{{n}} places",
+  "{{ok}} か所を適用、{{bad}} か所は適用できませんでした": "{{ok}} applied, {{bad}} could not be applied",
   "考え中…": "Thinking…",
   "モデルが応答を断りました": "The model declined to respond",
   "長さの上限で途中で切れました": "Cut off at the length limit",
