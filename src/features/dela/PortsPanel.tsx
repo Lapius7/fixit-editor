@@ -1,7 +1,7 @@
 // 右側のポート管理パネル。上: 新しい公開(名前とポート)と、使用中の一覧(停止)。下: 保存した名前ごとの URL(再公開・コピー・開く・作り直し)。
 // 名前ごとに URL の元(トークン)が別で、プロジェクトのフォルダには何も作らない。同じ名前なら、どのフォルダを開いていても同じ URL で公開できる。
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Copy, ExternalLink, Globe, Play, Plus, Shuffle, Square, X } from "lucide-react";
+import { Copy, ExternalLink, Globe, ChevronRight, Play, Plus, Shuffle, Square, X } from "lucide-react";
 import i18next from "i18next";
 import { ms } from "@/features/settings/settings";
 import { ask } from "@/shared/ask";
@@ -32,6 +32,7 @@ export function PortsPanel({ open, items, conn, rootPath, onClose, onPublish, on
   const [port, setPort] = useState("5173");
   const [name, setName] = useState(DEFAULT_NAME); // 公開する名前。app は名前を付けない既定の URL
   const [fresh, setFresh] = useState(false); // 新しい名前を打っているか
+  const [adv, setAdv] = useState(false); // 「別の URL・一時公開」を開いているか
   const [temp, setTemp] = useState(false); // 一時公開(設定を使わず、終了で URL を捨てる)
   const [infos, setInfos] = useState<Record<string, Row | undefined>>({});
   const [running, setRunning] = useState<string[]>([]); // 起動中のトンネルの URL(dela list)
@@ -129,6 +130,9 @@ export function PortsPanel({ open, items, conn, rootPath, onClose, onPublish, on
   const ok = validPort(port) && (temp || nameOk);
   const go = () => { if (ok) void publish(port.trim(), { temp, name: temp ? undefined : name }); };
   const sel = infos[keyOf(name)];
+  // 名前が 2 つ以上ある・app 以外を選んでいる・一時公開のときは、折りたたまずに出す
+  const forced = temp || fresh || name !== DEFAULT_NAME || slots.length > 1;
+  const showAdv = adv || forced;
   return (
     <aside className="ai-dock ports-dock" data-closing={!open} aria-label={i18next.t("ポート管理")} onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } }}>
       <div className="ai-bar">
@@ -137,6 +141,18 @@ export function PortsPanel({ open, items, conn, rootPath, onClose, onPublish, on
       </div>
       <div className="ports-top scroll">
         <h3 className="ports-sec">{i18next.t("新しく公開")}</h3>
+        <form className="ports-new" onSubmit={(e) => { e.preventDefault(); go(); }}>
+          <input ref={portRef} inputMode="numeric" aria-label={i18next.t("公開するポート")} placeholder="3000" value={port} onChange={(e) => setPort(e.target.value)} aria-invalid={!validPort(port) || undefined} />
+          <button type="submit" className="ports-go" disabled={!ok}>{i18next.t("公開する")}</button>
+        </form>
+        {!forced && (
+          <button type="button" className="ports-more" aria-expanded={adv} onClick={() => setAdv((x) => !x)}>
+            <ChevronRight size={12} />
+            <span>{i18next.t("別の URL・一時公開")}</span>
+          </button>
+        )}
+        {showAdv && (
+          <>
         <div className="ports-proj">
           <div className="seg ports-mode" role="group" aria-label={i18next.t("公開のしかた")}>
             <button type="button" aria-pressed={!temp} onClick={() => setTemp(false)}>{i18next.t("名前で公開")}</button>
@@ -158,10 +174,8 @@ export function PortsPanel({ open, items, conn, rootPath, onClose, onPublish, on
           </div>
         )}
         {!temp && fresh && name === DEFAULT_NAME && <p className="ports-note">{i18next.t("「app」は、最初から使える名前です。ほかの名前にしてください")}</p>}
-        <form className="ports-new" onSubmit={(e) => { e.preventDefault(); go(); }}>
-          <input ref={portRef} inputMode="numeric" aria-label={i18next.t("公開するポート")} placeholder="3000" value={port} onChange={(e) => setPort(e.target.value)} aria-invalid={!validPort(port) || undefined} />
-          <button type="submit" className="ports-go" disabled={!ok}>{i18next.t("公開する")}</button>
-        </form>
+          </>
+        )}
         {temp ? (
           <p className="ports-note">{i18next.t("使い捨ての URL で公開します。終了すると URL は破棄され、設定は残りません。")}</p>
         ) : !fresh && sel && !sel.busy ? (

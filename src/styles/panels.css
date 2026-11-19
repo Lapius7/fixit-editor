@@ -777,6 +777,10 @@ body.opening, body.opening .tree-row { cursor: progress; }
 .ports-chip:hover { background: var(--press); }
 .ports-chip-new { gap: 4px; padding: 0 9px 0 7px; font-family: var(--font-sans); }
 .ports-chip[aria-pressed="true"] { background: var(--accent); color: #fff; box-shadow: none; }
+.ports-more { display: inline-flex; align-items: center; gap: 4px; margin: 8px 12px 0; padding: 0 6px 0 3px; height: 22px; font-size: 12px; line-height: 20px; color: var(--ink-2); border-radius: 6px; cursor: pointer; }
+.ports-more:hover { color: var(--ink); }
+.ports-more svg { position: relative; top: -1px; transition: transform calc(.14s * var(--sp)) var(--ease); }
+.ports-more[aria-expanded="true"] svg { transform: rotate(90deg); }
 .ports-note { margin: 8px 12px 0; font-size: 12px; line-height: 18px; color: var(--ink-2); }
 .ports-empty { margin: 4px 12px 8px; font-size: 12.5px; line-height: 18px; color: var(--ink-2); }
 .ports-row { display: flex; align-items: center; gap: 2px; min-height: 36px; margin: 0 6px; padding: 0 4px 0 8px; border-radius: 9px; }
