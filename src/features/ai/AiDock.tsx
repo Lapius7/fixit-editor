@@ -347,7 +347,9 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
         if (ac.signal.aborted) { set("rejected"); return "Stopped by the user."; }
         if (choice === "reject") { set("rejected"); return "The user rejected this command. Do not retry it; ask what they want instead."; }
         pat(aid, (m) => ({ ...m, acts: m.acts?.map((x) => (x.id === id && x.k === "run" ? { ...x, running: true } : x)) }));
-        const res = await host.exec(pr.cmd, pr.secs);
+        // 止めるボタンで待つのをやめる(動き出したコマンド自体は止められない)
+        const res = await Promise.race([host.exec(pr.cmd, pr.secs), new Promise<null>((ok) => { if (ac.signal.aborted) ok(null); else ac.signal.addEventListener("abort", () => ok(null), { once: true }); })]);
+        if (res === null) { set("rejected"); return "Stopped by the user."; }
         if (typeof res === "string") { set("err", res); return `Failed: ${res}`; }
         pat(aid, (m) => ({ ...m, acts: m.acts?.map((x) => (x.id === id && x.k === "run" ? { ...x, st: "applied", code: res.code, out: res.out.slice(-4000), timedOut: res.timedOut } : x)) }));
         return execResult(res);

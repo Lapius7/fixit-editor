@@ -230,6 +230,7 @@ async function claudeCliTauri(r: Req): Promise<Stop> {
     else if (e.t === "limit") recordLimit("claude-cli", e.id, e.u, e.r);
     else if (e.t === "err") fail = new AiError(e.kind === "nocli" || e.kind === "login" || e.kind === "rate" || e.kind === "model" ? e.kind : "other");
   };
+  if (r.signal.aborted) throw new DOMException("aborted", "AbortError");
   const id = crypto.randomUUID();
   const cancel = () => { void invoke("claude_cancel", { id }); };
   r.signal.addEventListener("abort", cancel, { once: true });
@@ -312,9 +313,9 @@ async function claudeCliRun(r: Req): Promise<Stop> {
 // claude コマンドは道具を無効にして呼ぶ(安全のため)ので、ファイル操作は文字の取り決めで行う。
 // AI が <fixit_tool>{"name":..,"args":{..}}</fixit_tool> と書いたら、ここで取り出して onTool を実行し、
 // 結果を <fixit_result> で次の往復に渡す。画面には、取り決めの部分を出さない
-const T_OPEN = "<fixit_tool>", T_CLOSE = "</fixit_tool>";
+const T_OPEN = "<fixit_tool>", T_CLOSE = "</fixit_tool>", MAX_BATCH = 5, READ_ONLY = new Set(["list_files", "read_file", "search_files"]);
 const toolRules = (exec?: boolean) =>
-  `\n\nTOOL PROTOCOL. You have no built-in tools here; use the editor's file tools through this protocol only. To use a tool, end your message with exactly one call written as ${T_OPEN}{"name":"read_file","args":{"path":"/src/app.ts"}}${T_CLOSE} and then stop writing. The result arrives in the next user message inside <fixit_result> tags; then continue. Make at most one call per message, and never write a result yourself. Available tools (name, description, args JSON schema):\n` +
+  `\n\nTOOL PROTOCOL. You have no built-in tools here; use the editor's file tools through this protocol only. To use a tool, end your message with exactly one call written as ${T_OPEN}{"name":"read_file","args":{"path":"/src/app.ts"}}${T_CLOSE} and then stop writing. The result arrives in the next user message inside <fixit_result> tags; then continue. To save time, you may put up to ${MAX_BATCH} independent read-only calls (list_files, read_file, search_files) one after another at the end of one message, each in its own tags; their results arrive together. Any call that changes something (edit, create, move, delete, run_command) must be the only call in its message. Never write a result yourself. Be efficient: each round trip is slow, so read what you need in as few rounds as possible and do not explore files that are not needed for the request. Available tools (name, description, args JSON schema):\n` +
   (exec ? [...TOOLS, EXEC_TOOL] : TOOLS).map((t) => `- ${t.name}: ${t.description} Schema: ${JSON.stringify(t.schema)}`).join("\n");
 const partial = (s: string) => { for (let k = Math.min(T_OPEN.length - 1, s.length); k > 0; k--) if (T_OPEN.startsWith(s.slice(-k))) return k; return 0; };
 
@@ -324,6 +325,7 @@ async function claudeCli(r: Req): Promise<Stop> {
   const system = r.system + toolRules(r.exec);
   let messages = r.messages, stop: Stop = "end";
   for (let round = 0; ; round++) {
+    if (r.signal.aborted) throw aborted();
     let full = "", shown = 0, cut = false;
     const flush = (final: boolean) => {
       if (cut) return;
@@ -336,17 +338,29 @@ async function claudeCli(r: Req): Promise<Stop> {
     flush(true);
     const at = full.indexOf(T_OPEN);
     if (at < 0 || stop !== "end" || round >= AI_TOOL_ROUNDS) return stop;
-    const body = full.slice(at + T_OPEN.length), close = body.indexOf(T_CLOSE);
-    let result: string, name = "tool";
-    try {
-      const j = JSON.parse(close >= 0 ? body.slice(0, close) : body) as { name?: string; args?: unknown };
-      name = String(j.name ?? "tool");
-      result = await onTool({ id: `cli-${round}`, name, args: j.args ?? {} });
-    } catch (e) {
-      if (r.signal.aborted) throw e;
-      result = "Could not read the tool call. Write one valid JSON object between the tags.";
+    // 1 つのメッセージに並んだ呼び出しを順に取り出す(読むだけの操作は最大 MAX_BATCH 件まとめて、変更する操作は単独で動かす)
+    const calls: { name: string; args: unknown; text: string }[] = [];
+    let end = at, pos = at;
+    while (pos >= 0 && calls.length < MAX_BATCH) {
+      const body = full.slice(pos + T_OPEN.length), close = body.indexOf(T_CLOSE);
+      const raw = close >= 0 ? body.slice(0, close) : body;
+      let name = "tool", args: unknown = {};
+      try { const j = JSON.parse(raw) as { name?: string; args?: unknown }; name = String(j.name ?? "tool"); args = j.args ?? {}; } catch { name = "?"; }
+      calls.push({ name, args, text: raw });
+      end = pos + T_OPEN.length + (close >= 0 ? close + T_CLOSE.length : body.length);
+      pos = close >= 0 ? full.indexOf(T_OPEN, end) : -1;
     }
-    messages = [...messages, { role: "assistant", content: full.slice(0, at + T_OPEN.length + (close >= 0 ? close + T_CLOSE.length : body.length)) }, { role: "user", content: `<fixit_result name="${name}">\n${result}\n</fixit_result>` }];
+    const outs: string[] = [];
+    for (const [k, c] of calls.entries()) {
+      if (r.signal.aborted) throw aborted();
+      if (c.name === "?") { outs.push(`<fixit_result name="tool">\nCould not read the tool call. Write one valid JSON object between the tags.\n</fixit_result>`); continue; }
+      if ((!READ_ONLY.has(c.name) && k > 0) || (k > 0 && !READ_ONLY.has(calls[0].name))) { outs.push(`<fixit_result name="${c.name}">\nNot run: a call that changes something must be the only call in its message. Send it again on its own.\n</fixit_result>`); continue; }
+      let result: string;
+      try { result = await onTool({ id: `cli-${round}-${k}`, name: c.name, args: c.args }); }
+      catch (e) { if (r.signal.aborted) throw e; result = "The tool failed."; }
+      outs.push(`<fixit_result name="${c.name}">\n${result}\n</fixit_result>`);
+    }
+    messages = [...messages, { role: "assistant", content: full.slice(0, end) }, { role: "user", content: outs.join("\n") }];
   }
 }
 
