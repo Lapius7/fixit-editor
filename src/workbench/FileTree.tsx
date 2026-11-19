@@ -3,7 +3,7 @@ import i18next from "i18next";
 import { ChevronRight, FileText, FileCode2, FileJson, FileType, Folder, FolderOpen, Image as ImageIcon, Film, Music } from "lucide-react";
 import { type Node, nodeOrder } from "@/platform/fs";
 import { useSettings } from "@/features/settings/settings";
-import { drag, dragEnd, extFiles, setDragSrc, setDropTarget, useDnd } from "@/workbench/dnd";
+import { drag, dragEnd, dragHint, isCopyKey, extFiles, setDragSrc, setDropTarget, useDnd } from "@/workbench/dnd";
 import { creatingNow, stopCreating, stopRenaming, useCreating, useRenaming, useWanted, type Renaming } from "@/workbench/creating";
 import { enterRow } from "@/workbench/treeAnim";
 import { usePending, type PendingItem } from "@/workbench/pending";
@@ -12,9 +12,10 @@ import { isMulti, isSelectedPath, knownNode, selectOnly, selectRange, selectedNo
 import { dirOf } from "@/workbench/treeops"; import { bulkFor, bulkTake, dropWarm, isOpen, inRefreshScope, readDir, readWarm, setOpenPath, subBulk, takePrefetched, rememberKids, recallKids, warmDir, warmKids } from "@/workbench/treeOpen";
 
 // ドラッグ中のものを、このフォルダへ移せるか(自分の中・今いる場所へは移せない)
-export const canDrop = (dest: Node) => {
+// copy(Ctrl を押している)なら、いまいるフォルダへも入れられる(複製)
+export const canDrop = (dest: Node, copy = false) => {
   const n = drag.node;
-  return !!n && dest.kind === "dir" && n.path !== dest.path && dirOf(n.path) !== dest.path && !dest.path.startsWith(n.path + "/");
+  return !!n && dest.kind === "dir" && n.path !== dest.path && (copy || dirOf(n.path) !== dest.path) && !dest.path.startsWith(n.path + "/");
 };
 
 export const iconFor = (name: string) => {
@@ -48,7 +49,7 @@ const SKEL = [46, 34, 40]; // 中身を読んでいる間に出す行(名前の�
 export type GitMark = "M" | "A" | "D" | "U" | "R" | "C" | "dir";
 export const GitMarks = createContext<(n: Node) => GitMark | undefined>(() => undefined);
 
-type Props = { nodes: Node[]; activePath: string | null; ctxPath: string | null; rev: number; onOpen: (n: Node, pin?: boolean) => void; onContext: (e: React.MouseEvent, n: Node) => void; onMove: (n: Node, dest: Node) => void; onDropFiles?: (e: React.DragEvent, dest: Node) => void; onPasteFiles?: (e: React.ClipboardEvent, dest: Node | null) => void; depth?: number; dirPath?: string };
+type Props = { nodes: Node[]; activePath: string | null; ctxPath: string | null; rev: number; onOpen: (n: Node, pin?: boolean) => void; onContext: (e: React.MouseEvent, n: Node) => void; onMove: (n: Node, dest: Node, copy?: boolean) => void; onDropFiles?: (e: React.DragEvent, dest: Node) => void; onPasteFiles?: (e: React.ClipboardEvent, dest: Node | null) => void; depth?: number; dirPath?: string };
 
 // 名前を打つ行。「a/b/c.js」のように打つと、途中のフォルダも作る
 function CreateRow({ depth }: { depth: number }) {
@@ -260,15 +261,15 @@ function Item({ enter, n, activePath, ctxPath, rev, onOpen, onContext, onMove, o
       if (onDropFiles && extFiles(e)) { e.stopPropagation(); e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDropTarget(n.path); return; }
       if (!drag.node) return;
       e.stopPropagation();
-      if (!canDrop(n)) { setDropTarget(null); return; }
-      e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropTarget(n.path);
+      if (!canDrop(n, isCopyKey(e))) { setDropTarget(null); return; }
+      e.preventDefault(); e.dataTransfer.dropEffect = isCopyKey(e) ? "copy" : "move"; setDropTarget(n.path);
     },
     onDrop: (e: React.DragEvent) => {
       if (onDropFiles && extFiles(e)) { onDropFiles(e, n); return; }
       if (!drag.node) return;
       e.stopPropagation();
-      if (!canDrop(n)) { dragEnd(); return; }
-      e.preventDefault(); const m = drag.node; dragEnd(); onMove(m, n);
+      if (!canDrop(n, isCopyKey(e))) { dragEnd(); return; }
+      e.preventDefault(); const m = drag.node, cp = isCopyKey(e); dragEnd(); onMove(m, n, cp);
     },
   } : {};
 
@@ -279,7 +280,7 @@ function Item({ enter, n, activePath, ctxPath, rev, onOpen, onContext, onMove, o
       onPaste={onPasteFiles ? (e) => onPasteFiles(e, isDir ? n : { name: dirOf(n.path).split("/").pop() ?? "", path: dirOf(n.path), kind: "dir", handle: n.parent }) : undefined}>
       {renaming && renaming.path === n.path ? <RenameRow key={n.path} r={renaming} depth={depth} open={open} /> : (
       <button className="tree-row" data-path={n.path} data-sel={selected || undefined} data-git={git} data-active={!isDir && activePath === n.path} data-ctx={ctxPath === n.path} data-src={!!(dnd & 2) || cut || undefined} draggable
-        onDragStart={(e) => { drag.node = n; e.dataTransfer.effectAllowed = "copyMove"; e.dataTransfer.setData("text/plain", n.name); dragChip(e, e.currentTarget, isMulti() && isSelectedPath(n.path) ? i18next.t("{{name}} ほか {{n}} 件", { name: n.name, n: selectedNodes().length - 1 }) : n.name); setTimeout(() => setDragSrc(n.path), 0); }}
+        onDragStart={(e) => { drag.node = n; dragHint(); e.dataTransfer.effectAllowed = "copyMove"; e.dataTransfer.setData("text/plain", n.name); dragChip(e, e.currentTarget, isMulti() && isSelectedPath(n.path) ? i18next.t("{{name}} ほか {{n}} 件", { name: n.name, n: selectedNodes().length - 1 }) : n.name); setTimeout(() => setDragSrc(n.path), 0); }}
         onDragEnd={() => dragEnd()} onClick={(e) => { if (e.ctrlKey || e.metaKey) return toggleSel(n); if (e.shiftKey) { window.getSelection()?.removeAllRanges(); return selectRange(n); } selectOnly(n); void click(); }} onPointerEnter={isDir && !open && !kids ? () => void warmDir(n) : undefined} onDoubleClick={() => { if (!isDir) onOpen(n, true); }}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!(isMulti() && isSelectedPath(n.path))) selectOnly(n); onContext(e, n); }}
         style={{ paddingLeft: 10 + depth * indent, ["--i" as string]: idx }}>

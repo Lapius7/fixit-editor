@@ -29,9 +29,12 @@ type Props = { path?: string;
 
 // タブを切り替えても、元に戻す履歴やカーソル位置が残るようにする
 const cache = new Map<string, EditorState>();
-export const dropStates = (match: (key: string) => boolean) => { for (const k of [...cache.keys()]) if (match(k)) cache.delete(k); };
+export const dropStates = (match: (key: string) => boolean) => { for (const k of [...cache.keys()]) if (match(k)) cache.delete(k); for (const k of [...scrolls.keys()]) if (match(k)) { scrolls.delete(k); typing.delete(k); } };
 // ワークスペースに残すカーソル位置(パス → 文書の先頭からの位置)。開いている画面と、切り替えて残した状態の両方から集める
 const live = new Map<string, EditorView>();
+// タブを離れたときの表示位置と、入力中だったか(戻ったときに続きから打てるようにする)
+const scrolls = new Map<string, ReturnType<EditorView["scrollSnapshot"]>>();
+const typing = new Set<string>();
 const seeds = new Map<string, number>();
 const pathOf = (key: string) => key.slice(key.indexOf(":") + 1);
 export const cursorsNow = (): Record<string, number> => {
@@ -71,7 +74,8 @@ export default function Editor({ path, docKey, name, value, onChange, onCursor, 
         history(), fileName.of(name), filePath.of(docKey.slice(docKey.indexOf(":") + 1)), DYN.of(dynamic(st)), LANG.of([]), EMMET.of([]), fixitTheme, fixitSearch, power, extEditor,
         keymap.of(keys),
         EditorView.domEventHandlers({
-          focus: (_e, v) => { lastFocus.v = v; setActive(v, pathOf(docKey)); cb.current.onFocus(); },
+          blur: (e) => { const to = (e as FocusEvent).relatedTarget as HTMLElement | null; if (!to?.closest?.(".tab, .tabbar")) typing.delete(docKey); return false; }, // タブへ移っただけなら、入力中のまま残す
+          focus: (_e, v) => { typing.add(docKey); lastFocus.v = v; setActive(v, pathOf(docKey)); cb.current.onFocus(); },
           // 最終行より下の空き地をクリックしたら、最後の行の末尾にカーソルを置く
           mousedown: (e, v) => {
             if (e.button !== 0 || (e.target as HTMLElement).closest(".cm-content, .cm-gutters, .cm-panels, .cm-tooltip")) return false;
@@ -112,12 +116,17 @@ export default function Editor({ path, docKey, name, value, onChange, onCursor, 
     view.current = v; setVw(v);
     live.set(docKey, v);
     if (seed !== undefined) requestAnimationFrame(() => v.dispatch({ effects: EditorView.scrollIntoView(v.state.selection.main.head, { y: "center" }) }));
+    if (cached) {
+      const snap = scrolls.get(docKey);
+      if (snap) requestAnimationFrame(() => { if (view.current === v) v.dispatch({ effects: snap }); });
+      if (typing.has(docKey)) requestAnimationFrame(() => { if (view.current === v && !v.hasFocus) v.focus(); }); // 入力中に離れたなら、戻ったらすぐ打てる
+    }
     cb.current.onReady(v);
     setActive(v, pathOf(docKey)); noteOpen(pathOf(docKey));
     // 切り替え直後のカーソル情報を状態バーへ
     const m = v.state.selection.main, l = v.state.doc.lineAt(m.head);
     cb.current.onCursor({ l: l.number, c: m.head - l.from + 1, sel: 0, lines: v.state.doc.lines });
-    return () => { clearTimeout(verT.current); setVw(null); cache.set(docKey, v.state); if (live.get(docKey) === v) live.delete(docKey); clearActive(v); cb.current.onReady(null); v.destroy(); };
+    return () => { clearTimeout(verT.current); setVw(null); cache.set(docKey, v.state); scrolls.set(docKey, v.scrollSnapshot()); if (live.get(docKey) === v) live.delete(docKey); clearActive(v); cb.current.onReady(null); const had = v.hasFocus || typing.has(docKey); v.destroy(); if (had) typing.add(docKey); };
   }, [docKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 設定の反映(開いた直後にも一度流す)。使う項目だけを並べる

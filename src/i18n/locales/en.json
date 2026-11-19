@@ -1955,5 +1955,13 @@
   "直前の操作": "Last action",
   "モデルが返答を組み立てています。ファイルの検索や読み込みなどの操作を始めると、ここに表示されます": "The model is composing a reply. Actions such as searching or reading files will appear here once they start.",
   "経過 {{n}} 秒。{{m}} 秒なにも届かないと、自動で打ち切ります": "{{n}} s elapsed. If nothing arrives for {{m}} s, it is stopped automatically.",
-  "実行中…": "Running…"
+  "実行中…": "Running…",
+  "移動": "Move",
+  "ドラッグでコピーするキー": "Key to copy while dragging",
+  "ファイル一覧でファイルやフォルダを引きずるとき、このキーを押しながら落とすと移動ではなくコピーになります": "When dragging files or folders in the file tree, hold this key while dropping to copy instead of move.",
+  "Ctrl": "Ctrl",
+  "Alt": "Alt",
+  "Shift": "Shift",
+  "「{{name}}」にコピー": "Copy to \"{{name}}\"",
+  "「{{name}}」に移動": "Move to \"{{name}}\""
 }

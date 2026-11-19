@@ -310,3 +310,8 @@ html.theme-fade, html.theme-fade * { transition: background-color calc(.45s * va
 @supports (animation-timeline: scroll()) {
   .cm-editor[data-hmask] .cm-scroller { animation: cm-hx linear both; animation-timeline: scroll(self inline); }
 }
+
+/* ドラッグ中、カーソルのそばに出す「移動 / コピー」の札 */
+.drag-mode { position: fixed; left: 0; top: 0; z-index: 10000; pointer-events: none; height: 22px; padding: 0 9px; border-radius: 6px; font-size: 12px; line-height: 22px; font-weight: 500; white-space: nowrap; color: var(--ink-2); background: var(--s2); box-shadow: 0 0 0 1px var(--hair), 0 6px 16px -6px rgb(20 30 60 / .3); -webkit-backdrop-filter: blur(12px) saturate(1.4); backdrop-filter: blur(12px) saturate(1.4); }
+.drag-mode[data-mode="copy"] { color: #fff; background: var(--accent); box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--accent) 60%, transparent); }
+.drag-mode[data-mode="copy"]::before { content: "+"; margin-right: 5px; font-weight: 700; }

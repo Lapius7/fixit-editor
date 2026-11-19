@@ -103,7 +103,7 @@ import { EDIT } from "@/editor/edit-cmds";
 import { codeToPng, copyShot } from "@/editor/shot";
 import { showShot } from "@/editor/shotPreview";
 import { ShotPreview } from "@/editor/ShotPreview";
-import { drag, dragEnd, extFiles, paneDrag, rootKey, setDropTarget, useDropTarget } from "@/workbench/dnd";
+import { isCopyKey, drag, dragEnd, extFiles, paneDrag, rootKey, setDropTarget, useDropTarget } from "@/workbench/dnd";
 import { LEAF0, boxes, flipAround, fromPair, isLeaf, joints, leaves, nextId, onTop, removeLeaf, renumber, setRatio, splitLeaf, swapLeaves, topLeaves, topRight, valid as validLay, type Box, type Dir, type Edge, type Joint, type Lay } from "@/workbench/layout";
 import { addNode, dirOf, exists, moveNode, removeNode, renameNode } from "@/workbench/treeops";
 import { CATS, DEFS, isDark, ms, update, useSettings } from "@/features/settings/settings";
@@ -2478,13 +2478,14 @@ export default function App() {
   const goHit = (n: Node, h: { line: number; from: number; to: number }) => goto(n, h.line, h.from, h.to);
 
   // ツリーに渡す関数は毎回同じものにする(FileTree は memo なので、打鍵のたびに描き直さない)
-  const treeRef = useRef({ openOrFocus, treeMenu, moveTo, dropInto, pasteInto, removeMany, copyTree, rename });
-  treeRef.current = { openOrFocus, treeMenu, moveTo, dropInto, pasteInto, removeMany, copyTree, rename };
+  const treeRef = useRef({ pasteTree, openOrFocus, treeMenu, moveTo, dropInto, pasteInto, removeMany, copyTree, rename });
+  treeRef.current = { pasteTree, openOrFocus, treeMenu, moveTo, dropInto, pasteInto, removeMany, copyTree, rename };
   const treeFn = useMemo(() => ({
     open: (n: Node, pin?: boolean) => treeRef.current.openOrFocus(n, !!pin),
     ctx: (e: React.MouseEvent, n: Node | null) => void treeRef.current.treeMenu(e, n),
-    move: async (n: Node, dest: Node | null) => {
+    move: async (n: Node, dest: Node | null, copy?: boolean) => {
       const list = selectedNodes();
+      if (copy) { const nodes = isMulti() && list.some((x) => x.path === n.path) ? list : [n]; await treeRef.current.pasteTree({ mode: "copy", nodes }, dest); clearSel(); return; }
       if (isMulti() && list.some((x) => x.path === n.path)) { for (const x of list) if (x.path !== dest?.path) await treeRef.current.moveTo(x, dest); clearSel(); } else await treeRef.current.moveTo(n, dest);
     },
     drop: (e: React.DragEvent, n: Node | null) => void treeRef.current.dropInto(e, n),
@@ -2526,8 +2527,8 @@ export default function App() {
                   if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDropTarget(null); setRootDrop(true); setExtDrop(true); return; }
                   // ここまで来るのは、一番上の階層のファイルか、何もない所の上。フォルダが1つなら、その一番上へ移す
                   if (!drag.node) return;
-                  if (roots.length > 1 || dirOf(drag.node.path) === roots[0].prefix) { setDropTarget(null); return; }
-                  e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropTarget(rootKey(roots[0].prefix));
+                  if (roots.length > 1 || (!isCopyKey(e) && dirOf(drag.node.path) === roots[0].prefix)) { setDropTarget(null); return; }
+                  e.preventDefault(); e.dataTransfer.dropEffect = isCopyKey(e) ? "copy" : "move"; setDropTarget(rootKey(roots[0].prefix));
                 }}
                 onDragOverCapture={(e) => { if (hasFiles(e)) { setRootDrop(false); setExtDrop(false); } }} // フォルダの上なら、そのフォルダが受け止める(開く案内は出さない)。何もない所なら下で出し直す
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as globalThis.Node | null)) { setRootDrop(false); setExtDrop(false); setDropTarget(null); } }}
@@ -2535,9 +2536,9 @@ export default function App() {
                   if (hasFiles(e)) { void dropExternal(e); return; }
                   setRootDrop(false);
                   if (!drag.node) return;
-                  const m = drag.node; dragEnd();
-                  if (roots.length > 1 || dirOf(m.path) === roots[0].prefix) return;
-                  e.preventDefault(); moveTo(m, null);
+                  const m = drag.node, cp = isCopyKey(e); dragEnd();
+                  if (roots.length > 1 || (!cp && dirOf(m.path) === roots[0].prefix)) return;
+                  e.preventDefault(); if (cp) void pasteTree({ mode: "copy", nodes: [m] }, null); else moveTo(m, null);
                 }}
                 onContextMenu={(e) => { if (e.target === e.currentTarget || !(e.target as HTMLElement).closest(".tree-row")) treeMenu(e, null); }}
                 onClick={(e) => { if (!(e.target as HTMLElement).closest(".tree-row, .create-row, .pending-row")) clearSel(); }}>
@@ -2551,9 +2552,9 @@ export default function App() {
                     <section key={r.prefix || "main"} className="root-sec" data-new={freshRoot === r.prefix} data-drop={dropAt === rootKey(r.prefix) || undefined} aria-label={r.name}
                       onDragOver={(e) => {
                         if (r.handle && hasFiles(e)) { e.stopPropagation(); e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDropTarget(rootKey(r.prefix)); return; }
-                        if (!drag.node) return; e.stopPropagation(); if (!canDrop(h)) { setDropTarget(null); return; } e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropTarget(rootKey(r.prefix));
+                        if (!drag.node) return; e.stopPropagation(); if (!canDrop(h, isCopyKey(e))) { setDropTarget(null); return; } e.preventDefault(); e.dataTransfer.dropEffect = isCopyKey(e) ? "copy" : "move"; setDropTarget(rootKey(r.prefix));
                       }}
-                      onDrop={(e) => { if (r.handle && hasFiles(e)) { void dropInto(e, null, r); return; } if (!drag.node) return; e.stopPropagation(); const m = drag.node, ok = canDrop(h); dragEnd(); if (!ok) return; e.preventDefault(); moveTo(m, roots.length > 1 ? h : null); }}>
+                      onDrop={(e) => { if (r.handle && hasFiles(e)) { void dropInto(e, null, r); return; } if (!drag.node) return; e.stopPropagation(); const m = drag.node, cp = isCopyKey(e), ok = canDrop(h, cp); dragEnd(); if (!ok) return; e.preventDefault(); if (cp) void treeFn.move(m, roots.length > 1 ? h : null, true); else moveTo(m, roots.length > 1 ? h : null); }}>
                       <button className="tree-row root-head" title={rootPath(r)} data-ctx={menu?.path === r.prefix} aria-expanded={!shut}
                         onClick={() => setFolded((p) => { const q = new Set(p); if (q.has(r.prefix)) q.delete(r.prefix); else q.add(r.prefix); return q; })}
                         onContextMenu={(e) => { e.stopPropagation(); treeMenu(e, h); }}
