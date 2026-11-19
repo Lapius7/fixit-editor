@@ -224,6 +224,15 @@ body:has(.ratio-grip[data-drag="true"]) .ed-pv { transition: none; }
 .ai-wait, .ai-warn, .ai-err, .ai-done { margin: 4px 0 0; font: 12px/20px var(--font-sans); color: var(--ink-3); }
 /* 考え中: 文字の上を光が流れる */
 .ai-wait { width: fit-content; background: linear-gradient(90deg, var(--ink-3) 35%, var(--ink) 50%, var(--ink-3) 65%) 0 0 / 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: ai-shimmer calc(1.8s * var(--sp)) linear infinite; }
+.ai-loading { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; height: 20px; }
+.ai-loading .ai-wait { margin: 0; }
+.ai-dots { display: inline-flex; align-items: center; gap: 3px; height: 20px; }
+.ai-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent, var(--ink-3)); opacity: .35; animation: ai-dot calc(1.2s * var(--sp)) ease-in-out infinite; }
+.ai-dots i:nth-child(2) { animation-delay: calc(.15s * var(--sp)); }
+.ai-dots i:nth-child(3) { animation-delay: calc(.3s * var(--sp)); }
+.ai-loading[data-wait] .ai-dots i { animation-duration: calc(2.4s * var(--sp)); }
+.ai-sec { font: 12px/20px var(--font-sans); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+@keyframes ai-dot { 0%, 60%, 100% { transform: translateY(0); opacity: .35; } 30% { transform: translateY(-3px); opacity: 1; } }
 @keyframes ai-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
 .ai-err { color: #d64545; }
 .ai-done { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-2); }
@@ -491,7 +500,7 @@ body:has(.col-grip[data-drag="true"]) iframe, body:has(.col-grip[data-drag="true
 .ai-drop > svg { color: var(--accent); }
 .ai-drop small { color: var(--ink-2); font-size: 12px; }
 .ai-dock[data-over="true"] .ai-drop { opacity: 1; transform: none; }
-@media (prefers-reduced-motion: reduce) { .ai-clip, .ai-start { animation: none; } .ai-wait { animation: none; color: var(--ink-3); background: none; } .ai-scroll > .ai-latest { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ai-clip, .ai-start { animation: none; } .ai-wait { animation: none; color: var(--ink-3); background: none; } .ai-dots i { animation: none; opacity: .6; } .ai-scroll > .ai-latest { transform: none; } }
 
 /* パンくずが入りきらないときは、左を切って右端(いまの位置)を見せる */
 .bc[data-cut] .bc-trail { -webkit-mask-image: linear-gradient(to right, transparent, #000 22px); mask-image: linear-gradient(to right, transparent, #000 22px); }
@@ -857,3 +866,21 @@ body.opening, body.opening .tree-row { cursor: progress; }
 .set-color { width: 40px; height: 28px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: transparent; cursor: pointer; }
 .set-ext-reset { margin-top: 8px; align-self: flex-start; }
 .ports-chip-new svg { position: relative; top: -1px; }
+
+/* AI チャットの動き: 発言・操作カードはふわっと入り、待ち中のカードは脈打つ */
+@keyframes ai-msg-in { from { opacity: 0; transform: translateY(8px); filter: blur(calc(var(--ab) * .6)); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes ai-card-in { from { opacity: 0; transform: translateY(6px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes ai-pend { 0%, 100% { box-shadow: 0 0 0 1px var(--hair) inset, 0 0 0 0 transparent; } 50% { box-shadow: 0 0 0 1px var(--accent) inset, 0 0 12px -2px var(--accent); } }
+@keyframes ai-send-in { from { transform: scale(.7); opacity: 0; } to { transform: none; opacity: 1; } }
+.ai-thread > .ai-u { animation: ai-msg-in calc(.32s * var(--sp)) var(--out) backwards; }
+.ai-thread > .ai-a { animation: ai-msg-in calc(.4s * var(--sp)) var(--out) backwards; }
+.ai-a .ai-edit, .ai-a .ai-fop { animation: ai-card-in calc(.3s * var(--sp)) var(--out) backwards; transform-origin: top left; }
+.ai-edit[data-st="pending"] { animation: ai-card-in calc(.3s * var(--sp)) var(--out) backwards, ai-pend calc(2.4s * var(--sp)) ease-in-out .4s infinite; }
+.ai-loading { animation: fade calc(.2s * var(--sp)) var(--out) both; }
+.ai-send:not(:disabled) { transition: transform calc(.16s * var(--sp)) var(--out), filter calc(.16s * var(--sp)) var(--out), background calc(.16s * var(--sp)); }
+.ai-send:not(:disabled):active { transform: scale(var(--ps)); }
+.ai-send svg { animation: ai-send-in calc(.22s * var(--sp)) var(--out) backwards; }
+.ai-compose textarea { transition: box-shadow calc(.18s * var(--sp)) var(--out); }
+.ai-fop svg { transition: color calc(.2s * var(--sp)); }
+.ai-fop[data-err] svg { color: var(--danger, #d93b3b); }
+@media (prefers-reduced-motion: reduce) { .ai-thread > *, .ai-a .ai-edit, .ai-a .ai-fop, .ai-edit[data-st="pending"], .ai-loading, .ai-send svg { animation: none; } }

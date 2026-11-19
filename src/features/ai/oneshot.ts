@@ -17,6 +17,7 @@ export const AI_ERR: Record<AiErrorKind, string> = {
   relogin: "GitHub Copilot のログインが切れました。設定の「AI」で、もう一度ログインしてください",
   nosub: "この GitHub アカウントでは Copilot を使えません。Copilot の契約(無料プランを含む)があるか確かめてください",
   nobase: "OpenAI 互換の接続先が未設定です。設定の「AI」で、接続先の URL を入れてください",
+  timeout: "応答が長いあいだ止まったので、打ち切りました。もう一度試してください",
   other: "AI の応答でエラーが起きました",
 };
 

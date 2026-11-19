@@ -44,6 +44,7 @@ export const AI_MODEL_HINTS = {
   custom: [],
 } as const;
 // AI がファイルを読み・直すとき(tools.ts)の上限
+export const AI_IDLE_MS = 120_000; // claude から何も届かないまま、これだけ経ったら打ち切る
 export const AI_TOOL_ROUNDS = 16; // 1 回の質問の中で、道具を呼べる往復の数
 export const AI_TOOL_READ_LINES = 400; // read_file が 1 回で返す行数の既定
 export const AI_TOOL_READ_MAX_LINES = 800; // 同じく、範囲を指定したときの上限

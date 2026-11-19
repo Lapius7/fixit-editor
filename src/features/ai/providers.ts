@@ -1,7 +1,7 @@
 // プロバイダーへの送信。ストリームで本文を受け取り、失敗は AiError(種類つき)にそろえる。
 // 画面に出す文言はここに置かず、呼び出し側が kind から選ぶ(多言語のため)。
 import Anthropic from "@anthropic-ai/sdk";
-import { AI_DEFAULT_MODEL, AI_MAX_TOKENS, AI_TOOL_ROUNDS } from "@/shared/config";
+import { AI_DEFAULT_MODEL, AI_IDLE_MS, AI_MAX_TOKENS, AI_TOOL_ROUNDS } from "@/shared/config";
 import { EXEC_TOOL, TOOLS, addToolDelta, doneCalls, newToolAcc, type ToolCall, type ToolDelta } from "@/features/ai/tools";
 import { IS_TAURI } from "@/shared/chrome";
 import { getAi, type Effort, type Link, type Provider } from "@/features/ai/store";
@@ -13,7 +13,7 @@ import { recordLimit, recordUsage, type Tok } from "@/features/ai/usage";
 // 画像は base64(data: の前置きなし)。type は AI_IMAGE_TYPES のどれか
 export type Img = { type: string; data: string };
 export type Msg = { role: "user" | "assistant"; content: string; images?: Img[] };
-export type AiErrorKind = "auth" | "denied" | "rate" | "network" | "model" | "bad" | "nocli" | "login" | "relogin" | "nosub" | "nobase" | "other";
+export type AiErrorKind = "auth" | "denied" | "rate" | "network" | "model" | "bad" | "nocli" | "login" | "relogin" | "nosub" | "nobase" | "timeout" | "other";
 export class AiError extends Error {
   constructor(public kind: AiErrorKind, public status?: number) { super(kind); }
 }
@@ -247,7 +247,24 @@ async function claudeCliTauri(r: Req): Promise<Stop> {
 }
 
 // この PC の claude コマンド(Claude のサブスクリプションのログイン)を、dev サーバー経由で呼ぶ。トークンには触れない
-async function claudeCliOnce(r: Req): Promise<Stop> {
+// claude が何も返さないまま長く止まったときは、待ち続けずに打ち切る。何か受け取るたびに計り直す
+const claudeIdle = (r: Req): [Req, () => void, () => boolean] => {
+  const ac = new AbortController(); let hit = false, t = 0;
+  const poke = () => { clearTimeout(t); t = window.setTimeout(() => { hit = true; ac.abort(); }, AI_IDLE_MS); };
+  const link = () => ac.abort();
+  r.signal.addEventListener("abort", link, { once: true }); poke();
+  const done = () => { clearTimeout(t); r.signal.removeEventListener("abort", link); };
+  return [{ ...r, signal: ac.signal, onText: (s) => { poke(); r.onText(s); }, onUsage: r.onUsage && ((u) => { poke(); r.onUsage?.(u); }) }, done, () => hit];
+};
+
+async function claudeCliOnce(r0: Req): Promise<Stop> {
+  const [r, done, hit] = claudeIdle(r0);
+  try { return await claudeCliRun(r); }
+  catch (e) { if (hit() && !r0.signal.aborted) throw new AiError("timeout"); throw e; }
+  finally { done(); }
+}
+
+async function claudeCliRun(r: Req): Promise<Stop> {
   if (IS_TAURI) return claudeCliTauri(r);
   let res: Response;
   try {

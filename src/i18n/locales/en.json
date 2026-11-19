@@ -1944,5 +1944,8 @@
   "ポート": "Port",
   "登録": "Add",
   "この PC の中だけで、ポート番号の代わりに名前で開けます。": "Open by name instead of port number, on this PC only.",
-  "登録を外す": "Remove"
+  "登録を外す": "Remove",
+  "許可を待っています…": "Waiting for approval…",
+  "{{n}} 秒": "{{n}} s",
+  "応答が長いあいだ止まったので、打ち切りました。もう一度試してください": "No response for a long time, so it was stopped. Please try again."
 }

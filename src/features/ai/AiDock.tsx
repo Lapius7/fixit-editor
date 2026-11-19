@@ -55,13 +55,26 @@ function Body({ m, onDecide }: { m: M; onDecide: Decide }) {
   return <>{parts}</>;
 }
 
+// 待っている間の表示。ドットが順に弾み、文字に光が流れ、10 秒を超えたら経過秒数も出す。承認待ちのときは文言を変える
+function Wait({ waiting }: { waiting: boolean }) {
+  const [sec, setSec] = useState(0);
+  useEffect(() => { const t0 = Date.now(), id = setInterval(() => setSec(Math.floor((Date.now() - t0) / 1000)), 1000); return () => clearInterval(id); }, []);
+  return (
+    <div className="ai-loading" role="status" data-wait={waiting || undefined}>
+      <span className="ai-dots" aria-hidden><i /><i /><i /></span>
+      <span className="ai-wait">{i18next.t(waiting ? "許可を待っています…" : "考え中…")}</span>
+      {sec >= 10 && !waiting && <span className="ai-sec">{i18next.t("{{n}} 秒", { n: sec })}</span>}
+    </div>
+  );
+}
+
 const Reply = memo(function Reply({ m, retry, onReplace, onRetry, onDecide }: { m: M; retry: boolean; onReplace: (m: M) => void; onRetry: (m: M) => void; onDecide: Decide }) {
   const [copied, copy] = useCopy();
   const stopped = !m.busy && !m.err && !m.note && !m.content && !m.acts?.length;
   return (
     <div className="ai-a" aria-busy={m.busy || undefined}>
       <Body m={m} onDecide={onDecide} />
-      {m.busy && !m.content && !m.acts?.length && <p className="ai-wait">{i18next.t("考え中…")}</p>}
+      {m.busy && <Wait waiting={!!m.acts?.some((a) => "st" in a && a.st === "pending")} />}
       {stopped && <p className="ai-warn">{i18next.t("止めました")}</p>}
       {m.noTools && <p className="ai-warn">{i18next.t("このモデルはファイルの操作に対応していないため、会話だけで答えました")}</p>}
       {m.note === "refusal" && <p className="ai-warn">{i18next.t("モデルが応答を断りました")}</p>}
