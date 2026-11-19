@@ -56,6 +56,7 @@ export default function TerminalSession({ id, active, open, focusKey, host: sshH
   useEffect(() => {
     const t = new XTerm({
       fontFamily: FONT(), fontSize: s.termFontSize, lineHeight: s.termLineHeight, cursorBlink: s.termBlink, cursorWidth: s.termCursorWidth, cursorInactiveStyle: (s.termCursorInactive === "none" ? "none" : s.termCursorInactive) as "outline" | "block" | "none", cursorStyle: s.termCursor as "bar" | "block" | "underline",
+      linkHandler: { activate: (_e, uri) => { void openExternal(uri); }, allowNonHttpProtocols: false },
       allowTransparency: true, scrollback: s.termScrollback, scrollSensitivity: s.termScrollSens, minimumContrastRatio: s.termMinContrast, theme: isDark(s) ? DARK : LIGHT,
     });
     const f = new FitAddon();

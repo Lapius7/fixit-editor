@@ -283,7 +283,7 @@ button.sb:active { transform: scale(var(--ps)); }
 /* 印が付く・消えるときは、小さく・ぼやけた状態から出入りする。消えたあとは幅を畳む */
 .tree-row .git-badge[data-on="false"] { opacity: 0; transform: scale(.25); filter: blur(4px); width: 0; transition-property: opacity, transform, filter, color, background-color, width; transition-delay: 0s, 0s, 0s, 0s, 0s, .22s; transition-duration: .22s, .22s, .22s, .22s, .22s, 0s; pointer-events: none; }
 @starting-style { .tree-row .git-badge[data-on="true"] { opacity: 0; transform: scale(.25); filter: blur(4px); } }
-.tree-row .truncate { transition: color .22s var(--out, cubic-bezier(.2, 0, 0, 1)); }
+.tree-row .truncate { flex: 1 1 0; min-width: 0; text-overflow: clip; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); transition: color .22s var(--out, cubic-bezier(.2, 0, 0, 1)); }
 @media (prefers-reduced-motion: reduce) { .tree-row .git-badge, .tree-row .truncate { transition-duration: 0s !important; transition-delay: 0s !important; } }
 .tree-row[data-git="M"] .truncate, .tree-row[data-git="R"] .truncate { color: var(--git-mod); }
 .tree-row[data-git="A"] .truncate, .tree-row[data-git="U"] .truncate { color: var(--git-add); }
