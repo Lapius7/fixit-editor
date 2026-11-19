@@ -45,7 +45,7 @@ function RunCard({ a, onDecide }: { a: Extract<Act, { k: "run" }>; onDecide: Dec
       <pre className="ai-run-c scroll" aria-label={i18next.t("実行するコマンド")}>{a.cmd}</pre>
       {a.st === "applied" && a.out?.trim() ? <pre className="ai-run-o scroll" aria-label={i18next.t("コマンドの出力")}>{a.out.trimEnd()}</pre> : null}
       <div className="ai-edit-f">
-        {a.st === "pending" ? (
+        {a.st === "pending" && a.running ? <span className="ai-edit-s" role="status">{i18next.t("実行中…")}</span> : a.st === "pending" ? (
           <>
             <button className="ai-edit-b" onClick={() => onDecide(a.id, "reject")}><X aria-hidden />{i18next.t("却下")}</button>
             <button className="ai-edit-b" data-primary="true" onClick={() => onDecide(a.id, "apply")}><Check aria-hidden />{i18next.t("実行する")}</button>

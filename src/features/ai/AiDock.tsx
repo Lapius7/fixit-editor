@@ -1,7 +1,8 @@
 // AI チャットのパネル。右側に出す(アプリ内ブラウザと同じ置き場所)。
 // 送るのは「利用者が操作したとき」だけ。送る前に、相手と送る範囲を画面に出し、初回は同意を取る。
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, Check, Copy, MousePointerClick, Replace, RotateCcw, Settings as Cog, Square, Trash2, X, History, SquarePen, ChevronLeft, FileText, Quote as QuoteIcon, FileDown, ImagePlus, Hand, Zap, ShieldOff, FolderOpen } from "lucide-react";
+import { AI_IDLE_MS } from "@/shared/config";
+import { ChevronRight, ArrowDown, ArrowUp, Check, Copy, MousePointerClick, Replace, RotateCcw, Settings as Cog, Square, Trash2, X, History, SquarePen, ChevronLeft, FileText, Quote as QuoteIcon, FileDown, ImagePlus, Hand, Zap, ShieldOff, FolderOpen } from "lucide-react";
 import i18next from "i18next";
 import { AI_MAX_HISTORY_CHARS, AI_TOOL_SEARCH_MAX, AI_MAX_HISTORY_IMAGES, AI_MAX_IMAGES } from "@/shared/config";
 import { AiError, isAbort, streamChat, type AiErrorKind, type Img, type Msg, type Stop } from "@/features/ai/providers";
@@ -55,15 +56,31 @@ function Body({ m, onDecide }: { m: M; onDecide: Decide }) {
   return <>{parts}</>;
 }
 
-// 待っている間の表示。ドットが順に弾み、文字に光が流れ、10 秒を超えたら経過秒数も出す。承認待ちのときは文言を変える
-function Wait({ waiting }: { waiting: boolean }) {
-  const [sec, setSec] = useState(0);
+// 待っている間の表示。ドットが順に弾み、文字に光が流れ、10 秒を超えたら経過秒数も出す。押すと、いま何をしているか(動かしているコマンド・直前の操作)が開く
+function Wait({ acts }: { acts?: Act[] }) {
+  const [sec, setSec] = useState(0), [open, setOpen] = useState(false);
   useEffect(() => { const t0 = Date.now(), id = setInterval(() => setSec(Math.floor((Date.now() - t0) / 1000)), 1000); return () => clearInterval(id); }, []);
+  const run = acts?.find((a): a is Extract<Act, { k: "run" }> => a.k === "run" && a.st === "pending" && !!a.running);
+  const waiting = !run && !!acts?.some((a) => "st" in a && a.st === "pending");
+  const last = acts?.length ? acts[acts.length - 1] : undefined;
+  const label = run ? "コマンドを実行中…" : waiting ? "許可を待っています…" : "考え中…";
+  const now = last ? ("query" in last ? last.query : "path" in last ? last.path : "") : "";
   return (
-    <div className="ai-loading" role="status" data-wait={waiting || undefined}>
-      <span className="ai-dots" aria-hidden><i /><i /><i /></span>
-      <span className="ai-wait">{i18next.t(waiting ? "許可を待っています…" : "考え中…")}</span>
-      {sec >= 10 && !waiting && <span className="ai-sec">{i18next.t("{{n}} 秒", { n: sec })}</span>}
+    <div className="ai-wait-box" data-open={open || undefined}>
+      <button type="button" className="ai-loading" data-wait={waiting || undefined} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <span className="ai-dots" aria-hidden><i /><i /><i /></span>
+        <span className="ai-wait" role="status">{i18next.t(label)}</span>
+        {sec >= 10 && !waiting && <span className="ai-sec">{i18next.t("{{n}} 秒", { n: sec })}</span>}
+        <ChevronRight className="ai-wait-chev" aria-hidden />
+      </button>
+      {open && (
+        <div className="ai-wait-detail">
+          {run && <pre className="ai-run-c scroll" aria-label={i18next.t("実行するコマンド")}>{run.cmd}</pre>}
+          {!run && last && <p>{i18next.t("直前の操作")}: <code>{last.k}</code>{now ? <> <code>{now}</code></> : null}</p>}
+          {!run && !last && <p>{i18next.t("モデルが返答を組み立てています。ファイルの検索や読み込みなどの操作を始めると、ここに表示されます")}</p>}
+          <p className="ai-wait-note">{i18next.t("経過 {{n}} 秒。{{m}} 秒なにも届かないと、自動で打ち切ります", { n: sec, m: AI_IDLE_MS / 1000 })}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -74,7 +91,7 @@ const Reply = memo(function Reply({ m, retry, onReplace, onRetry, onDecide }: { 
   return (
     <div className="ai-a" aria-busy={m.busy || undefined}>
       <Body m={m} onDecide={onDecide} />
-      {m.busy && <Wait waiting={!!m.acts?.some((a) => "st" in a && a.st === "pending")} />}
+      {m.busy && <Wait acts={m.acts} />}
       {stopped && <p className="ai-warn">{i18next.t("止めました")}</p>}
       {m.noTools && <p className="ai-warn">{i18next.t("このモデルはファイルの操作に対応していないため、会話だけで答えました")}</p>}
       {m.note === "refusal" && <p className="ai-warn">{i18next.t("モデルが応答を断りました")}</p>}
@@ -329,6 +346,7 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
         const choice = await ask(mode === "full");
         if (ac.signal.aborted) { set("rejected"); return "Stopped by the user."; }
         if (choice === "reject") { set("rejected"); return "The user rejected this command. Do not retry it; ask what they want instead."; }
+        pat(aid, (m) => ({ ...m, acts: m.acts?.map((x) => (x.id === id && x.k === "run" ? { ...x, running: true } : x)) }));
         const res = await host.exec(pr.cmd, pr.secs);
         if (typeof res === "string") { set("err", res); return `Failed: ${res}`; }
         pat(aid, (m) => ({ ...m, acts: m.acts?.map((x) => (x.id === id && x.k === "run" ? { ...x, st: "applied", code: res.code, out: res.out.slice(-4000), timedOut: res.timedOut } : x)) }));
@@ -363,7 +381,7 @@ export function AiDock({ open, job, quote, resolve, files, onClose, onSettings }
       if (ac.signal.aborted) { set("rejected"); return "Stopped by the user."; }
       if (choice === "reject") { set("rejected"); return "The user rejected this change. Do not retry the same change; ask what they want instead."; }
       const res = await host.apply(pr.path, pr.old, pr.neu);
-      if (res === "ok") { set("applied"); return "Applied in the editor (the user saves it). Line numbers after this change may have shifted; read the file again before the next edit."; }
+      if (res === "ok") { const saved = mode !== "ask" && (await host.save?.(pr.path)) === true; set("applied"); if (saved) return "Applied and saved to disk. Line numbers after this change may have shifted; read the file again before the next edit."; return "Applied in the editor (the user saves it). Line numbers after this change may have shifted; read the file again before the next edit."; }
       set("stale"); return "Could not apply: the file changed meanwhile. Read the file again and propose the change again.";
     } : undefined;
     const flush = () => { raf = 0; pat(aid, (m) => ({ ...m, content: acc })); };

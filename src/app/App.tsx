@@ -1900,6 +1900,7 @@ export default function App() {
   // ファイルを作る・移す・消したあとに、ツリーの読み直しとタブの整理をするための最新の関数(useMemo の中から呼ぶ)
   const aiSync = useRef({ reload, closeMany, dirty: [] as string[] });
   aiSync.current = { reload, closeMany, dirty: dirtyList.map((t) => t.node.path) };
+  const saveRef = useRef(saveTab); saveRef.current = saveTab;
   const aiFiles = useMemo<FileHost | null>(() => {
     if (!mainDir) return null;
     const bad = (path: string) => path.split("/").some((s) => secretName(s));
@@ -1955,6 +1956,15 @@ export default function App() {
         } catch { return "fail"; }
         replace();
         return "ok";
+      },
+      // 自動で許可した編集を、そのまま保存する(タブだけに残って、あとで消えるのを防ぐ)。画面に反映されるのを待ってから、最新のタブを保存する
+      async save(path) {
+        for (let i = 0; i < 20; i++) {
+          await new Promise((r) => setTimeout(r, 50));
+          const t = tabsRef.current.find((x) => x.node.path === path);
+          if (t && t.view.kind === "text") { if (t.text === t.saved) return true; return saveRef.current(t, true); }
+        }
+        return false;
       },
       async create(path, content) {
         if (bad(path)) return "That path is not allowed.";

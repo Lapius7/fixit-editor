@@ -246,7 +246,7 @@ export type Act =
   // ファイル・フォルダの作成 / 移動 / 削除。to は移動先、size は作る中身の文字数
   | OpAct
   // コマンドの実行。code は終了コード、out は出力(画面に見せる分。長いときは切る)、timedOut は時間切れで止めたとき
-  | ({ id: string; k: "run"; cmd: string; st: "pending" | "applied" | "rejected" | "err"; code?: number; out?: string; timedOut?: boolean; err?: string } & Pos);
+  | ({ id: string; k: "run"; cmd: string; st: "pending" | "applied" | "rejected" | "err"; running?: boolean; code?: number; out?: string; timedOut?: boolean; err?: string } & Pos);
 type OpKind = "create" | "mkdir" | "move" | "delete";
 // 種類ごとの型に分ける(k を 1 つずつの型にして、if で絞り込めるようにする)
 type OpAct = OpKind extends infer K ? K extends OpKind ? { id: string; k: K; path: string; to?: string; size?: number; st: "pending" | "applied" | "rejected" | "err"; err?: string } & Pos : never : never;
@@ -257,6 +257,8 @@ export type FileHost = {
   list(dir: string): Promise<Entry[] | null>;
   read(path: string): Promise<{ text: string } | { err: "none" | "binary" | "big" | "dir" | "denied" }>;
   apply(path: string, old: string, neu: string): Promise<"ok" | "stale" | "fail">;
+  // 適用した編集を、開いているタブから保存する(自動で許可した編集が、保存されないまま残らないように)
+  save?(path: string): Promise<boolean>;
   // 作る・移す・消す。結果は "ok" か、失敗の理由(AI に返す文)。存在しない・すでにある、などもここで調べる
   create(path: string, content: string): Promise<"ok" | string>;
   mkdir(path: string): Promise<"ok" | string>;

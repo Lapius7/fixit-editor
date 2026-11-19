@@ -1947,5 +1947,10 @@
   "登録を外す": "Remove",
   "許可を待っています…": "Waiting for approval…",
   "{{n}} 秒": "{{n}} s",
-  "応答が長いあいだ止まったので、打ち切りました。もう一度試してください": "No response for a long time, so it was stopped. Please try again."
+  "応答が長いあいだ止まったので、打ち切りました。もう一度試してください": "No response for a long time, so it was stopped. Please try again.",
+  "コマンドを実行中…": "Running a command…",
+  "直前の操作": "Last action",
+  "モデルが返答を組み立てています。ファイルの検索や読み込みなどの操作を始めると、ここに表示されます": "The model is composing a reply. Actions such as searching or reading files will appear here once they start.",
+  "経過 {{n}} 秒。{{m}} 秒なにも届かないと、自動で打ち切ります": "{{n}} s elapsed. If nothing arrives for {{m}} s, it is stopped automatically.",
+  "実行中…": "Running…"
 }

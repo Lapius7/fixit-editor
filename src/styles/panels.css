@@ -884,3 +884,15 @@ body.opening, body.opening .tree-row { cursor: progress; }
 .ai-fop svg { transition: color calc(.2s * var(--sp)); }
 .ai-fop[data-err] svg { color: var(--danger, #d93b3b); }
 @media (prefers-reduced-motion: reduce) { .ai-thread > *, .ai-a .ai-edit, .ai-a .ai-fop, .ai-edit[data-st="pending"], .ai-loading, .ai-send svg { animation: none; } }
+
+/* 待ち表示の詳細(押すと開く) */
+button.ai-loading { appearance: none; border: 0; background: none; padding: 0; cursor: pointer; font: inherit; color: inherit; text-align: left; border-radius: 6px; }
+button.ai-loading:hover .ai-wait-chev { color: var(--ink); }
+.ai-wait-chev { flex: none; width: 14px; height: 14px; color: var(--ink-3); transition: transform calc(.2s * var(--sp)) var(--out), color calc(.15s * var(--sp)); }
+.ai-wait-box[data-open] .ai-wait-chev { transform: rotate(90deg); }
+.ai-wait-detail { margin: 6px 0 0; padding: 8px 10px; border-radius: 10px; background: var(--field); box-shadow: 0 0 0 1px var(--hair) inset; display: flex; flex-direction: column; gap: 6px; min-width: 0; animation: ai-card-in calc(.24s * var(--sp)) var(--out) backwards; }
+.ai-wait-detail p { margin: 0; font: 12px/20px var(--font-sans); color: var(--ink-2); overflow-wrap: anywhere; }
+.ai-wait-detail code { font: 11px/18px var(--font-mono); padding: 0 4px; border-radius: 4px; background: var(--s3); }
+.ai-wait-detail .ai-wait-note { color: var(--ink-3); font-size: 11px; line-height: 16px; }
+.ai-wait-detail .ai-run-c { margin: 0; max-height: 160px; }
+@media (prefers-reduced-motion: reduce) { .ai-wait-detail { animation: none; } .ai-wait-chev { transition: none; } }
