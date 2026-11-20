@@ -87,8 +87,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.0
       '@yusufceng1z/ding-react':
-        specifier: ^0.0.3
-        version: 0.0.3(react@19.3.1)
+        specifier: ^0.0.9
+        version: 0.0.9(react@19.3.1)
       codemirror-lang-mermaid:
         specifier: ^0.5.0
         version: 0.5.0
@@ -1246,14 +1246,14 @@ packages:
   '@xterm/xterm@6.0.0':
     resolution: {integrity: sha512-TQwDdQGtwwDt+2cgKDLn0IRaSxYu1tSUjgKarSDkUM0ZNiSRXFpjxEsvc/Zgc5kq5omJ+V0a8/kIM2WD3sMOYg==}
 
-  '@yusufceng1z/ding-react@0.0.3':
-    resolution: {integrity: sha512-mPJ4KGkOme9XthdCZYXs36UFXE05Sg6VST9A1e4NNvSGlIJCKy4E/AUTx1j0kzFP4J+1lwnTIeewLlBYn7d0+A==}
+  '@yusufceng1z/ding-react@0.0.9':
+    resolution: {integrity: sha512-nBPdOZFENcbfSo/nZbkZdZ7YcI0wZTtV8J77nyPLWJoInB3UPL6EUTbdgsbmNfAVlIFWXNbg/uq+a9plSan/vQ==}
     engines: {node: '>=18'}
     peerDependencies:
       react: '>=18'
 
-  '@yusufceng1z/ding@0.0.3':
-    resolution: {integrity: sha512-sm+rU3b4kXo4Z4bgS85eHWCjcdtT/YDGTYpChMktEgbY3/lZrXycOKUKutgWc6C6CXBalGQ54LyWTonMdUlJDA==}
+  '@yusufceng1z/ding@0.0.9':
+    resolution: {integrity: sha512-WtIq8OmYK0d0HczoxH43eIlcCTtGyjLI0XObfLftF8BePeUJZOL6CYdMVI+VCepc2ok5jPyIduz0QozINdKnWg==}
     engines: {node: '>=18'}
 
   acorn@8.19.0:
@@ -3242,12 +3242,12 @@ snapshots:
 
   '@xterm/xterm@6.0.0': {}
 
-  '@yusufceng1z/ding-react@0.0.3(react@19.3.1)':
+  '@yusufceng1z/ding-react@0.0.9(react@19.3.1)':
     dependencies:
-      '@yusufceng1z/ding': 0.0.3
+      '@yusufceng1z/ding': 0.0.9
       react: 19.3.1
 
-  '@yusufceng1z/ding@0.0.3': {}
+  '@yusufceng1z/ding@0.0.9': {}
 
   acorn@8.19.0: {}
 
