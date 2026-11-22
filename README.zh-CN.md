@@ -1,20 +1,32 @@
 <div align="center">
 
-<img src="docs/screenshots/banner.png" alt="Fixit Editor" width="100%">
+<p align="center">
+  <img src="docs/images/banner.png" alt="Fixit Editor" width="100%">
+</p>
 
-# Fixit Editor
+<p align="center"><a href="README.md">English</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <b>简体中文</b> · <a href="README.es.md">Español</a></p>
 
-**轻巧好看、磨砂玻璃风格的 Windows 代码编辑器。**
+<h1 align="center">Fixit Editor</h1>
 
-![License](https://img.shields.io/badge/license-proprietary-lightgrey)
-![Platform](https://img.shields.io/badge/platform-Windows-0078d4)
-![Built with](https://img.shields.io/badge/built%20with-Tauri%20%C2%B7%20React%20%C2%B7%20CodeMirror%206-444)
+<h3 align="center">轻巧好看、磨砂玻璃风格的 Windows 代码编辑器。</h3>
 
-[官网](https://fixit-editor.lapius7.com) · [文档](https://fixit-editor.lapius7.com/docs) · [更新日志](https://fixit-editor.lapius7.com/en/changelog) · [许可证](#许可证)
+<p align="center">
+  <a href="https://github.com/Lapius7/fixit-editor/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Lapius7/fixit-editor?label=release&style=flat-square&color=e8833a&logo=github"></a>
+  <a href="https://github.com/Lapius7/fixit-editor/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Lapius7/fixit-editor/ci.yml?branch=main&label=CI&style=flat-square&logo=githubactions&logoColor=white"></a>
+  <a href="LICENSE"><img alt="License: proprietary" src="https://img.shields.io/badge/license-proprietary-lightgrey?style=flat-square"></a>
+  <img alt="Platform: Windows" src="https://img.shields.io/badge/platform-Windows-0078d4?style=flat-square">
+  <a href="https://tauri.app"><img alt="Tauri" src="https://img.shields.io/badge/Tauri-ffc131?logo=tauri&logoColor=black&style=flat-square"></a>
+  <a href="https://react.dev"><img alt="React" src="https://img.shields.io/badge/React-20232a?logo=react&logoColor=61dafb&style=flat-square"></a>
+  <a href="https://github.com/Lapius7/fixit-editor/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/Lapius7/fixit-editor?style=flat-square&color=e3b341&logo=github"></a>
+</p>
 
-[English](README.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · **简体中文** · [Español](README.es.md)
+<p align="center">
+  <a href="https://fixit-editor.lapius7.com">官网</a> · <a href="https://fixit-editor.lapius7.com/docs">文档</a> · <a href="https://fixit-editor.lapius7.com/en/changelog">更新日志</a> · <a href="#许可证">许可证</a>
+</p>
 
 </div>
+
+---
 
 ## 概述
 
@@ -29,7 +41,7 @@ Fixit Editor 是一款磨砂玻璃风格的小型代码编辑器。Windows 版�
 
 ## 功能
 
-下面列出的功能都可以在最新版本 1.0.8 中使用。各版本的变化见[更新日志](https://fixit-editor.lapius7.com/en/changelog)。
+下面列出的功能都可以在最新版本 1.5.10 中使用。各版本的变化见[更新日志](https://fixit-editor.lapius7.com/en/changelog)。
 
 ### 编辑
 

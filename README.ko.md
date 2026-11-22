@@ -1,20 +1,32 @@
 <div align="center">
 
-<img src="docs/screenshots/banner.png" alt="Fixit Editor" width="100%">
+<p align="center">
+  <img src="docs/images/banner.png" alt="Fixit Editor" width="100%">
+</p>
 
-# Fixit Editor
+<p align="center"><a href="README.md">English</a> · <a href="README.ja.md">日本語</a> · <b>한국어</b> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.es.md">Español</a></p>
 
-**가볍고 보기 좋은, 반투명 유리 느낌의 Windows용 코드 에디터.**
+<h1 align="center">Fixit Editor</h1>
 
-![License](https://img.shields.io/badge/license-proprietary-lightgrey)
-![Platform](https://img.shields.io/badge/platform-Windows-0078d4)
-![Built with](https://img.shields.io/badge/built%20with-Tauri%20%C2%B7%20React%20%C2%B7%20CodeMirror%206-444)
+<h3 align="center">가볍고 보기 좋은, 반투명 유리 느낌의 Windows용 코드 에디터.</h3>
 
-[웹사이트](https://fixit-editor.lapius7.com) · [문서](https://fixit-editor.lapius7.com/docs) · [변경 내역](https://fixit-editor.lapius7.com/ko/changelog) · [라이선스](#라이선스)
+<p align="center">
+  <a href="https://github.com/Lapius7/fixit-editor/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Lapius7/fixit-editor?label=release&style=flat-square&color=e8833a&logo=github"></a>
+  <a href="https://github.com/Lapius7/fixit-editor/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Lapius7/fixit-editor/ci.yml?branch=main&label=CI&style=flat-square&logo=githubactions&logoColor=white"></a>
+  <a href="LICENSE"><img alt="License: proprietary" src="https://img.shields.io/badge/license-proprietary-lightgrey?style=flat-square"></a>
+  <img alt="Platform: Windows" src="https://img.shields.io/badge/platform-Windows-0078d4?style=flat-square">
+  <a href="https://tauri.app"><img alt="Tauri" src="https://img.shields.io/badge/Tauri-ffc131?logo=tauri&logoColor=black&style=flat-square"></a>
+  <a href="https://react.dev"><img alt="React" src="https://img.shields.io/badge/React-20232a?logo=react&logoColor=61dafb&style=flat-square"></a>
+  <a href="https://github.com/Lapius7/fixit-editor/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/Lapius7/fixit-editor?style=flat-square&color=e3b341&logo=github"></a>
+</p>
 
-[English](README.md) · [日本語](README.ja.md) · **한국어** · [简体中文](README.zh-CN.md) · [Español](README.es.md)
+<p align="center">
+  <a href="https://fixit-editor.lapius7.com">웹사이트</a> · <a href="https://fixit-editor.lapius7.com/docs">문서</a> · <a href="https://fixit-editor.lapius7.com/ko/changelog">변경 내역</a> · <a href="#라이선스">라이선스</a>
+</p>
 
 </div>
+
+---
 
 ## 개요
 
@@ -29,7 +41,7 @@ Fixit Editor는 반투명 유리 느낌의 작은 코드 에디터입니다. Win
 
 ## 기능
 
-여기에 적은 기능은 모두 최신 버전인 1.0.8에서 사용할 수 있습니다. 버전별 변경 사항은 [변경 내역](https://fixit-editor.lapius7.com/ko/changelog)에서 볼 수 있습니다.
+여기에 적은 기능은 모두 최신 버전인 1.5.10에서 사용할 수 있습니다. 버전별 변경 사항은 [변경 내역](https://fixit-editor.lapius7.com/ko/changelog)에서 볼 수 있습니다.
 
 ### 편집
 
