@@ -1,20 +1,32 @@
 <div align="center">
 
-<img src="docs/screenshots/banner.png" alt="Fixit Editor" width="100%">
+<p align="center">
+  <img src="docs/images/banner.png" alt="Fixit Editor" width="100%">
+</p>
 
-# Fixit Editor
+<p align="center"><a href="README.md">English</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.zh-CN.md">简体中文</a> · <b>Español</b></p>
 
-**Un editor de código ligero y elegante para Windows, con aspecto de cristal esmerilado.**
+<h1 align="center">Fixit Editor</h1>
 
-![License](https://img.shields.io/badge/license-proprietary-lightgrey)
-![Platform](https://img.shields.io/badge/platform-Windows-0078d4)
-![Built with](https://img.shields.io/badge/built%20with-Tauri%20%C2%B7%20React%20%C2%B7%20CodeMirror%206-444)
+<h3 align="center">Un editor de código ligero y elegante para Windows, con aspecto de cristal esmerilado.</h3>
 
-[Sitio web](https://fixit-editor.lapius7.com) · [Documentación](https://fixit-editor.lapius7.com/docs) · [Historial de cambios](https://fixit-editor.lapius7.com/en/changelog) · [Licencia](#licencia)
+<p align="center">
+  <a href="https://github.com/Lapius7/fixit-editor/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Lapius7/fixit-editor?label=release&style=flat-square&color=e8833a&logo=github"></a>
+  <a href="https://github.com/Lapius7/fixit-editor/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Lapius7/fixit-editor/ci.yml?branch=main&label=CI&style=flat-square&logo=githubactions&logoColor=white"></a>
+  <a href="LICENSE"><img alt="License: proprietary" src="https://img.shields.io/badge/license-proprietary-lightgrey?style=flat-square"></a>
+  <img alt="Platform: Windows" src="https://img.shields.io/badge/platform-Windows-0078d4?style=flat-square">
+  <a href="https://tauri.app"><img alt="Tauri" src="https://img.shields.io/badge/Tauri-ffc131?logo=tauri&logoColor=black&style=flat-square"></a>
+  <a href="https://react.dev"><img alt="React" src="https://img.shields.io/badge/React-20232a?logo=react&logoColor=61dafb&style=flat-square"></a>
+  <a href="https://github.com/Lapius7/fixit-editor/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/Lapius7/fixit-editor?style=flat-square&color=e3b341&logo=github"></a>
+</p>
 
-[English](README.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [简体中文](README.zh-CN.md) · **Español**
+<p align="center">
+  <a href="https://fixit-editor.lapius7.com">Sitio web</a> · <a href="https://fixit-editor.lapius7.com/docs">Documentación</a> · <a href="https://fixit-editor.lapius7.com/en/changelog">Historial de cambios</a> · <a href="#licencia">Licencia</a>
+</p>
 
 </div>
+
+---
 
 ## Resumen
 
@@ -29,7 +41,7 @@ Los ajustes, las estadísticas y los espacios de trabajo se guardan en tu PC. Lo
 
 ## Funciones
 
-Todo lo que se describe aquí está en la última versión, la 1.0.8. Los cambios de cada versión están en el [registro de cambios](https://fixit-editor.lapius7.com/en/changelog).
+Todo lo que se describe aquí está en la última versión, la 1.5.10. Los cambios de cada versión están en el [registro de cambios](https://fixit-editor.lapius7.com/en/changelog).
 
 ### Edición
 
