@@ -13,7 +13,7 @@ importers:
     dependencies:
       '@anthropic-ai/sdk':
         specifier: ^1.6.0
-        version: 1.6.0(zod@4.6.7)
+        version: 1.14.0(zod@4.6.7)
       '@codemirror/autocomplete':
         specifier: ^6.20.4
         version: 6.20.4
@@ -155,7 +155,7 @@ importers:
         version: 6.2.1(vite@8.3.6(@types/node@26.6.6)(jiti@2.7.0)(yaml@2.9.1))
       '@x18n/cli':
         specifier: ^0.1.13
-        version: 0.1.13(@devframes/agentic@1.2.5)(@typescript-eslint/types@8.72.2)(crossws@0.4.17(srvx@1.0.8))(srvx@1.0.8)(typescript@7.0.2)
+        version: 0.1.13(@typescript-eslint/types@8.72.2)(crossws@0.4.17(srvx@1.0.8))(srvx@1.0.8)(typescript@7.0.2)
       happy-dom:
         specifier: ^21.0.4
         version: 21.0.4
@@ -180,8 +180,8 @@ packages:
   '@antfu/install-pkg@2.1.0':
     resolution: {integrity: sha512-sdg9NxU3zR4Mnawfbc/x6GB5Wf17WYud5qOuEuxXjaKpYpMkISSJEjItGebXJ2bQ4DIcly4NYH23mtkGJjvKUw==}
 
-  '@anthropic-ai/sdk@1.6.0':
-    resolution: {integrity: sha512-XqiO/46n8S6So8jQ/6/uNCkHntyW6QHHs1gZ+hlwTx1fWDr929g4VmwIXfdMVk7SuBWNdQvAlwyi1G3t6SEIuQ==}
+  '@anthropic-ai/sdk@1.14.0':
+    resolution: {integrity: sha512-nADYXUd5fn9Zgw2nHi1iKyt/kb1UUt1cN3RbdxEI6XjTDTxbx4LLG4GnMrxWyS9GgXQllFOyAKSiFM3joDNK9A==}
     hasBin: true
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
@@ -2172,7 +2172,7 @@ snapshots:
       package-manager-detector: 1.9.0
       tinyexec: 1.3.1
 
-  '@anthropic-ai/sdk@1.6.0(zod@4.6.7)':
+  '@anthropic-ai/sdk@1.14.0(zod@4.6.7)':
     dependencies:
       '@opentelemetry/api': 1.10.0
       json-schema-to-ts: 3.1.1
@@ -3179,7 +3179,7 @@ snapshots:
       - '@typescript-eslint/types'
       - typescript
 
-  '@x18n/cli@0.1.13(@devframes/agentic@1.2.5)(@typescript-eslint/types@8.72.2)(crossws@0.4.17(srvx@1.0.8))(srvx@1.0.8)(typescript@7.0.2)':
+  '@x18n/cli@0.1.13(@typescript-eslint/types@8.72.2)(crossws@0.4.17(srvx@1.0.8))(srvx@1.0.8)(typescript@7.0.2)':
     dependencies:
       '@x18n/builtins': 0.1.13(@typescript-eslint/types@8.72.2)(typescript@7.0.2)
       '@x18n/core': 0.1.13(typescript@7.0.2)
