@@ -155,7 +155,7 @@ importers:
         version: 6.2.1(vite@8.3.6(@types/node@26.6.6)(jiti@2.7.0)(yaml@2.9.1))
       '@x18n/cli':
         specifier: ^0.1.13
-        version: 0.1.13(@devframes/agentic@1.2.5)(@typescript-eslint/types@8.72.2)(crossws@0.4.17(srvx@1.0.8))(srvx@1.0.8)(typescript@7.0.2)
+        version: 0.1.13(@typescript-eslint/types@8.72.2)(crossws@0.4.17(srvx@1.0.8))(srvx@1.0.8)(typescript@7.0.2)
       happy-dom:
         specifier: ^21.0.4
         version: 21.0.4
@@ -173,7 +173,7 @@ importers:
         version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(happy-dom@21.0.4)(vite@8.3.6(@types/node@26.6.6)(jiti@2.7.0)(yaml@2.9.1))
       ws:
         specifier: ^8.22.1
-        version: 8.22.1
+        version: 8.23.1
 
 packages:
 
@@ -2138,8 +2138,20 @@ packages:
     engines: {node: '>=20.11'}
     hasBin: true
 
-  ws@8.22.1:
-    resolution: {integrity: sha512-oyL6OPYme/CmiFvNuGzeoxCJ4nOrZE2O1FwM9MWM1AsGri6nLXB2pg+lNA8aLeXMSav0J6eIVS1j6vUPzUtK9g==}
+  ws@8.23.0:
+    resolution: {integrity: sha512-wCkmX8QMOrKjgO8HW2WyDbTSGeqkocxgDzS9iR79rEAexty6/2qzilx3Ag8Tqf9ykop3irLKle0MtVn5qjVnoQ==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
+  ws@8.23.1:
+    resolution: {integrity: sha512-1rzWDSN0NOi3tpwgHsQExjWRoKUGtjCkJ2gZRaaRtzhYLboMytOI9pj9PU7yCgY37auqdd4OyLofZDbkeuZmPA==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       bufferutil: ^4.0.1
@@ -3179,7 +3191,7 @@ snapshots:
       - '@typescript-eslint/types'
       - typescript
 
-  '@x18n/cli@0.1.13(@devframes/agentic@1.2.5)(@typescript-eslint/types@8.72.2)(crossws@0.4.17(srvx@1.0.8))(srvx@1.0.8)(typescript@7.0.2)':
+  '@x18n/cli@0.1.13(@typescript-eslint/types@8.72.2)(crossws@0.4.17(srvx@1.0.8))(srvx@1.0.8)(typescript@7.0.2)':
     dependencies:
       '@x18n/builtins': 0.1.13(@typescript-eslint/types@8.72.2)(typescript@7.0.2)
       '@x18n/core': 0.1.13(typescript@7.0.2)
@@ -3598,7 +3610,7 @@ snapshots:
       buffer-image-size: 0.6.4
       entities: 7.0.1
       whatwg-mimetype: 3.0.0
-      ws: 8.22.1
+      ws: 8.23.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -4085,7 +4097,9 @@ snapshots:
 
   why-is-node-running@3.2.1: {}
 
-  ws@8.22.1: {}
+  ws@8.23.0: {}
+
+  ws@8.23.1: {}
 
   xmlbuilder@10.1.1: {}
 
