@@ -106,7 +106,7 @@ importers:
         version: 0.8.4
       lucide-react:
         specifier: '*'
-        version: 1.70.0(@types/react@19.3.0)(react@19.3.1)
+        version: 1.83.0(@types/react@19.3.0)(react@19.3.1)
       mammoth:
         specifier: ^1.13.0
         version: 1.13.0
@@ -155,7 +155,7 @@ importers:
         version: 6.2.1(vite@8.3.6(@types/node@26.6.6)(jiti@2.7.0)(yaml@2.9.1))
       '@x18n/cli':
         specifier: ^0.1.13
-        version: 0.1.13(@devframes/agentic@1.2.5)(@typescript-eslint/types@8.72.2)(crossws@0.4.17(srvx@1.0.8))(srvx@1.0.8)(typescript@7.0.2)
+        version: 0.1.13(@typescript-eslint/types@8.72.2)(crossws@0.4.17(srvx@1.0.8))(srvx@1.0.8)(typescript@7.0.2)
       happy-dom:
         specifier: ^21.0.4
         version: 21.0.4
@@ -1789,8 +1789,8 @@ packages:
   lop@0.4.2:
     resolution: {integrity: sha512-RefILVDQ4DKoRZsJ4Pj22TxE3omDO47yFpkIBoDKzkqPRISs5U1cnAdg/5583YPkWPaLIYHOKRMQSvjFsO26cw==}
 
-  lucide-react@1.70.0:
-    resolution: {integrity: sha512-gCTPPN1MlQUBtUgdsUv+0CAUj+X8hifRUiRBw4E5v7lvDIOIpx0EZezdGQMSimS8pKA6esvullJub4GYr0mCHA==}
+  lucide-react@1.83.0:
+    resolution: {integrity: sha512-bYosQeQphbbNtdWT4DvY1/wlen2CcsZEQI/pMykcQ8twiu+T7m7cY7s8hOTJiMEAs3nUxCkeCxTe4ohczS5jhA==}
     peerDependencies:
       '@types/react': '*'
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
@@ -3179,7 +3179,7 @@ snapshots:
       - '@typescript-eslint/types'
       - typescript
 
-  '@x18n/cli@0.1.13(@devframes/agentic@1.2.5)(@typescript-eslint/types@8.72.2)(crossws@0.4.17(srvx@1.0.8))(srvx@1.0.8)(typescript@7.0.2)':
+  '@x18n/cli@0.1.13(@typescript-eslint/types@8.72.2)(crossws@0.4.17(srvx@1.0.8))(srvx@1.0.8)(typescript@7.0.2)':
     dependencies:
       '@x18n/builtins': 0.1.13(@typescript-eslint/types@8.72.2)(typescript@7.0.2)
       '@x18n/core': 0.1.13(typescript@7.0.2)
@@ -3736,7 +3736,7 @@ snapshots:
       option: 0.2.4
       underscore: 1.13.8
 
-  lucide-react@1.70.0(@types/react@19.3.0)(react@19.3.1):
+  lucide-react@1.83.0(@types/react@19.3.0)(react@19.3.1):
     dependencies:
       react: 19.3.1
     optionalDependencies:
